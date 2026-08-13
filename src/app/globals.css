@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Brand-coloured focus ring everywhere, so keyboard users get the same
+     visual language as the rest of the portal. */
+  :focus-visible {
+    outline: 2px solid #e43d96;
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: #fce9f1;
+    color: #c21f73;
+  }
+}
+
+@layer utilities {
+  /* Content settling in. Cards use --delay for a gentle stagger. */
+  .animate-rise {
+    animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--delay, 0ms);
+  }
+
+  .animate-fade {
+    animation: fade 0.3s ease-out both;
+    animation-delay: var(--delay, 0ms);
+  }
+
+  /* Loading placeholders */
+  .skeleton {
+    background: linear-gradient(90deg, #eef0f4 25%, #f7f8fa 50%, #eef0f4 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+
+  /* The brand bar as a progress indicator while something loads. */
+  .brand-loader {
+    background: linear-gradient(90deg, #e43d96, #f15a25, #e43d96);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s linear infinite;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Motion is decoration here — never the only way something is communicated,
+   so it's safe to switch off entirely. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* iOS Safari zooms the whole page in when you focus a field whose text is
+   under 16px, and does not zoom back out. Several fields sit under 16px for
+   density on desktop, which is fine there and a nuisance on a phone, so the
+   floor only applies at phone widths. */
+@media (max-width: 640px) {
+  /* [class] lifts this to 0,1,1 so it outranks Tailwind's own text-sm (0,1,0)
+     wherever those fields set a size, without reaching for !important. */
+  input[class],
+  select[class],
+  textarea[class] {
+    font-size: 16px;
+  }
+}

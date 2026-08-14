@@ -188,10 +188,13 @@ stranding a half-migration.
    planned: `/projects/new` also supports starting from scratch with no
    template — any RunFree staff member can do this today, from a template or
    not. This is the step that actually takes RunFree off Asana.
-5. **Younique life plans, then migrating the rest of the roster.** Not
-   started. Andrew: no clean reusable Younique template currently exists in
-   Asana — only one finished engagement (Joe McGinn's) to reverse-model from,
-   differently shaped (day/section-numbered, not modular) from Pivvot.
+5. **Younique life plans, then migrating the rest of the roster.**
+   Template exists (`younique-lifeplan`, migration `009`) — built from Joe
+   McGinn's real completed engagement, the only Younique example in Asana, so
+   it's a rough reconstruction rather than a "DO NOT CHANGE" master. Titles
+   only were read, never notes — nothing of Joe's actual personal content is
+   in the template. No project seeded yet; needs a real named client the same
+   way Athena was for Pivvot.
 
 ## Deliberately later
 

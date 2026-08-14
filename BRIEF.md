@@ -63,6 +63,56 @@ handlers.** One forgotten filter shows one church's recordings to another. That
 is a different order of problem from any bug in the CVF portal, where everyone
 is entitled to the same content. See `docs/data-model.md`.
 
+## Shared Supabase project — read before creating anything
+
+**This is the decision, not yet the fact.** The current migrations
+(`supabase/migrations/001-004`) were applied against a new, separate Supabase
+project — `runfree-client-portal`, isolated from CVF. Andrew has confirmed he
+wants one shared project instead. Re-pointing `.env.local` at the CVF project
+and re-running the migrations there is the reconciliation; cheap right now
+since nothing real has been invited into either side of this portal yet, and
+`002`'s function-grant fix plus the schema itself are project-agnostic SQL —
+nothing about them assumes which project they run against.
+
+Once reconciled: **the same Supabase project as the Certified Vision Framers
+portal**, so `auth.users` is shared and one person has one login even if they
+are both a certified framer and a client.
+
+That direction is one-way. Sharing later would mean re-inviting every certified
+framer and losing their passwords; splitting later is trivial. It also removes a
+standing tax: one set of email templates, one SMTP config, one redirect
+allowlist, one place to add or remove a person.
+
+The table sets do not collide — CVF owns `certified_framers`, `training_videos`
+and `ghl_sync_log`; this portal owns `profiles`, `projects`, `project_members`,
+`sessions`, `deliverables`, `templates`. RLS is per-table.
+
+**The one real risk is a careless migration.** The CVF portal is live and
+serving real church leaders. Never write a migration that touches a table this
+project does not own, and never disable RLS on one to debug the other.
+
+### Invitation emails need solving separately
+
+Supabase allows one set of email templates per project, and they are already
+branded for Certified Vision Framers. A church client must not receive an email
+about certification.
+
+So this portal should **not** use Supabase's built-in invite email. Mint the
+link with the admin API (`generateLink`) and send the message from the app with
+its own branding. That is the only way to get per-portal email copy out of a
+shared auth system, and it is the standard approach when one auth project backs
+more than one product.
+
+## Domains
+
+- `certified.runfree.co` — Certified Vision Framers portal (and any future
+  certification; named for certification, not for Vision Framing)
+- `portal.runfree.co` — this portal
+- DNS is AWS Route 53, with a `*.runfree.co` wildcard already pointing unclaimed
+  subdomains at the Plesk web host. A specific CNAME overrides it, but nothing
+  looks broken beforehand because the subdomain already resolves — to the wrong
+  place.
+
 ## Settled decisions
 
 - **Web app first.** No native iOS/Android. The same codebase installs as a PWA

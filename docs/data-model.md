@@ -18,10 +18,10 @@ team is not, by itself, permission to see anything.
 One row per human, keyed to `auth.users`. `is_staff` marks RunFree people;
 `is_owner` marks Andrew. A client has both false.
 
-**`auth.users` is shared with the Certified Vision Framers portal**, if the two
-end up on the same Supabase project (see `BRIEF.md` — not yet decided which
-project this schema actually lives in). A row in `auth.users` grants nothing
-here on its own; access comes from `project_members`.
+**`auth.users` is shared with the Certified Vision Framers portal** — both run
+on the same Supabase project (`txaesavbpbtyqhzhcabm`; see `BRIEF.md`). A row in
+`auth.users` grants nothing here on its own; access comes from
+`project_members`.
 
 **A `profiles` row is created automatically** by a trigger on `auth.users`
 insert (`handle_new_user()`, in `001_multi_tenant_schema.sql`), not created by

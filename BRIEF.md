@@ -65,18 +65,19 @@ is entitled to the same content. See `docs/data-model.md`.
 
 ## Shared Supabase project — read before creating anything
 
-**This is the decision, not yet the fact.** The current migrations
-(`supabase/migrations/001-004`) were applied against a new, separate Supabase
-project — `runfree-client-portal`, isolated from CVF. Andrew has confirmed he
-wants one shared project instead. Re-pointing `.env.local` at the CVF project
-and re-running the migrations there is the reconciliation; cheap right now
-since nothing real has been invited into either side of this portal yet, and
-`002`'s function-grant fix plus the schema itself are project-agnostic SQL —
-nothing about them assumes which project they run against.
+**Done, as of 2026-08-14.** This portal runs on the same Supabase project as
+Certified Vision Framers (`txaesavbpbtyqhzhcabm`), not a separate one. It
+briefly existed on its own project (`fbcrofawqxdldcibevfs`, created by a
+parallel session while forking) — migrations `001-004` were re-applied
+verbatim against the CVF project via the Supabase MCP, `.env.local` in both
+repos now points at the same `NEXT_PUBLIC_SUPABASE_URL`, and `tests/rls.test.ts`
+passes all 11 checks against it. The standalone project is dormant, not
+deleted — nothing has been invited into it, so there is nothing on it worth
+recovering, but deleting a Supabase project is a separate, one-way decision
+that hasn't been made yet.
 
-Once reconciled: **the same Supabase project as the Certified Vision Framers
-portal**, so `auth.users` is shared and one person has one login even if they
-are both a certified framer and a client.
+`auth.users` is shared, so one person has one login even if they are both a
+certified framer and a client.
 
 That direction is one-way. Sharing later would mean re-inviting every certified
 framer and losing their passwords; splitting later is trivial. It also removes a

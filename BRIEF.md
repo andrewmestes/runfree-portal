@@ -4,7 +4,12 @@ A private portal replacing how RunFree uses Asana with clients. Each engagement
 gets its own space holding session recordings, coaching notes, transcripts,
 deliverables and materials — visible only to the people on it.
 
-Not started. This folder holds the plan, the schema, and the brand assets.
+**Pivvot Vision Framing is live end to end** as of 2026-08-14: schema, RLS,
+the actual project page (view/edit sessions and deliverables, image uploads,
+team management), the creation flow, and the real first project — Athena
+Christian Church — seeded from the actual Asana template, not a mockup. See
+`docs/data-model.md` for what's built and `tests/rls.test.ts` for what's
+verified. Meta Performance and Younique are still just plans below.
 
 ---
 
@@ -37,26 +42,54 @@ Out of scope: **Calling for the Best of Us**. It is a public, self-serve,
 sequenced course — a different product with a different access model. Parked
 pending a RightNow Media conversation that may mean it is never built here.
 
+### Two Pivvot templates, or one?
+
+Asana also has a **"RUN FREE Pivvot coaching Template DO NOT CHANGE"** — same
+modules, plus a Facilitator's Guide, Pilot Experiences, and an Application
+Toolbox, for certifying someone to lead the process themselves. Andrew, not
+yet decided: *"a project portal for their church, and access to the
+certification tools, that might be sufficient"* — i.e. `certification_access`
+(see Access model) plus an `editor`/`admin` grant on the client's own project
+might be the whole answer, with no second template needed. Only the Pivvot
+Vision Framing template is built; don't build the coaching one speculatively.
+
 ## Access model — read this before writing any query
 
-Being on the RunFree team grants **nothing** by itself. A coach's visibility
-works exactly like a client's, through membership of a specific project. The
-only extra capability staff have is that they can *create* projects.
+Being on the RunFree team grants **nothing** by itself. Visibility works
+through membership of a specific project — a client's and a coach's access
+are the same mechanism, just usually a different tier. The only portal-wide
+capability staff have is that they can *create* projects.
 
-- **Private project** — visible only to its explicit members. A coaching
-  relationship is private and invisible to the rest of the team.
-- **Team-wide project** — visible to every RunFree staff member. Team training
-  videos are team-wide.
+**Implemented as three per-project tiers, not a fixed client/coach split**
+(built out in `005_project_member_roles.sql` and `006_client_portal_expansion.sql`
+— the original two-role design couldn't express Pivvot Coaching, where the
+client leads their own process and needs to write, not just read):
 
-A coach opening a new engagement picks a template, picks private or team-wide,
-and is a member of what they just made. Nobody provisions it for them, and
-nothing is visible by default.
-
-| Role | Sees |
+| Role | Can |
 | --- | --- |
-| Client | Only the projects they are on |
-| Coach / staff | Their own projects, plus anything team-wide |
-| Owner (Andrew) | Everything, plus managing people and templates |
+| `viewer` | Read published sessions/deliverables. Nothing else. |
+| `editor` | Everything a viewer can, plus write sessions and deliverables. |
+| `admin` | Everything an editor can, plus add/remove members and change roles. |
+
+Anyone — staff or client — can hold any tier on a project they're a member of.
+A self-facilitating Pivvot Coaching client is `editor` or `admin` on their own
+project without being RunFree staff; a RunFree teammate who's just there to
+observe can be `viewer`.
+
+- **Private project** — visible only to its explicit members.
+- **Team-wide project** — visible to every RunFree staff member, regardless
+  of tier they'd hold if they joined explicitly.
+
+A staff member opening a new engagement picks a template (or starts from
+scratch), picks private or team-wide, and is added as `admin` on what they
+just made. Nobody else provisions it for them, and nothing is visible by
+default.
+
+`profiles.certification_access` is a separate, portal-wide boolean,
+independent of any project membership — the mechanism for "this client also
+gets certification/training content," which may end up being the entire
+answer to whether a dedicated Pivvot Coaching *template* is ever needed (see
+"Two templates, or one?" below).
 
 **Enforce this with Postgres row-level security, not with checks inside route
 handlers.** One forgotten filter shows one church's recordings to another. That
@@ -141,16 +174,24 @@ of pasted text, adding the automation later means re-entering every note by hand
 Each step ends somewhere usable, so work can stop or re-prioritise without
 stranding a half-migration.
 
-1. **New repo forked from the CVF portal.** Multi-tenant schema and RLS from the
-   first commit.
-2. **Pivvot template, with Athena Christian Church as the first real project.**
-   One vertical, one live client, end to end.
+1. ~~**New repo forked from the CVF portal.** Multi-tenant schema and RLS from
+   the first commit.~~ Done.
+2. ~~**Pivvot template, with Athena Christian Church as the first real
+   project.** One vertical, one live client, end to end.~~ Done — real
+   content from Asana, not a mockup.
 3. **Coaching notes and the Meta Performance template.** Proves templates handle
    a second, differently shaped vertical rather than one hard-coded layout.
-4. **Coaches creating their own projects.** Private by default, from a template,
-   without anyone provisioning it. This is the step that actually takes RunFree
-   off Asana.
-5. **Younique life plans, then migrating the rest of the roster.**
+   Not started — needs the real Meta Performance Asana board read first, the
+   same way Pivvot's was.
+4. ~~**Coaches creating their own projects.** Private by default, from a
+   template, without anyone provisioning it.~~ Done, and further than
+   planned: `/projects/new` also supports starting from scratch with no
+   template — any RunFree staff member can do this today, from a template or
+   not. This is the step that actually takes RunFree off Asana.
+5. **Younique life plans, then migrating the rest of the roster.** Not
+   started. Andrew: no clean reusable Younique template currently exists in
+   Asana — only one finished engagement (Joe McGinn's) to reverse-model from,
+   differently shaped (day/section-numbered, not modular) from Pivvot.
 
 ## Deliberately later
 
@@ -165,9 +206,11 @@ Named so they don't quietly expand the first build.
 
 ## Before designing further
 
-If Andrew authorises the **Asana connector**, read the real Pivvot and Meta
-Performance boards and model the templates from their actual structure rather
-than from description. It needs authorising in his claude.ai connector settings.
+The Asana connector is authorised and was used to build the Pivvot Vision
+Framing template and the Athena Christian Church project directly from the
+real boards — see `supabase/seed.sql` for exactly what was read and how it
+maps to the schema. Do the same for Meta Performance and Younique before
+building their templates: read the real boards, don't model from description.
 
 Full plan, including reasoning:
 https://claude.ai/code/artifact/eca4f455-a5c0-414b-af2d-517bfcea66c0

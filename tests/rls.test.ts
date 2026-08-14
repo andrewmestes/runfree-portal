@@ -1,11 +1,13 @@
 /**
  * Row-level security verification, run against the real Supabase project —
  * not mocks. Implements the "Things to verify before trusting this" list in
- * docs/data-model.md, plus a couple of extra checks for the gaps this fork
- * closed beyond that doc (templates RLS, deliverables draft gating).
+ * docs/data-model.md, the gaps this fork closed beyond that doc (templates
+ * RLS, deliverables draft gating), and the viewer/editor/admin permission
+ * model plus template_resources / deliverable-image storage added in
+ * migrations 005-007.
  *
  * Every assertion queries through `createUserClient(accessToken)`, i.e. the
- * same anon-key + user-JWT path a real PostgREST call takes — this is
+ * same anon-key + user-JWT path a real PostgREST/Storage call takes — this is
  * deliberately not testing application code, it's testing what the database
  * itself will and won't return.
  *
@@ -31,6 +33,7 @@ if (!url || !anonKey || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
 
 const RUN = Date.now();
 const PASSWORD = "test-password-only-for-rls-suite-1234!";
+const BUCKET = "deliverable-images";
 
 type TestUser = { id: string; email: string; accessToken: string };
 
@@ -86,25 +89,31 @@ async function createTestUser(
 async function main() {
   const cleanupUserIds: string[] = [];
   const cleanupProjectIds: string[] = [];
+  const cleanupTemplateIds: string[] = [];
+  const cleanupStoragePaths: string[] = [];
 
   try {
     // -----------------------------------------------------------------
-    // Seed: two private projects with their own coach and client, one
-    // team-wide project, and a staff member who belongs to nothing.
+    // Seed: two private projects each with an admin + viewer, one
+    // non-staff person made 'editor' on project A (the Pivvot Coaching
+    // scenario — a client who leads their own process), a team-wide
+    // project, and a staff member who belongs to nothing.
     // -----------------------------------------------------------------
     const owner = await createTestUser("owner", { is_owner: true, is_staff: true });
-    const coachA = await createTestUser("coach-a", { is_staff: true });
-    const coachB = await createTestUser("coach-b", { is_staff: true });
-    const clientA = await createTestUser("client-a", {});
-    const clientB = await createTestUser("client-b", {});
+    const adminA = await createTestUser("admin-a", { is_staff: true });
+    const adminB = await createTestUser("admin-b", { is_staff: true });
+    const viewerA = await createTestUser("viewer-a", {});
+    const viewerB = await createTestUser("viewer-b", {});
+    const selfLeadEditor = await createTestUser("self-lead-editor", {}); // non-staff
     const staffOutsider = await createTestUser("staff-outsider", { is_staff: true });
     cleanupUserIds.push(
-      owner.id, coachA.id, coachB.id, clientA.id, clientB.id, staffOutsider.id
+      owner.id, adminA.id, adminB.id, viewerA.id, viewerB.id,
+      selfLeadEditor.id, staffOutsider.id
     );
 
     const { data: projectA, error: projAErr } = await supabaseAdmin
       .from("projects")
-      .insert({ name: `RLS Test A ${RUN}`, visibility: "private", created_by: coachA.id })
+      .insert({ name: `RLS Test A ${RUN}`, visibility: "private", created_by: adminA.id })
       .select()
       .single();
     if (projAErr || !projectA) throw new Error(`seed project A failed: ${projAErr?.message}`);
@@ -112,7 +121,7 @@ async function main() {
 
     const { data: projectB, error: projBErr } = await supabaseAdmin
       .from("projects")
-      .insert({ name: `RLS Test B ${RUN}`, visibility: "private", created_by: coachB.id })
+      .insert({ name: `RLS Test B ${RUN}`, visibility: "private", created_by: adminB.id })
       .select()
       .single();
     if (projBErr || !projectB) throw new Error(`seed project B failed: ${projBErr?.message}`);
@@ -127,10 +136,11 @@ async function main() {
     cleanupProjectIds.push(projectTeam.id);
 
     const { error: membersErr } = await supabaseAdmin.from("project_members").insert([
-      { project_id: projectA.id, profile_id: coachA.id, role: "coach" },
-      { project_id: projectA.id, profile_id: clientA.id, role: "client" },
-      { project_id: projectB.id, profile_id: coachB.id, role: "coach" },
-      { project_id: projectB.id, profile_id: clientB.id, role: "client" },
+      { project_id: projectA.id, profile_id: adminA.id, role: "admin" },
+      { project_id: projectA.id, profile_id: viewerA.id, role: "viewer" },
+      { project_id: projectA.id, profile_id: selfLeadEditor.id, role: "editor" },
+      { project_id: projectB.id, profile_id: adminB.id, role: "admin" },
+      { project_id: projectB.id, profile_id: viewerB.id, role: "viewer" },
     ]);
     if (membersErr) throw new Error(`seed members failed: ${membersErr.message}`);
 
@@ -152,12 +162,12 @@ async function main() {
     if (delivDraftErr) throw new Error(`seed draft deliverable failed: ${delivDraftErr.message}`);
 
     // -----------------------------------------------------------------
-    // 1. Client on project A gets zero rows querying project B.
+    // 1. Viewer on project A gets zero rows querying project B.
     // -----------------------------------------------------------------
     {
-      const client = createUserClient(clientA.accessToken);
+      const client = createUserClient(viewerA.accessToken);
       const { data } = await client.from("projects").select("*").eq("id", projectB.id);
-      record("1. client A sees 0 rows for project B", (data?.length ?? -1) === 0, `got ${data?.length}`);
+      record("1. viewer A sees 0 rows for project B", (data?.length ?? -1) === 0, `got ${data?.length}`);
     }
 
     // -----------------------------------------------------------------
@@ -179,52 +189,52 @@ async function main() {
     }
 
     // -----------------------------------------------------------------
-    // 4. Client sees no unpublished session; the coach on that project does.
+    // 4. Viewer sees no unpublished session; the admin on that project does.
     // -----------------------------------------------------------------
     {
-      const asClient = createUserClient(clientA.accessToken);
-      const { data: clientSessions } = await asClient
+      const asViewer = createUserClient(viewerA.accessToken);
+      const { data: viewerSessions } = await asViewer
         .from("sessions")
         .select("*")
         .eq("project_id", projectA.id);
       record(
-        "4a. client A sees only the published session",
-        clientSessions?.length === 1 && clientSessions[0].title === "Published session",
-        `got ${clientSessions?.map((s) => s.title).join(", ")}`
+        "4a. viewer A sees only the published session",
+        viewerSessions?.length === 1 && viewerSessions[0].title === "Published session",
+        `got ${viewerSessions?.map((s) => s.title).join(", ")}`
       );
 
-      const asCoach = createUserClient(coachA.accessToken);
-      const { data: coachSessions } = await asCoach
+      const asAdmin = createUserClient(adminA.accessToken);
+      const { data: adminSessions } = await asAdmin
         .from("sessions")
         .select("*")
         .eq("project_id", projectA.id);
-      record("4b. coach A sees both sessions, including the draft", coachSessions?.length === 2, `got ${coachSessions?.length}`);
+      record("4b. admin A sees both sessions, including the draft", adminSessions?.length === 2, `got ${adminSessions?.length}`);
     }
 
     // -----------------------------------------------------------------
-    // 5. A coach can create a project and is a member of it immediately.
+    // 5. Staff creates a project and is a member of it immediately, as admin.
     // -----------------------------------------------------------------
     {
-      const asCoach = createUserClient(coachA.accessToken);
-      const { data: newProject, error: createErr } = await asCoach
+      const asAdmin = createUserClient(adminA.accessToken);
+      const { data: newProject, error: createErr } = await asAdmin
         .from("projects")
-        .insert({ name: `RLS Test Self-Created ${RUN}`, visibility: "private", created_by: coachA.id })
+        .insert({ name: `RLS Test Self-Created ${RUN}`, visibility: "private", created_by: adminA.id })
         .select()
         .single();
 
       if (createErr || !newProject) {
-        record("5. coach creates a project", false, createErr?.message);
+        record("5. staff creates a project", false, createErr?.message);
       } else {
         cleanupProjectIds.push(newProject.id);
-        const { error: selfAddErr } = await asCoach
+        const { error: selfAddErr } = await asAdmin
           .from("project_members")
-          .insert({ project_id: newProject.id, profile_id: coachA.id, role: "coach" });
-        const { data: readBack } = await asCoach
+          .insert({ project_id: newProject.id, profile_id: adminA.id, role: "admin" });
+        const { data: readBack } = await asAdmin
           .from("projects")
           .select("*")
           .eq("id", newProject.id);
         record(
-          "5. coach creates a project and is a member of it immediately",
+          "5. staff creates a project and is a member of it immediately as admin",
           !selfAddErr && readBack?.length === 1,
           selfAddErr?.message
         );
@@ -232,31 +242,31 @@ async function main() {
     }
 
     // -----------------------------------------------------------------
-    // 6. A client cannot create a project at all.
+    // 6. A viewer (non-staff) cannot create a project at all.
     // -----------------------------------------------------------------
     {
-      const asClient = createUserClient(clientA.accessToken);
-      const { error } = await asClient
+      const asViewer = createUserClient(viewerA.accessToken);
+      const { error } = await asViewer
         .from("projects")
-        .insert({ name: `RLS Test Should Fail ${RUN}`, visibility: "private", created_by: clientA.id });
-      record("6. client cannot create a project", !!error, error ? "correctly rejected" : "insert unexpectedly succeeded");
+        .insert({ name: `RLS Test Should Fail ${RUN}`, visibility: "private", created_by: viewerA.id });
+      record("6. non-staff viewer cannot create a project", !!error, error ? "correctly rejected" : "insert unexpectedly succeeded");
     }
 
     // -----------------------------------------------------------------
     // 7. Revoking membership takes effect on the next request.
     // -----------------------------------------------------------------
     {
-      const beforeClient = createUserClient(clientA.accessToken);
+      const beforeClient = createUserClient(viewerA.accessToken);
       const { data: before } = await beforeClient.from("projects").select("*").eq("id", projectA.id);
 
       const { error: revokeErr } = await supabaseAdmin
         .from("project_members")
         .delete()
         .eq("project_id", projectA.id)
-        .eq("profile_id", clientA.id);
+        .eq("profile_id", viewerA.id);
       if (revokeErr) throw new Error(`revoke failed: ${revokeErr.message}`);
 
-      const afterClient = createUserClient(clientA.accessToken);
+      const afterClient = createUserClient(viewerA.accessToken);
       const { data: after } = await afterClient.from("projects").select("*").eq("id", projectA.id);
 
       record(
@@ -265,10 +275,10 @@ async function main() {
         `before=${before?.length} after=${after?.length}`
       );
 
-      // Restore for the deliverables check below, which still needs clientA on project A.
+      // Restore — later checks still need viewerA on project A.
       const { error: restoreErr } = await supabaseAdmin
         .from("project_members")
-        .insert({ project_id: projectA.id, profile_id: clientA.id, role: "client" });
+        .insert({ project_id: projectA.id, profile_id: viewerA.id, role: "viewer" });
       if (restoreErr) throw new Error(`restore membership failed: ${restoreErr.message}`);
     }
 
@@ -276,18 +286,23 @@ async function main() {
     // Bonus 8: templates are staff-only — a gap in data-model.md's own RLS
     // list that this migration closed (see 001_multi_tenant_schema.sql).
     // -----------------------------------------------------------------
+    let sharedTemplateId: string | null = null;
     {
-      const { error: seedTemplateErr } = await supabaseAdmin
+      const { data: template, error: seedTemplateErr } = await supabaseAdmin
         .from("templates")
-        .insert({ name: `RLS Test Template ${RUN}`, slug: `rls-test-template-${RUN}` });
-      if (seedTemplateErr) throw new Error(`seed template failed: ${seedTemplateErr.message}`);
+        .insert({ name: `RLS Test Template ${RUN}`, slug: `rls-test-template-${RUN}` })
+        .select()
+        .single();
+      if (seedTemplateErr || !template) throw new Error(`seed template failed: ${seedTemplateErr?.message}`);
+      sharedTemplateId = template.id;
+      cleanupTemplateIds.push(template.id);
 
-      const asClient = createUserClient(clientA.accessToken);
-      const { data: clientView } = await asClient
+      const asViewer = createUserClient(viewerA.accessToken);
+      const { data: viewerView } = await asViewer
         .from("templates")
         .select("*")
         .eq("slug", `rls-test-template-${RUN}`);
-      record("8a. client cannot read templates", (clientView?.length ?? -1) === 0, `got ${clientView?.length}`);
+      record("8a. non-staff project member cannot read templates", (viewerView?.length ?? -1) === 0, `got ${viewerView?.length}`);
 
       const asStaff = createUserClient(staffOutsider.accessToken);
       const { data: staffView } = await asStaff
@@ -295,8 +310,6 @@ async function main() {
         .select("*")
         .eq("slug", `rls-test-template-${RUN}`);
       record("8b. staff can read templates", staffView?.length === 1, `got ${staffView?.length}`);
-
-      await supabaseAdmin.from("templates").delete().eq("slug", `rls-test-template-${RUN}`);
     }
 
     // -----------------------------------------------------------------
@@ -304,23 +317,182 @@ async function main() {
     // this migration closed beyond data-model.md's stated policy.
     // -----------------------------------------------------------------
     {
-      const asClient = createUserClient(clientA.accessToken);
-      const { data: clientDeliverables } = await asClient
+      const asViewer = createUserClient(viewerA.accessToken);
+      const { data: viewerDeliverables } = await asViewer
         .from("deliverables")
         .select("*")
         .eq("project_id", projectA.id);
       record(
-        "9. client does not see the unpublished deliverable",
-        (clientDeliverables?.length ?? -1) === 0,
-        `got ${clientDeliverables?.length}`
+        "9. viewer does not see the unpublished deliverable",
+        (viewerDeliverables?.length ?? -1) === 0,
+        `got ${viewerDeliverables?.length}`
+      );
+    }
+
+    // -----------------------------------------------------------------
+    // 10. A viewer cannot write a session or a deliverable.
+    // -----------------------------------------------------------------
+    {
+      const asViewer = createUserClient(viewerA.accessToken);
+      const { error: sessErr } = await asViewer
+        .from("sessions")
+        .insert({ project_id: projectA.id, title: "Viewer should not be able to write this" });
+      record("10a. viewer cannot create a session", !!sessErr, sessErr ? "correctly rejected" : "insert unexpectedly succeeded");
+
+      const { error: delivErr } = await asViewer
+        .from("deliverables")
+        .insert({ project_id: projectA.id, title: "Viewer should not be able to write this" });
+      record("10b. viewer cannot create a deliverable", !!delivErr, delivErr ? "correctly rejected" : "insert unexpectedly succeeded");
+    }
+
+    // -----------------------------------------------------------------
+    // 11. A non-staff person granted 'editor' on their own project CAN
+    // write — this is the Pivvot Coaching case: a client leading their own
+    // process needs to write session notes without being RunFree staff.
+    // -----------------------------------------------------------------
+    {
+      const asEditor = createUserClient(selfLeadEditor.accessToken);
+      const { data: session, error } = await asEditor
+        .from("sessions")
+        .insert({ project_id: projectA.id, title: "Self-led session", section: "Mod #1 FUNNEL FUSION" })
+        .select()
+        .single();
+      record(
+        "11. non-staff editor can write a session on their own project",
+        !error && !!session,
+        error?.message
+      );
+    }
+
+    // -----------------------------------------------------------------
+    // 12/13. Membership management is admin-only — an editor cannot add or
+    // remove members, but an admin can. This is the actual reason three
+    // tiers exist instead of two.
+    // -----------------------------------------------------------------
+    {
+      const asEditor = createUserClient(selfLeadEditor.accessToken);
+      const { error: editorAddErr } = await asEditor
+        .from("project_members")
+        .insert({ project_id: projectA.id, profile_id: staffOutsider.id, role: "viewer" });
+      record(
+        "12. editor cannot add a project member",
+        !!editorAddErr,
+        editorAddErr ? "correctly rejected" : "insert unexpectedly succeeded"
+      );
+
+      const asAdmin = createUserClient(adminA.accessToken);
+      const { error: adminAddErr } = await asAdmin
+        .from("project_members")
+        .insert({ project_id: projectA.id, profile_id: staffOutsider.id, role: "viewer" });
+      record("13. admin can add a project member", !adminAddErr, adminAddErr?.message);
+    }
+
+    // -----------------------------------------------------------------
+    // 14. Admin can promote a member's role in place (the new
+    // update_members policy — previously there was no UPDATE policy at
+    // all on project_members).
+    // -----------------------------------------------------------------
+    {
+      const asAdmin = createUserClient(adminA.accessToken);
+      const { error: promoteErr } = await asAdmin
+        .from("project_members")
+        .update({ role: "editor" })
+        .eq("project_id", projectA.id)
+        .eq("profile_id", staffOutsider.id);
+      record("14. admin can promote a member's role", !promoteErr, promoteErr?.message);
+    }
+
+    // -----------------------------------------------------------------
+    // 15. template_resources: visible to a project member on a matching
+    // template, invisible to someone with no project on that template.
+    // -----------------------------------------------------------------
+    {
+      await supabaseAdmin.from("projects").update({ template_id: sharedTemplateId }).eq("id", projectA.id);
+      const { data: resource, error: seedResourceErr } = await supabaseAdmin
+        .from("template_resources")
+        .insert({
+          template_id: sharedTemplateId!,
+          section: "PROCESS OVERVIEW",
+          kind: "handout",
+          title: `RLS Test Resource ${RUN}`,
+        })
+        .select()
+        .single();
+      if (seedResourceErr || !resource) throw new Error(`seed template_resource failed: ${seedResourceErr?.message}`);
+
+      const asViewer = createUserClient(viewerA.accessToken);
+      const { data: viewerSees } = await asViewer
+        .from("template_resources")
+        .select("*")
+        .eq("id", resource.id);
+      record(
+        "15a. member of a project on this template can read its template_resources",
+        viewerSees?.length === 1,
+        `got ${viewerSees?.length}`
+      );
+
+      const asOutsider = createUserClient(viewerB.accessToken);
+      const { data: outsiderSees } = await asOutsider
+        .from("template_resources")
+        .select("*")
+        .eq("id", resource.id);
+      record(
+        "15b. non-member on a different template cannot read template_resources",
+        (outsiderSees?.length ?? -1) === 0,
+        `got ${outsiderSees?.length}`
+      );
+    }
+
+    // -----------------------------------------------------------------
+    // 16. Deliverable image storage: editor/admin can upload into their own
+    // project's folder, a viewer cannot, and a member of a different
+    // project cannot even read what's there.
+    // -----------------------------------------------------------------
+    {
+      const path = `${projectA.id}/rls-test-${RUN}.txt`;
+      const body = new Blob([`rls test ${RUN}`], { type: "text/plain" });
+
+      const asViewer = createUserClient(viewerA.accessToken);
+      const { error: viewerUploadErr } = await asViewer.storage.from(BUCKET).upload(path, body);
+      record(
+        "16a. viewer cannot upload a deliverable image",
+        !!viewerUploadErr,
+        viewerUploadErr ? "correctly rejected" : "upload unexpectedly succeeded"
+      );
+
+      const asAdmin = createUserClient(adminA.accessToken);
+      const { error: adminUploadErr } = await asAdmin.storage.from(BUCKET).upload(path, body, { upsert: true });
+      record("16b. admin can upload a deliverable image", !adminUploadErr, adminUploadErr?.message);
+      if (!adminUploadErr) cleanupStoragePaths.push(path);
+
+      const asOutsider = createUserClient(viewerB.accessToken);
+      const { error: outsiderDownloadErr } = await asOutsider.storage.from(BUCKET).download(path);
+      record(
+        "16c. member of a different project cannot read this project's uploaded image",
+        !!outsiderDownloadErr,
+        outsiderDownloadErr ? "correctly rejected" : "download unexpectedly succeeded"
+      );
+
+      const { error: sameProjectDownloadErr } = await asViewer.storage.from(BUCKET).download(path);
+      record(
+        "16d. a viewer ON the project can still read the uploaded image",
+        !sameProjectDownloadErr,
+        sameProjectDownloadErr?.message
       );
     }
   } finally {
     // ---------------------------------------------------------------------
-    // Cleanup — projects first (created_by has no ON DELETE CASCADE, so a
-    // profile can't be deleted while it still owns a project), then users
-    // (cascades to profiles and project_members).
+    // Cleanup — storage objects and templates first (no FK relationship to
+    // worry about there), then projects (created_by has no ON DELETE
+    // CASCADE, so a profile can't be deleted while it still owns a
+    // project), then users (cascades to profiles and project_members).
     // ---------------------------------------------------------------------
+    if (cleanupStoragePaths.length > 0) {
+      await supabaseAdmin.storage.from(BUCKET).remove(cleanupStoragePaths);
+    }
+    for (const id of cleanupTemplateIds) {
+      await supabaseAdmin.from("templates").delete().eq("id", id);
+    }
     for (const id of cleanupProjectIds) {
       await supabaseAdmin.from("projects").delete().eq("id", id);
     }

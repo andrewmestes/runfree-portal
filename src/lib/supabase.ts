@@ -62,6 +62,8 @@ export type Database = {
           full_name: string | null;
           is_staff: boolean;
           is_owner: boolean;
+          /** Portal-wide, independent of any project membership — see 006_client_portal_expansion.sql. */
+          certification_access: boolean;
           created_at: string;
         };
         Insert: {
@@ -70,12 +72,14 @@ export type Database = {
           full_name?: string | null;
           is_staff?: boolean;
           is_owner?: boolean;
+          certification_access?: boolean;
           created_at?: string;
         };
         Update: {
           full_name?: string | null;
           is_staff?: boolean;
           is_owner?: boolean;
+          certification_access?: boolean;
         };
         Relationships: [];
       };
@@ -154,17 +158,18 @@ export type Database = {
         Row: {
           project_id: string;
           profile_id: string;
-          role: "client" | "coach";
+          /** viewer: read-only. editor: writes sessions/deliverables. admin: editor + manages membership. */
+          role: "viewer" | "editor" | "admin";
           added_at: string;
         };
         Insert: {
           project_id: string;
           profile_id: string;
-          role?: "client" | "coach";
+          role?: "viewer" | "editor" | "admin";
           added_at?: string;
         };
         Update: {
-          role?: "client" | "coach";
+          role?: "viewer" | "editor" | "admin";
         };
         Relationships: [
           {
@@ -186,6 +191,8 @@ export type Database = {
           id: string;
           project_id: string;
           title: string;
+          /** Freeform module/section label, e.g. "Mod #1 FUNNEL FUSION" — not an enum, since it varies per template and a from-scratch project has none. */
+          section: string | null;
           held_on: string | null;
           position: number;
           recording_url: string | null;
@@ -199,6 +206,7 @@ export type Database = {
           id?: string;
           project_id: string;
           title: string;
+          section?: string | null;
           held_on?: string | null;
           position?: number;
           recording_url?: string | null;
@@ -210,6 +218,7 @@ export type Database = {
         };
         Update: {
           title?: string;
+          section?: string | null;
           held_on?: string | null;
           position?: number;
           recording_url?: string | null;
@@ -233,8 +242,12 @@ export type Database = {
           project_id: string;
           session_id: string | null;
           title: string;
+          /** Freeform module/section label — see sessions.section. */
+          section: string | null;
           drive_file_id: string | null;
           external_url: string | null;
+          /** Supabase Storage object path in the deliverable-images bucket, e.g. "{project_id}/{filename}". */
+          image_path: string | null;
           position: number;
           published_at: string | null;
           created_at: string;
@@ -244,8 +257,10 @@ export type Database = {
           project_id: string;
           session_id?: string | null;
           title: string;
+          section?: string | null;
           drive_file_id?: string | null;
           external_url?: string | null;
+          image_path?: string | null;
           position?: number;
           published_at?: string | null;
           created_at?: string;
@@ -253,8 +268,10 @@ export type Database = {
         Update: {
           title?: string;
           session_id?: string | null;
+          section?: string | null;
           drive_file_id?: string | null;
           external_url?: string | null;
+          image_path?: string | null;
           position?: number;
           published_at?: string | null;
         };
@@ -269,6 +286,49 @@ export type Database = {
             foreignKeyName: "deliverables_session_id_fkey";
             columns: ["session_id"];
             referencedRelation: "sessions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      template_resources: {
+        Row: {
+          id: string;
+          template_id: string;
+          section: string;
+          kind: "handout" | "video" | "exercise" | "team_bio" | "link";
+          title: string;
+          description: string | null;
+          external_url: string | null;
+          drive_file_id: string | null;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          template_id: string;
+          section: string;
+          kind: "handout" | "video" | "exercise" | "team_bio" | "link";
+          title: string;
+          description?: string | null;
+          external_url?: string | null;
+          drive_file_id?: string | null;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          section?: string;
+          kind?: "handout" | "video" | "exercise" | "team_bio" | "link";
+          title?: string;
+          description?: string | null;
+          external_url?: string | null;
+          drive_file_id?: string | null;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "template_resources_template_id_fkey";
+            columns: ["template_id"];
+            referencedRelation: "templates";
             referencedColumns: ["id"];
           },
         ];

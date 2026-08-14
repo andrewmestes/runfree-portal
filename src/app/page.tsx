@@ -135,6 +135,17 @@ export default function HomePage() {
       />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        {profile?.is_staff && (
+          <div className="mb-6 flex justify-end">
+            <a
+              href="/projects/new"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+            >
+              + New project
+            </a>
+          </div>
+        )}
+
         {projects.length === 0 ? (
           <EmptyState isStaff={profile?.is_staff ?? false} />
         ) : (
@@ -168,7 +179,10 @@ function EmptyState({ isStaff }: { isStaff: boolean }) {
 
 function ProjectCard({ project }: { project: ProjectRow }) {
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-runfree-magenta/35">
+    <a
+      href={`/projects/${project.id}`}
+      className="group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-runfree-magenta/35"
+    >
       <div className="h-1 bg-runfree-grad" />
       <div className="flex flex-1 flex-col p-6">
         <div className="flex items-center gap-2">
@@ -187,6 +201,6 @@ function ProjectCard({ project }: { project: ProjectRow }) {
           {project.name}
         </h2>
       </div>
-    </div>
+    </a>
   );
 }

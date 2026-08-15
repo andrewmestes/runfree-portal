@@ -740,7 +740,11 @@ function IconButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className="flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-xs font-bold text-gray-600 shadow-sm outline-none ring-runfree-magenta/60 backdrop-blur transition hover:bg-white hover:text-runfree-magentaDeep focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-30"
+      /* 36px rather than the 28px this started at. These are the only way to
+         reorder without a mouse, so they are hit with a thumb on an iPad in a
+         working session — 28px is well under a comfortable touch target and
+         sits on top of a busy photo. */
+      className="flex h-9 w-9 items-center justify-center rounded-md bg-white/90 text-sm font-bold text-gray-600 shadow-sm outline-none ring-runfree-magenta/60 backdrop-blur transition hover:bg-white hover:text-runfree-magentaDeep focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-30"
     >
       {children}
     </button>

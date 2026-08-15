@@ -125,6 +125,9 @@ export default function VisionStackPage() {
   const stackItems = detail.deliverables.filter((d) => d.kind === "vision_stack");
   const ready = stackItems.filter((d) => d.published_at).length;
 
+  const layerSlugs = new Set(detail.stackLayers.map((l) => l.slug));
+  const unfiled = stackItems.filter((d) => !d.stack_layer || !layerSlugs.has(d.stack_layer));
+
   return (
     <div className="min-h-screen bg-gray-50">
       <PortalHeader
@@ -179,6 +182,27 @@ export default function VisionStackPage() {
               onChanged={load}
             />
           ))}
+
+          {/* Anything not assigned to one of the four layers — or assigned to
+              a layer that no longer exists. Without this the item is counted
+              in the header ("N of M complete") but appears nowhere on the
+              page, which is how "Future Team Z-lander Personal Vision Work"
+              went missing: it was seeded from Asana but never mapped in
+              migration 012. Guessing a layer for it would have been worse
+              than showing it honestly and letting Andrew file it. */}
+          {unfiled.length > 0 && (
+            <LayerBlock
+              index={detail.stackLayers.length}
+              name="Also in this engagement"
+              blurb="Work that hasn't been filed into a layer of the stack yet."
+              items={unfiled}
+              imageUrls={imageUrls}
+              canEdit={canEdit}
+              accessToken={accessToken}
+              projectId={projectId}
+              onChanged={load}
+            />
+          )}
         </div>
 
         {stackItems.every((d) => !d.published_at) && (

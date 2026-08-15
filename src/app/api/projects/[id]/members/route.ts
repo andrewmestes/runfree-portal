@@ -27,7 +27,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const accessToken = authHeader.slice("Bearer ".length);
 
-  let body: { email?: string; role?: string };
+  let body: { email?: string; role?: string; orgRole?: string | null };
   try {
     body = await request.json();
   } catch {
@@ -36,6 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const email = body.email?.trim().toLowerCase();
   const role = body.role;
+  const orgRole = body.orgRole?.trim() || null;
   if (!email) {
     return NextResponse.json({ error: "email is required" }, { status: 400 });
   }
@@ -85,7 +86,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const client = createUserClient(accessToken);
   const { error: insertErr } = await client
     .from("project_members")
-    .insert({ project_id: projectId, profile_id: profileId, role: role as "viewer" | "editor" | "admin" });
+    .insert({
+      project_id: projectId,
+      profile_id: profileId,
+      role: role as "viewer" | "editor" | "admin",
+      org_role: orgRole,
+    });
 
   if (insertErr) {
     if (insertErr.code === "23505") {

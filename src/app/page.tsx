@@ -72,7 +72,21 @@ export default function HomePage() {
         }
 
         setProfile(current);
-        setProjects((await listMyProjects()) as ProjectRow[]);
+        const mine = (await listMyProjects()) as ProjectRow[];
+
+        // A church client is on exactly one engagement and has no use for a
+        // list of one. Send them straight in — "I want it to go directly to
+        // the project that they're invited to, especially since the vast
+        // majority will only be involved in one single project."
+        //
+        // Staff keep the list even when it holds one project, because they
+        // create others and need somewhere to do it from.
+        if (!current.is_staff && mine.length === 1) {
+          router.replace(`/projects/${mine[0].id}`);
+          return;
+        }
+
+        setProjects(mine);
         setStatus("ready");
       } catch (err) {
         console.error("Home init failed:", err);

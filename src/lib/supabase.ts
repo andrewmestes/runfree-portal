@@ -118,6 +118,11 @@ export type Database = {
           template_id: string | null;
           visibility: "private" | "team";
           drive_folder_id: string | null;
+          /** Storage path in the deliverable-images bucket, {project_id}/logo-*.ext */
+          logo_path: string | null;
+          location: string | null;
+          website_url: string | null;
+          about: string | null;
           created_by: string;
           archived_at: string | null;
           created_at: string;
@@ -128,6 +133,10 @@ export type Database = {
           template_id?: string | null;
           visibility?: "private" | "team";
           drive_folder_id?: string | null;
+          logo_path?: string | null;
+          location?: string | null;
+          website_url?: string | null;
+          about?: string | null;
           created_by: string;
           archived_at?: string | null;
           created_at?: string;
@@ -137,6 +146,10 @@ export type Database = {
           template_id?: string | null;
           visibility?: "private" | "team";
           drive_folder_id?: string | null;
+          logo_path?: string | null;
+          location?: string | null;
+          website_url?: string | null;
+          about?: string | null;
           archived_at?: string | null;
         };
         Relationships: [
@@ -160,16 +173,24 @@ export type Database = {
           profile_id: string;
           /** viewer: read-only. editor: writes sessions/deliverables. admin: editor + manages membership. */
           role: "viewer" | "editor" | "admin";
+          /** Their job title where they work ("Executive Pastor"). Carries NO permissions — see 010. */
+          org_role: string | null;
+          /** Marks the RunFree person leading this engagement. */
+          is_lead: boolean;
           added_at: string;
         };
         Insert: {
           project_id: string;
           profile_id: string;
           role?: "viewer" | "editor" | "admin";
+          org_role?: string | null;
+          is_lead?: boolean;
           added_at?: string;
         };
         Update: {
           role?: "viewer" | "editor" | "admin";
+          org_role?: string | null;
+          is_lead?: boolean;
         };
         Relationships: [
           {
@@ -241,9 +262,14 @@ export type Database = {
           id: string;
           project_id: string;
           session_id: string | null;
-          title: string;
-          /** Freeform module/section label — see sessions.section. */
+          /** Nullable on purpose: a flipchart photo is meaningful without a name. */
+          title: string | null;
+          /** Which module PRODUCED it. Distinct from stack_layer — see 012. */
           section: string | null;
+          /** vision_stack: a named, finished artifact. session_image: an untitled photo from a working session. */
+          kind: "vision_stack" | "session_image";
+          /** Which Vision Stack layer it BELONGS to. References vision_stack_layers.slug. */
+          stack_layer: string | null;
           drive_file_id: string | null;
           external_url: string | null;
           /** Supabase Storage object path in the deliverable-images bucket, e.g. "{project_id}/{filename}". */
@@ -256,8 +282,10 @@ export type Database = {
           id?: string;
           project_id: string;
           session_id?: string | null;
-          title: string;
+          title?: string | null;
           section?: string | null;
+          kind?: "vision_stack" | "session_image";
+          stack_layer?: string | null;
           drive_file_id?: string | null;
           external_url?: string | null;
           image_path?: string | null;
@@ -266,9 +294,11 @@ export type Database = {
           created_at?: string;
         };
         Update: {
-          title?: string;
+          title?: string | null;
           session_id?: string | null;
           section?: string | null;
+          kind?: "vision_stack" | "session_image";
+          stack_layer?: string | null;
           drive_file_id?: string | null;
           external_url?: string | null;
           image_path?: string | null;
@@ -300,6 +330,8 @@ export type Database = {
           description: string | null;
           external_url: string | null;
           drive_file_id: string | null;
+          /** Marks the combined module handout, which renders large; the rest render small beneath it. */
+          is_primary: boolean;
           position: number;
           created_at: string;
         };
@@ -312,6 +344,7 @@ export type Database = {
           description?: string | null;
           external_url?: string | null;
           drive_file_id?: string | null;
+          is_primary?: boolean;
           position?: number;
           created_at?: string;
         };
@@ -322,6 +355,7 @@ export type Database = {
           description?: string | null;
           external_url?: string | null;
           drive_file_id?: string | null;
+          is_primary?: boolean;
           position?: number;
         };
         Relationships: [
@@ -332,6 +366,26 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      vision_stack_layers: {
+        Row: {
+          slug: string;
+          name: string;
+          blurb: string | null;
+          position: number;
+        };
+        Insert: {
+          slug: string;
+          name: string;
+          blurb?: string | null;
+          position: number;
+        };
+        Update: {
+          name?: string;
+          blurb?: string | null;
+          position?: number;
+        };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

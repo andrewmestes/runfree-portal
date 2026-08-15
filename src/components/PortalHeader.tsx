@@ -24,7 +24,30 @@ type Props = {
    * the caller supplies it. Defaults to just Home.
    */
   links?: NavLink[];
+  /**
+   * False on pages that open with their own hero — the project page leads
+   * with the church's name and mark, and a second title block above it would
+   * say the same thing twice in a smaller font.
+   */
+  showTitleBlock?: boolean;
+  /**
+   * Shows the switch across to the Certified Vision Framers portal. Andrew:
+   * "Since I would be somebody who's in a project, also an admin, also
+   * needing access to the Certified Vision Framers content, I want you to
+   * maybe easily show how I might switch between each individual section."
+   * Hidden for church clients, who have no login over there.
+   */
+  certificationAccess?: boolean;
 };
+
+/**
+ * Where the certification portal lives. Env var so this follows the domain
+ * cutover to certified.runfree.co without a code change; the fallback is the
+ * URL that works today.
+ */
+const CVF_URL =
+  process.env.NEXT_PUBLIC_CVF_PORTAL_URL ||
+  "https://certified-vision-framers-portal-pearl.vercel.app";
 
 const HOME_LINK: NavLink[] = [{ href: "/", label: "Home" }];
 
@@ -37,6 +60,8 @@ export default function PortalHeader({
   backHref,
   backLabel,
   links,
+  showTitleBlock = true,
+  certificationAccess = false,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -87,6 +112,18 @@ export default function PortalHeader({
           </nav>
 
           <div className="hidden shrink-0 items-center gap-4 text-sm sm:flex">
+            {certificationAccess && (
+              <a
+                href={CVF_URL}
+                className="group inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider text-white/70 ring-1 ring-white/20 transition hover:text-white hover:ring-white/40"
+                title="Switch to the Certified Vision Framers portal"
+              >
+                Certification
+                <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+                  ↗
+                </span>
+              </a>
+            )}
             {profile?.is_staff && (
               <a
                 href="/admin"
@@ -152,6 +189,17 @@ export default function PortalHeader({
 
             <div className="my-2 border-t border-white/10" />
 
+            {certificationAccess && (
+              <a
+                href={CVF_URL}
+                onClick={() => setMenuOpen(false)}
+                className="flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"
+              >
+                Certification portal
+                <span aria-hidden>↗</span>
+              </a>
+            )}
+
             {profile?.is_staff && (
               <a
                 href="/admin"
@@ -175,7 +223,11 @@ export default function PortalHeader({
           </nav>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-6 py-6 sm:py-7">
+        <div
+          className={`flex flex-wrap items-center justify-between gap-6 py-6 sm:py-7 ${
+            showTitleBlock ? "" : "hidden"
+          }`}
+        >
           <div className="min-w-0">
             {eyebrow && (
               <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-pink">

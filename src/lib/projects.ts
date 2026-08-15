@@ -9,8 +9,20 @@ type TemplateResourceRow = Database["public"]["Tables"]["template_resources"]["R
 export type ProjectMember = {
   profileId: string;
   role: ProjectRole;
+  /** Their title where they work. No permissions attached — see migration 010. */
+  orgRole: string | null;
+  isLead: boolean;
+  /** Splits the roster into the RunFree side and the church's side. */
+  isStaff: boolean;
   fullName: string | null;
   email: string;
+};
+
+export type VisionStackLayer = {
+  slug: string;
+  name: string;
+  blurb: string | null;
+  position: number;
 };
 
 export type ProjectDetail = {
@@ -19,11 +31,16 @@ export type ProjectDetail = {
   visibility: "private" | "team";
   createdBy: string;
   archivedAt: string | null;
+  logoPath: string | null;
+  location: string | null;
+  websiteUrl: string | null;
+  about: string | null;
   template: { id: string; name: string; slug: string; structure: unknown } | null;
   members: ProjectMember[];
   sessions: SessionRow[];
   deliverables: DeliverableRow[];
   resources: TemplateResourceRow[];
+  stackLayers: VisionStackLayer[];
 };
 
 /**
@@ -47,10 +64,10 @@ export async function getProjectDetail(
   if (projectErr) throw projectErr;
   if (!project) return null;
 
-  const [membersRes, sessionsRes, deliverablesRes, resourcesRes] = await Promise.all([
+  const [membersRes, sessionsRes, deliverablesRes, resourcesRes, layersRes] = await Promise.all([
     client
       .from("project_members")
-      .select("profile_id, role, profiles(full_name, email)")
+      .select("profile_id, role, org_role, is_lead, profiles(full_name, email, is_staff)")
       .eq("project_id", projectId),
     client
       .from("sessions")
@@ -69,12 +86,14 @@ export async function getProjectDetail(
           .eq("template_id", project.template_id)
           .order("position", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
+    client.from("vision_stack_layers").select("*").order("position", { ascending: true }),
   ]);
 
   if (membersRes.error) throw membersRes.error;
   if (sessionsRes.error) throw sessionsRes.error;
   if (deliverablesRes.error) throw deliverablesRes.error;
   if (resourcesRes.error) throw resourcesRes.error;
+  if (layersRes.error) throw layersRes.error;
 
   const template = project.templates as unknown as
     | { id: string; name: string; slug: string; structure: unknown }
@@ -86,12 +105,23 @@ export async function getProjectDetail(
     visibility: project.visibility,
     createdBy: project.created_by,
     archivedAt: project.archived_at,
+    logoPath: project.logo_path,
+    location: project.location,
+    websiteUrl: project.website_url,
+    about: project.about,
     template,
     members: (membersRes.data ?? []).map((m) => {
-      const profile = m.profiles as unknown as { full_name: string | null; email: string } | null;
+      const profile = m.profiles as unknown as {
+        full_name: string | null;
+        email: string;
+        is_staff: boolean;
+      } | null;
       return {
         profileId: m.profile_id,
         role: m.role,
+        orgRole: m.org_role,
+        isLead: m.is_lead,
+        isStaff: profile?.is_staff ?? false,
         fullName: profile?.full_name ?? null,
         email: profile?.email ?? "",
       };
@@ -99,7 +129,24 @@ export async function getProjectDetail(
     sessions: sessionsRes.data ?? [],
     deliverables: deliverablesRes.data ?? [],
     resources: (resourcesRes.data as TemplateResourceRow[]) ?? [],
+    stackLayers: (layersRes.data as VisionStackLayer[]) ?? [],
   };
+}
+
+/**
+ * The roster as CSV — "in case we need to copy and paste all of the emails to
+ * send them all an email or easily add them to a group of contacts."
+ *
+ * Quotes every field and doubles embedded quotes, because a job title like
+ * 'Pastor, "Family Life"' otherwise shifts every subsequent column.
+ */
+export function membersToCsv(members: ProjectMember[]): string {
+  const escape = (v: string | null) => `"${(v ?? "").replace(/"/g, '""')}"`;
+  const rows = [
+    ["Name", "Email", "Role at church", "Portal access"],
+    ...members.map((m) => [m.fullName, m.email, m.orgRole, m.role]),
+  ];
+  return rows.map((r) => r.map((c) => escape(c as string | null)).join(",")).join("\r\n");
 }
 
 /** Group a list of section-labeled rows in template-declared order, then by first appearance. */
@@ -221,16 +268,42 @@ export async function updateSession(
 export async function createDeliverable(
   accessToken: string,
   projectId: string,
-  input: { title: string; section: string | null }
+  input: Omit<Database["public"]["Tables"]["deliverables"]["Insert"], "project_id">
 ) {
   const client = createUserClient(accessToken);
   const { data, error } = await client
     .from("deliverables")
-    .insert({ project_id: projectId, title: input.title, section: input.section })
+    .insert({ ...input, project_id: projectId })
     .select()
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function deleteDeliverable(accessToken: string, deliverableId: string) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("deliverables").delete().eq("id", deliverableId);
+  if (error) throw error;
+}
+
+/**
+ * Persist a hand-arranged order. Andrew: "it would be really nice if we could
+ * just click and drag and drop and reorganize the order of certain images
+ * once they're uploaded."
+ *
+ * Writes every row rather than only the moved one — a single drag shifts the
+ * index of everything between the old and new slot, and updating just the
+ * dragged row would leave duplicate positions that sort unpredictably.
+ */
+export async function reorderDeliverables(accessToken: string, orderedIds: string[]) {
+  const client = createUserClient(accessToken);
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      client.from("deliverables").update({ position: index }).eq("id", id)
+    )
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
 }
 
 export async function updateDeliverable(
@@ -261,6 +334,33 @@ export async function updateMemberRole(
     .update({ role })
     .eq("project_id", projectId)
     .eq("profile_id", profileId);
+  if (error) throw error;
+}
+
+/** Their title at the church, and whether they're the RunFree lead on this engagement. */
+export async function updateMemberDetails(
+  accessToken: string,
+  projectId: string,
+  profileId: string,
+  patch: { org_role?: string | null; is_lead?: boolean }
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client
+    .from("project_members")
+    .update(patch)
+    .eq("project_id", projectId)
+    .eq("profile_id", profileId);
+  if (error) throw error;
+}
+
+/** Church profile — name, logo, where they are, who they are. Gated by manage_projects RLS. */
+export async function updateProject(
+  accessToken: string,
+  projectId: string,
+  patch: Database["public"]["Tables"]["projects"]["Update"]
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("projects").update(patch).eq("id", projectId);
   if (error) throw error;
 }
 

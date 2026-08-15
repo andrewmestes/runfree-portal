@@ -63,6 +63,23 @@ type HandoutLibrary = {
   notebooks: HandoutFile[];
 };
 
+/**
+ * "2026-03-14" -> "14 March 2026". Parsed as parts rather than handed to
+ * `new Date("2026-03-14")`, which is treated as UTC midnight and renders as
+ * the previous day for anyone west of Greenwich — including every church
+ * this serves.
+ */
+function formatSessionDate(held: string | null): string {
+  if (!held) return "Date not set";
+  const [y, m, d] = held.split("-").map(Number);
+  if (!y || !m || !d) return held;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function prettySize(bytes: number | null): string | null {
   if (!bytes) return null;
   const mb = bytes / 1024 / 1024;
@@ -362,6 +379,9 @@ export default function ProjectDetailPage() {
         <SessionsSection
           id="sessions"
           sessions={detail.sessions}
+          detail={detail}
+          imageUrls={imageUrls}
+          moduleOptions={modules.map((m) => m.section)}
           canEdit={canEdit}
           accessToken={accessToken}
           projectId={projectId}
@@ -667,8 +687,12 @@ function ModulePanel({
   const primaryHandout = driveHandouts?.combined ?? null;
   const otherHandouts = driveHandouts?.sheets ?? [];
 
+  // Photos uploaded straight to the module. Ones attached to a session are
+  // deliberately excluded — they render inside that session, and a photo
+  // appearing twice on the same page reads as a duplicate rather than as
+  // two views of the same thing.
   const images = detail.deliverables.filter(
-    (d) => d.section === section && d.kind === "session_image"
+    (d) => d.section === section && d.kind === "session_image" && !d.session_id
   );
   const moduleDeliverables = detail.deliverables.filter(
     (d) => d.section === section && d.kind === "vision_stack"
@@ -934,6 +958,7 @@ function ImageGallery({
   accessToken,
   projectId,
   section,
+  sessionId,
   onChanged,
 }: {
   images: ProjectDetail["deliverables"];
@@ -941,7 +966,9 @@ function ImageGallery({
   canEdit: boolean;
   accessToken: string | null;
   projectId: string;
-  section: string;
+  section: string | null;
+  /** Set when the gallery belongs to one session rather than a whole module. */
+  sessionId?: string | null;
   onChanged: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -996,6 +1023,7 @@ function ImageGallery({
         await createDeliverable(accessToken, projectId, {
           title: null,
           section,
+          session_id: sessionId ?? null,
           kind: "session_image",
           image_path: path,
           position: next++,
@@ -1286,6 +1314,9 @@ function PrepareSection({
 function SessionsSection({
   id,
   sessions,
+  detail,
+  imageUrls,
+  moduleOptions,
   canEdit,
   accessToken,
   projectId,
@@ -1293,6 +1324,9 @@ function SessionsSection({
 }: {
   id: string;
   sessions: ProjectDetail["sessions"];
+  detail: ProjectDetail;
+  imageUrls: Record<string, string>;
+  moduleOptions: string[];
   canEdit: boolean;
   accessToken: string | null;
   projectId: string;
@@ -1321,12 +1355,19 @@ function SessionsSection({
           </p>
         )}
 
-        {sessions.map((s) => (
+        {sessions.map((s, i) => (
           <SessionRow
             key={s.id}
+            index={i}
             session={s}
+            photos={detail.deliverables.filter(
+              (d) => d.kind === "session_image" && d.session_id === s.id
+            )}
+            imageUrls={imageUrls}
+            moduleOptions={moduleOptions}
             canEdit={canEdit}
             accessToken={accessToken}
+            projectId={projectId}
             onChanged={onChanged}
           />
         ))}
@@ -1372,19 +1413,31 @@ function SessionsSection({
 }
 
 function SessionRow({
+  index,
   session,
+  photos,
+  imageUrls,
+  moduleOptions,
   canEdit,
   accessToken,
+  projectId,
   onChanged,
 }: {
+  index: number;
   session: ProjectDetail["sessions"][number];
+  photos: ProjectDetail["deliverables"];
+  imageUrls: Record<string, string>;
+  moduleOptions: string[];
   canEdit: boolean;
   accessToken: string | null;
+  projectId: string;
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
+    held_on: session.held_on ?? "",
+    section: session.section ?? "",
     recording_url: session.recording_url ?? "",
     takeaways: session.takeaways ?? "",
     commitments: session.commitments ?? "",
@@ -1397,6 +1450,8 @@ function SessionRow({
     setSaving(true);
     try {
       await updateSession(accessToken, session.id, {
+        held_on: form.held_on || null,
+        section: form.section || null,
         recording_url: form.recording_url || null,
         takeaways: form.takeaways || null,
         commitments: form.commitments || null,
@@ -1418,11 +1473,20 @@ function SessionRow({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
       >
-        <span className="min-w-0">
-          <span className="block font-semibold text-runfree-ink">{session.title}</span>
-          <span className="mt-0.5 block text-xs text-gray-500">
-            {session.held_on ?? "Date not set"}
-            {!session.published_at && canEdit && " · Draft"}
+        <span className="flex min-w-0 items-center gap-4">
+          <span
+            aria-hidden
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-runfree-indigo text-xs font-bold text-runfree-navy"
+          >
+            {index + 1}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-semibold text-runfree-ink">{session.title}</span>
+            <span className="mt-0.5 block truncate text-xs text-gray-500">
+              {formatSessionDate(session.held_on)}
+              {session.section && ` · ${moduleLabel(session.section)}`}
+              {!session.published_at && canEdit && " · Draft"}
+            </span>
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-3">
@@ -1447,10 +1511,47 @@ function SessionRow({
         <div className="animate-fade space-y-4 border-t border-gray-100 px-5 py-5">
           {canEdit ? (
             <>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex-1 min-w-[150px]">
+                  {/* This input did not exist. held_on was rendered in the
+                      header but never editable, so every session read "Date
+                      not set" forever — in the one feature whose whole point
+                      is a dated record of what happened when. */}
+                  <Field label="Date held">
+                    <input
+                      type="date"
+                      value={form.held_on}
+                      onChange={(e) => setForm((f) => ({ ...f, held_on: e.target.value }))}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                    />
+                  </Field>
+                </div>
+                <div className="flex-1 min-w-[180px]">
+                  {/* Six modules are delivered across roughly ten sessions, so
+                      a session is not a module — tagging which one it covered
+                      is what keeps the two views reconcilable. */}
+                  <Field label="Module covered">
+                    <select
+                      value={form.section}
+                      onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                    >
+                      <option value="">Not tied to one module</option>
+                      {moduleOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {moduleLabel(m)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </div>
+
               <Field label="Recording link (Loom or Zoom)">
                 <input
                   value={form.recording_url}
                   onChange={(e) => setForm((f) => ({ ...f, recording_url: e.target.value }))}
+                  placeholder="https://www.loom.com/share/…"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
                 />
               </Field>
@@ -1462,14 +1563,30 @@ function SessionRow({
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
                 />
               </Field>
-              <Field label="Commitments">
+              <Field label="Next steps &amp; homework">
                 <textarea
-                  rows={2}
+                  rows={3}
                   value={form.commitments}
                   onChange={(e) => setForm((f) => ({ ...f, commitments: e.target.value }))}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
                 />
               </Field>
+              <div>
+                <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                  Photos from this session
+                </h5>
+                <ImageGallery
+                  images={photos}
+                  imageUrls={imageUrls}
+                  canEdit={canEdit}
+                  accessToken={accessToken}
+                  projectId={projectId}
+                  section={session.section}
+                  sessionId={session.id}
+                  onChanged={onChanged}
+                />
+              </div>
+
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input
                   type="checkbox"
@@ -1513,14 +1630,32 @@ function SessionRow({
               {session.commitments && (
                 <div>
                   <h5 className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-                    Commitments
+                    Next steps &amp; homework
                   </h5>
                   <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">
                     {session.commitments}
                   </p>
                 </div>
               )}
-              {!loomId && !session.takeaways && !session.commitments && (
+              {photos.length > 0 && (
+                <div>
+                  <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                    From this session
+                  </h5>
+                  <ImageGallery
+                    images={photos}
+                    imageUrls={imageUrls}
+                    canEdit={false}
+                    accessToken={accessToken}
+                    projectId={projectId}
+                    section={session.section}
+                    sessionId={session.id}
+                    onChanged={onChanged}
+                  />
+                </div>
+              )}
+
+              {!loomId && !session.takeaways && !session.commitments && photos.length === 0 && (
                 <p className="text-sm text-gray-400">Notes from this session are coming.</p>
               )}
             </>

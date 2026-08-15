@@ -49,6 +49,26 @@ const OVERVIEW_SECTION = "PROCESS OVERVIEW";
  */
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 
+type HandoutFile = {
+  id: string;
+  title: string;
+  num: string | null;
+  label: string;
+  sizeBytes: number | null;
+};
+type HandoutLibrary = {
+  configured: boolean;
+  byModule: Record<string, { combined: HandoutFile | null; sheets: HandoutFile[] }>;
+  extras: { id: string; name: string; files: HandoutFile[] }[];
+  notebooks: HandoutFile[];
+};
+
+function prettySize(bytes: number | null): string | null {
+  if (!bytes) return null;
+  const mb = bytes / 1024 / 1024;
+  return mb >= 1 ? `${mb.toFixed(mb >= 10 ? 0 : 1)} MB` : `${Math.round(bytes / 1024)} KB`;
+}
+
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -60,6 +80,7 @@ export default function ProjectDetailPage() {
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"checking" | "ready" | "not_found" | "error">("checking");
   const [activeModule, setActiveModule] = useState<string>("");
+  const [handouts, setHandouts] = useState<HandoutLibrary | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -93,11 +114,73 @@ export default function ProjectDetailPage() {
         ...result.deliverables.map((d) => d.image_path).filter((p): p is string => !!p),
       ];
       setImageUrls(await getSignedImageUrls(session.access_token, paths));
+
+      // Handouts come from Drive and are the slowest part of the page, so
+      // they load after the render rather than blocking it — a module shows
+      // its videos and exercises immediately and the handout appears a beat
+      // later. A failure here is deliberately quiet: the rest of the project
+      // is still worth reading, and a church shouldn't see an error because
+      // Google was slow.
+      fetch(`/api/projects/${projectId}/handouts`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => data && setHandouts(data))
+        .catch(() => {});
     } catch (err) {
       console.error("Project load failed:", err);
       setStatus("error");
     }
   }, [projectId, router]);
+
+  /**
+   * Open a handout in a new tab.
+   *
+   * The file endpoint needs an Authorization header, which an <a href> cannot
+   * send — this app keeps its session in localStorage, not a cookie. So the
+   * bytes are fetched with the token and handed over as a blob URL, the same
+   * approach the CVF portal uses for its gated Drive files.
+   *
+   * The tab is opened SYNCHRONOUSLY on the click and pointed at the blob
+   * afterwards. Opening it after the await instead is what gets a window
+   * swallowed by a popup blocker, because by then the browser no longer
+   * attributes it to a user gesture.
+   */
+  const openHandout = useCallback(
+    async (fileId: string, title: string) => {
+      const tab = window.open("", "_blank");
+      if (tab) {
+        tab.document.write(
+          `<title>${title.replace(/[<>]/g, "")}</title><p style="font:16px system-ui;padding:2rem;color:#555">Opening ${title.replace(/[<>]/g, "")}…</p>`
+        );
+      }
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const res = await fetch(`/api/projects/${projectId}/handouts/file/${fileId}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) throw new Error(String(res.status));
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        if (tab) tab.location.href = url;
+        else window.location.href = url;
+        // Long enough for the viewer to have loaded it; the object would
+        // otherwise be held for the life of the document.
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } catch {
+        if (tab) {
+          tab.document.body.innerHTML =
+            '<p style="font:16px system-ui;padding:2rem;color:#b00">That handout could not be opened. Please try again.</p>';
+        }
+      }
+    },
+    [projectId]
+  );
 
   useEffect(() => {
     load();
@@ -243,6 +326,8 @@ export default function ProjectDetailPage() {
               canEdit={canEdit}
               accessToken={accessToken}
               onChanged={refresh}
+              handouts={handouts}
+              onOpenHandout={openHandout}
             />
           </section>
         )}
@@ -260,6 +345,8 @@ export default function ProjectDetailPage() {
                   canEdit={canEdit}
                   accessToken={accessToken}
                   onChanged={refresh}
+                  handouts={handouts}
+                  onOpenHandout={openHandout}
                 />
               ))}
             </div>
@@ -553,6 +640,8 @@ function ModulePanel({
   canEdit,
   accessToken,
   onChanged,
+  handouts,
+  onOpenHandout,
 }: {
   section: string;
   detail: ProjectDetail;
@@ -560,19 +649,23 @@ function ModulePanel({
   canEdit: boolean;
   accessToken: string | null;
   onChanged: () => void;
+  handouts: HandoutLibrary | null;
+  onOpenHandout: (fileId: string, title: string) => void;
 }) {
   if (!section) return null;
 
   const resources = detail.resources.filter((r) => r.section === section);
-  // Only handouts that actually resolve somewhere are shown. A card that
-  // looks like a document and goes nowhere reads as broken, not as pending.
-  const handouts = resources.filter(
-    (r) => r.kind === "handout" && (r.external_url || r.drive_file_id)
-  );
-  const primaryHandout = handouts.find((h) => h.is_primary) ?? handouts[0];
-  const otherHandouts = handouts.filter((h) => h.id !== primaryHandout?.id);
   const videos = resources.filter((r) => r.kind === "video" && r.external_url);
   const exercises = resources.filter((r) => r.kind === "exercise" || r.kind === "link");
+
+  // Handouts come from Drive, keyed by module number — not from
+  // template_resources, whose handout rows are just titles with nowhere to
+  // point. "1 - Funnel Fusion" (the sheets) and "01 - Funnel Fusion
+  // Handouts.pdf" (the combined PDF) both resolve to module 1.
+  const moduleNo = moduleOrder(section);
+  const driveHandouts = moduleNo ? handouts?.byModule?.[String(moduleNo)] : undefined;
+  const primaryHandout = driveHandouts?.combined ?? null;
+  const otherHandouts = driveHandouts?.sheets ?? [];
 
   const images = detail.deliverables.filter(
     (d) => d.section === section && d.kind === "session_image"
@@ -607,43 +700,49 @@ function ModulePanel({
           {meta && <p className="mt-1 text-sm text-gray-500">{meta.stage}</p>}
         </div>
 
-        {primaryHandout && (
+        {(primaryHandout || otherHandouts.length > 0) && (
           <Block title="Handouts">
-            <a
-              href={safeExternalUrl(primaryHandout.external_url) ?? "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-center gap-4 rounded-2xl bg-runfree-indigo/50 p-5 ring-1 ring-runfree-navy/10 transition hover:bg-runfree-indigo hover:ring-runfree-magenta/30"
-            >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-runfree-grad text-white">
-                <DocIcon />
-              </span>
-              <span className="min-w-0">
-                <span className="block font-semibold text-runfree-ink">{primaryHandout.title}</span>
-                <span className="mt-0.5 block text-xs text-gray-600">
-                  Everything for this module in one file
-                </span>
-              </span>
-              <span
-                aria-hidden
-                className="ml-auto shrink-0 text-gray-400 transition-transform group-hover:translate-x-1"
+            {primaryHandout && (
+              <button
+                onClick={() => onOpenHandout(primaryHandout.id, primaryHandout.title)}
+                className="group flex w-full items-center gap-4 rounded-2xl bg-runfree-indigo/50 p-5 text-left ring-1 ring-runfree-navy/10 outline-none transition hover:bg-runfree-indigo hover:ring-runfree-magenta/30 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
               >
-                →
-              </span>
-            </a>
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-runfree-grad text-white">
+                  <DocIcon />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-semibold text-runfree-ink">
+                    {primaryHandout.label || primaryHandout.title}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-gray-600">
+                    Everything for this module in one file
+                    {prettySize(primaryHandout.sizeBytes) && (
+                      <span className="text-gray-400"> · {prettySize(primaryHandout.sizeBytes)}</span>
+                    )}
+                  </span>
+                </span>
+                <span
+                  aria-hidden
+                  className="ml-auto shrink-0 text-gray-400 transition-transform group-hover:translate-x-1"
+                >
+                  →
+                </span>
+              </button>
+            )}
 
             {otherHandouts.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-2">
                 {otherHandouts.map((h) => (
                   <li key={h.id}>
-                    <a
-                      href={safeExternalUrl(h.external_url) ?? "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:border-runfree-magenta/40 hover:text-runfree-ink"
+                    <button
+                      onClick={() => onOpenHandout(h.id, h.title)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 outline-none transition hover:border-runfree-magenta/40 hover:text-runfree-ink focus-visible:ring-2 focus-visible:ring-runfree-magenta"
                     >
-                      {h.title}
-                    </a>
+                      {h.num && (
+                        <span className="font-bold text-runfree-magenta/60">{h.num}</span>
+                      )}
+                      {h.label || h.title}
+                    </button>
                   </li>
                 ))}
               </ul>

@@ -162,10 +162,19 @@ function toTitle(filename: string): string {
   return filename.replace(/\.[a-z0-9]{1,5}$/i, "").trim();
 }
 
-/** The "01" / "03.1" prefix, split out so it can be styled separately. */
+/**
+ * The "01" / "03.1" prefix, split out so it can be styled separately.
+ *
+ * The separator goes with the number, not the label. Files are named two
+ * ways in these folders — "01 Welcome.pdf" and "01 - Funnel Fusion
+ * Handouts.pdf" — and keeping the dash left the second rendering as
+ * "- Funnel Fusion Handouts" once the number was pulled out to its own
+ * element.
+ */
 function splitNumber(title: string): { num: string | null; rest: string } {
-  const m = title.match(/^\s*(\d+(?:\.\d+)?)\s+(.*)$/);
-  return m ? { num: m[1], rest: m[2] } : { num: null, rest: title };
+  const m = title.match(/^\s*(\d+(?:\.\d+)?)\s*[-–—]?\s*(.*)$/);
+  if (!m || !m[2]) return { num: null, rest: title };
+  return { num: m[1], rest: m[2] };
 }
 
 /**
@@ -187,8 +196,33 @@ function isTimestampedExport(name: string): boolean {
 export async function listDriveFolder(rootId: string): Promise<DriveFolderGroup[]> {
   const drive = getDriveClient();
 
-  // One flat query, then rebuild the tree locally — far fewer round trips
-  // than walking folder by folder.
+  // Walk the tree with scoped queries, one level at a time.
+  //
+  // Two approaches were tried against the real folder and both failed in
+  // ways that produce an EMPTY LIBRARY WITH A 200 OK and nothing logged,
+  // which is why this is spelled out:
+  //
+  //  1. A flat `q: "trashed = false"` (what the CVF portal does) defaults to
+  //     corpora='user' — My Drive plus explicitly-shared items. It does not
+  //     span a shared drive even with includeItemsFromAllDrives. Against
+  //     this folder it returned 194 unrelated files and zero children of the
+  //     root, at the same moment a scoped query returned the 10 real ones.
+  //
+  //  2. Adding corpora='drive' + driveId fixes the corpus but throws
+  //     "The attempted action requires shared drive membership" — the
+  //     service account has been shared this FOLDER, it is not a MEMBER of
+  //     the RunFree Team shared drive. Making it a member is an
+  //     administrative change nobody should need for a read-only portal.
+  //
+  // So: `'<id>' in parents`, which works on a per-folder grant, applied
+  // breadth-first. Drive has no recursive form of it, which is exactly why
+  // scoping a single query to the root would silently drop every nested
+  // module — the failure the CVF portal's own notes warn about. Walking is
+  // that warning's actual answer.
+  //
+  // Depth is bounded because a cycle in Drive is impossible but a
+  // mis-shared folder tree could still be enormous, and an unbounded walk
+  // inside a request is how a page hangs instead of failing.
   const all: {
     id: string;
     name: string;
@@ -198,20 +232,56 @@ export async function listDriveFolder(rootId: string): Promise<DriveFolderGroup[
     modifiedTime?: string;
   }[] = [];
 
-  let pageToken: string | undefined;
-  do {
-    const res = await drive.files.list({
-      pageSize: 1000,
-      pageToken,
-      q: "trashed = false",
-      fields:
-        "nextPageToken, files(id,name,mimeType,parents,size,modifiedTime)",
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    });
-    all.push(...((res.data.files || []) as typeof all));
-    pageToken = res.data.nextPageToken || undefined;
-  } while (pageToken);
+  const MAX_DEPTH = 3; // root > module folder > nested group. Deeper is not used.
+  const seen = new Set<string>([rootId]);
+  let frontier = [rootId];
+
+  for (let depth = 0; depth < MAX_DEPTH && frontier.length > 0; depth++) {
+    const next: string[] = [];
+
+    // One query per folder, deliberately NOT batched with `or`.
+    //
+    // Batching reads naturally — "'a' in parents or 'b' in parents" — and
+    // Drive accepts it without complaint, but against this shared drive it
+    // returned ZERO results for folders that each return their files fine
+    // when asked individually. Verified: the root's 10 subfolders were found
+    // by a single-id query, then the batched follow-up for those same 10 ids
+    // returned nothing at all. Another silent empty, so it is not used.
+    //
+    // The cost is one request per folder — about eleven for this tree, run
+    // concurrently per level — which is not worth trading for a query shape
+    // that fails quietly.
+    const results = await Promise.all(
+      frontier.map(async (parentId) => {
+        const q = `'${parentId}' in parents and trashed = false`;
+        const out: typeof all = [];
+        let pageToken: string | undefined;
+        do {
+          const res = await drive.files.list({
+            pageSize: 1000,
+            pageToken,
+            q,
+            fields:
+              "nextPageToken, files(id,name,mimeType,parents,size,modifiedTime)",
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+          });
+          out.push(...((res.data.files || []) as typeof all));
+          pageToken = res.data.nextPageToken || undefined;
+        } while (pageToken);
+        return out;
+      })
+    );
+
+    for (const f of results.flat()) {
+      if (seen.has(f.id)) continue;
+      seen.add(f.id);
+      all.push(f);
+      if (f.mimeType === FOLDER_MIME) next.push(f.id);
+    }
+
+    frontier = next;
+  }
 
   const folders = all.filter((f) => f.mimeType === FOLDER_MIME);
   const files = all.filter((f) => f.mimeType !== FOLDER_MIME);
@@ -271,4 +341,94 @@ export async function listDriveFolder(rootId: string): Promise<DriveFolderGroup[
   return groups
     .filter((g) => g.files.length > 0)
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Handouts                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export type ModuleHandouts = {
+  /** The one combined PDF for this module, if there is one. */
+  combined: DriveListedFile | null;
+  /** The individual sheets, from the numbered module folder. */
+  sheets: DriveListedFile[];
+};
+
+export type TemplateHandouts = {
+  /** Keyed by module number, 1-6. */
+  byModule: Record<number, ModuleHandouts>;
+  /** Named groups that aren't a numbered module — Field Guide, Additional Handouts. */
+  extras: DriveFolderGroup[];
+  /** Whole-process documents, e.g. the full Pivvot Notebook. */
+  notebooks: DriveListedFile[];
+};
+
+/**
+ * A shouted-out warning about the shared folder, because it decides who sees
+ * what:
+ *
+ * Every Pivvot engagement reads ONE folder, so anything dropped in it is
+ * visible to every church running the process. That is the point for the
+ * standard handouts — one PDF updated in Drive updates everyone — but it
+ * makes a client-specific file a leak of that client's name to every other
+ * client. `Combined Handouts` already holds one:
+ * "Pivvot Notebook - JUNE 14 2026 (Christ Chapel).pdf".
+ *
+ * So the rule for whole-process notebooks is deterministic and documented
+ * rather than clever: a file with a PARENTHESISED SUFFIX is treated as
+ * belonging to one church and is never surfaced. Naming a file
+ * "... (Christ Chapel).pdf" is how you keep it private; leaving the
+ * parentheses off is how you publish it to everyone. Per-module combined
+ * handouts are matched on their leading number instead, so this rule never
+ * touches them.
+ */
+function isClientSpecific(name: string): boolean {
+  return /\([^)]+\)\s*\.[a-z0-9]{1,5}$/i.test(name);
+}
+
+/** Sheets that duplicate the module's own combined PDF, by title. */
+function sameTitle(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * The handout library for a template, arranged the way the project page shows
+ * it: one combined PDF leading each module, its individual sheets beneath.
+ *
+ * Mirrors the CVF side's structure because the Drive folders mirror each
+ * other — "1 - Funnel Fusion" holds the sheets, "Combined Handouts" holds
+ * "01 - Funnel Fusion Handouts.pdf". Both are matched on their leading
+ * number, so renaming the descriptive part of either is safe.
+ */
+export async function listTemplateHandouts(rootId: string): Promise<TemplateHandouts> {
+  const groups = await listDriveFolder(rootId);
+
+  const combinedGroup = groups.find((g) => /combined handouts/i.test(g.name));
+  const byModule: Record<number, ModuleHandouts> = {};
+
+  for (const group of groups) {
+    // "1 - Funnel Fusion" … "6 - Horizon Storyline". 0 (Field Guide) and 7
+    // (Vision Stack) are deliberately not modules on the project page.
+    if (group.order < 1 || group.order > 6) continue;
+    byModule[group.order] = { combined: null, sheets: group.files };
+  }
+
+  for (const file of combinedGroup?.files ?? []) {
+    // "01 - Funnel Fusion Handouts.pdf" -> module 1.
+    if (file.order < 1 || file.order > 6) continue;
+    const entry = (byModule[file.order] ??= { combined: null, sheets: [] });
+    entry.combined = file;
+    // Don't list the same document twice under one module.
+    entry.sheets = entry.sheets.filter((s) => !sameTitle(s.title, file.title));
+  }
+
+  const notebooks = (combinedGroup?.files ?? []).filter(
+    (f) => f.order === Number.MAX_SAFE_INTEGER && !isClientSpecific(f.name)
+  );
+
+  const extras = groups.filter(
+    (g) => (g.order < 1 || g.order > 6) && !/combined handouts/i.test(g.name)
+  );
+
+  return { byModule, extras, notebooks };
 }

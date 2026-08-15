@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createUserClient, supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
+import { requireProjectAccess } from "@/lib/api-auth";
 import { invitePerson } from "@/lib/invite";
 
 const VALID_ROLES = new Set(["viewer", "editor", "admin"]);
@@ -18,69 +19,23 @@ const VALID_ROLES = new Set(["viewer", "editor", "admin"]);
  * what decides whether this succeeds, not application code re-deriving that
  * same rule here.
  */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
 
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return NextResponse.json({ error: "Missing bearer token" }, { status: 401 });
-  }
-  const accessToken = authHeader.slice("Bearer ".length);
+  // One shared path for "who is calling, and may they see this project" —
+  // see lib/api-auth.ts for why that is a helper and not inline here.
+  const access = await requireProjectAccess(request, projectId);
+  if (!access.ok) return access.response;
+  const client = access.client;
 
-  // ---------------------------------------------------------------------
-  // Establish WHO is calling before touching anything with the service role.
-  //
-  // This used to sit below the profile lookup and the invite, and that was a
-  // real, exploitable hole: the only check was that the header *started with*
-  // "Bearer ", so `Authorization: Bearer x` reached invitePerson(), which
-  // creates an auth.users row and sends a real email. The RLS-gated insert at
-  // the bottom did reject the forged caller — but only after the account and
-  // the email already existed. Verified against a running server: a garbage
-  // token returned 403 having already executed the service-role lookup.
-  //
-  // Because auth.users is SHARED with the live Certified Vision Framers
-  // portal, that made this endpoint an unauthenticated way to both spam
-  // arbitrary addresses from RunFree's domain and pollute another product's
-  // user table — and it quietly reintroduced the self-signup path that
-  // lib/auth.ts and CLAUDE.md say this portal deliberately does not have.
-  //
-  // Passing the JWT explicitly to getUser() validates it against the auth
-  // server rather than trusting anything client-side.
-  const client = createUserClient(accessToken);
-  const {
-    data: { user },
-    error: authErr,
-  } = await client.auth.getUser(accessToken);
-  if (authErr || !user) {
-    return NextResponse.json({ error: "Invalid or expired session" }, { status: 401 });
-  }
-
-  if (!UUID_RE.test(projectId)) {
-    return NextResponse.json({ error: "Invalid project id" }, { status: 400 });
-  }
-
-  // Pre-gate: may this caller administer THIS project? Queried through their
-  // own token, so RLS is still what answers.
-  //
-  // This is a pre-gate, not the authorization itself — the project_members
-  // insert below deliberately runs as the caller too, so insert_members'
-  // admin-only policy stays the authoritative check. Do not delete this as
-  // "redundant": without it, a signed-in viewer on any project could still
-  // reach invitePerson() and mint accounts, which the RLS insert would then
-  // reject too late to matter.
-  const [{ data: membership }, { data: me }] = await Promise.all([
-    client
-      .from("project_members")
-      .select("role")
-      .eq("project_id", projectId)
-      .eq("profile_id", user.id)
-      .maybeSingle(),
-    client.from("profiles").select("is_owner").eq("id", user.id).maybeSingle(),
-  ]);
-
-  if (membership?.role !== "admin" && !me?.is_owner) {
+  // Pre-gate: adding people is admin-only. This runs BEFORE any service-role
+  // work, which is the whole point — invitePerson() creates an auth.users row
+  // and sends real mail, and it used to be reachable by anyone who sent a
+  // header starting with "Bearer ". The project_members insert below still
+  // runs as the caller, so insert_members' RLS policy stays the authoritative
+  // check; this only stops a non-admin reaching the invite at all. Do not
+  // remove it as redundant.
+  if (!access.isAdmin) {
     return NextResponse.json(
       { error: "Only a project admin can add people to this project" },
       { status: 403 }

@@ -384,7 +384,12 @@ function StackItem({
       <div className="flex items-center justify-between gap-2 px-4 py-3">
         <p className="truncate text-sm font-medium text-runfree-ink">{item.title}</p>
         {canEdit ? (
+          /* Was a 2x2 pixel button with no accessible name: impossible to hit
+             on touch, invisible to a keyboard, and announced by a screen
+             reader as an unlabelled control. Now a real target that says what
+             it does and what state it is in. */
           <button
+            type="button"
             onClick={async () => {
               if (!accessToken) return;
               await updateDeliverable(accessToken, item.id, {
@@ -392,13 +397,31 @@ function StackItem({
               });
               onChanged();
             }}
-            title={done ? "Visible to the church — click to hide" : "Hidden — click to publish"}
-            className={`h-2 w-2 shrink-0 rounded-full transition ${
-              done ? "bg-runfree-magenta" : "bg-gray-300 hover:bg-gray-400"
+            aria-pressed={done}
+            aria-label={
+              done
+                ? `${item.title ?? "This deliverable"} is visible to the church — hide it`
+                : `${item.title ?? "This deliverable"} is hidden — make it visible to the church`
+            }
+            title={done ? "Visible to the church" : "Hidden from the church"}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide outline-none ring-runfree-magenta/60 transition focus-visible:ring-2 ${
+              done
+                ? "bg-runfree-pink text-runfree-magentaDeep hover:bg-runfree-pink/70"
+                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
             }`}
-          />
+          >
+            <span
+              aria-hidden
+              className={`h-1.5 w-1.5 rounded-full ${done ? "bg-runfree-magenta" : "bg-gray-400"}`}
+            />
+            {done ? "Live" : "Draft"}
+          </button>
         ) : (
-          done && <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-runfree-magenta" />
+          done && (
+            <span className="shrink-0 rounded-full bg-runfree-pink px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
+              Ready
+            </span>
+          )
         )}
       </div>
     </div>

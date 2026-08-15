@@ -223,11 +223,12 @@ export default function PortalHeader({
           </nav>
         )}
 
-        <div
-          className={`flex flex-wrap items-center justify-between gap-6 py-6 sm:py-7 ${
-            showTitleBlock ? "" : "hidden"
-          }`}
-        >
+        {/* Not rendered at all when the page has its own hero. Hiding it with
+            a class still left an empty <h1> in the accessibility tree, so the
+            project page announced two headings — one of them blank — and its
+            real title was an h1 sitting below a hidden one. */}
+        {showTitleBlock && (
+        <div className="flex flex-wrap items-center justify-between gap-6 py-6 sm:py-7">
           <div className="min-w-0">
             {eyebrow && (
               <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-pink">
@@ -242,6 +243,7 @@ export default function PortalHeader({
             )}
           </div>
         </div>
+        )}
       </div>
     </header>
   );

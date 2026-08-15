@@ -13,6 +13,7 @@ import {
   membersToCsv,
   removeMember,
   reorderDeliverables,
+  safeExternalUrl,
   updateMemberDetails,
   updateMemberRole,
   updateSession,
@@ -40,6 +41,13 @@ type Profile = {
 
 const PREP_SECTION = "CHURCH PREPARATION";
 const OVERVIEW_SECTION = "PROCESS OVERVIEW";
+
+/**
+ * A phone photo of a flipchart is a few MB; anything past this is a video
+ * someone mis-picked or a RAW file, and pushing it through the browser to
+ * Storage would stall the upload with no feedback.
+ */
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -169,6 +177,30 @@ export default function ProjectDetailPage() {
   const stackItems = detail.deliverables.filter((d) => d.kind === "vision_stack");
   const stackReady = stackItems.filter((d) => d.published_at).length;
 
+  // Anything whose section no other part of this page claims. Without this,
+  // a template that doesn't use "Mod #N" headings renders NOTHING: every one
+  // of the Younique template's 33 resources sits under "Day 1 - Section #1",
+  // "Recommended Prework" and the like, so a Younique client would have
+  // opened an empty portal. The same would have hit Meta Performance and
+  // DENOMINEE as they land.
+  //
+  // ModulePanel already degrades correctly for these — moduleOrder() returns
+  // null so it drops the stage line and the icon, and moduleLabel() passes an
+  // unprefixed heading straight through — so they get the same treatment,
+  // just without the six-tool rail above them.
+  const claimed = new Set<string>([...modules.map((m) => m.section), PREP_SECTION, OVERVIEW_SECTION]);
+  const orphanSections = [
+    ...new Set([
+      // team_bio rows are rendered by TeamSection whatever section they're in.
+      ...detail.resources.filter((r) => r.kind !== "team_bio").map((r) => r.section),
+      ...detail.deliverables
+        .filter((d) => d.kind === "session_image")
+        .map((d) => d.section)
+        .filter((s): s is string => !!s),
+      ...detail.sessions.map((s) => s.section).filter((s): s is string => !!s),
+    ]),
+  ].filter((s) => !claimed.has(s));
+
   return (
     <div className="min-h-screen bg-gray-50">
       <PortalHeader
@@ -212,6 +244,25 @@ export default function ProjectDetailPage() {
               accessToken={accessToken}
               onChanged={refresh}
             />
+          </section>
+        )}
+
+        {orphanSections.length > 0 && (
+          <section className="mt-16">
+            {modules.length > 0 && <SectionHeading eyebrow="Also in this engagement" title="Further materials" />}
+            <div className={modules.length > 0 ? "mt-8 space-y-6" : "space-y-6"}>
+              {orphanSections.map((section) => (
+                <ModulePanel
+                  key={section}
+                  section={section}
+                  detail={detail}
+                  imageUrls={imageUrls}
+                  canEdit={canEdit}
+                  accessToken={accessToken}
+                  onChanged={refresh}
+                />
+              ))}
+            </div>
           </section>
         )}
 
@@ -307,18 +358,18 @@ function ChurchHero({ detail, logoUrl }: { detail: ProjectDetail; logoUrl?: stri
                   <span>{detail.location}</span>
                 </>
               )}
-              {detail.websiteUrl && (
+              {safeExternalUrl(detail.websiteUrl) && (
                 <>
                   <span aria-hidden className="text-gray-300">
                     ·
                   </span>
                   <a
-                    href={detail.websiteUrl}
+                    href={safeExternalUrl(detail.websiteUrl)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-runfree-magentaDeep hover:underline"
                   >
-                    {prettyDomain(detail.websiteUrl)}
+                    {prettyDomain(detail.websiteUrl!)}
                   </a>
                 </>
               )}
@@ -533,6 +584,18 @@ function ModulePanel({
   const order = moduleOrder(section);
   const meta = order ? MODULE_META[order] : null;
 
+  // A section whose only rows are handouts and videos with no destination
+  // yet has nothing to show. An editor still gets the panel, because the
+  // photo drop zone is the point; a client gets nothing rather than a
+  // heading over an empty box.
+  const hasAnything =
+    !!primaryHandout ||
+    videos.length > 0 ||
+    exercises.length > 0 ||
+    images.length > 0 ||
+    moduleDeliverables.length > 0;
+  if (!hasAnything && !canEdit) return null;
+
   return (
     <div className="animate-fade mt-2 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
       <div className="h-1 bg-runfree-grad" />
@@ -547,7 +610,7 @@ function ModulePanel({
         {primaryHandout && (
           <Block title="Handouts">
             <a
-              href={primaryHandout.external_url ?? "#"}
+              href={safeExternalUrl(primaryHandout.external_url) ?? "#"}
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center gap-4 rounded-2xl bg-runfree-indigo/50 p-5 ring-1 ring-runfree-navy/10 transition hover:bg-runfree-indigo hover:ring-runfree-magenta/30"
@@ -574,7 +637,7 @@ function ModulePanel({
                 {otherHandouts.map((h) => (
                   <li key={h.id}>
                     <a
-                      href={h.external_url ?? "#"}
+                      href={safeExternalUrl(h.external_url) ?? "#"}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:border-runfree-magenta/40 hover:text-runfree-ink"
@@ -651,6 +714,36 @@ function ModulePanel({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * A small square control with a real accessible name. 28px rather than the
+ * 2px dot this replaced — that was a hover-only target no keyboard or touch
+ * user could hit, and screen readers announced it as an unlabelled button.
+ */
+function IconButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-xs font-bold text-gray-600 shadow-sm outline-none ring-runfree-magenta/60 backdrop-blur transition hover:bg-white hover:text-runfree-magentaDeep focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-30"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -751,6 +844,7 @@ function ImageGallery({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   /** Index being dragged, and the slot it's currently hovering over. */
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragTo, setDragTo] = useState<number | null>(null);
@@ -766,13 +860,35 @@ function ImageGallery({
 
   async function handleFiles(files: FileList | null) {
     if (!files || !accessToken) return;
+
+    const images = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const tooBig = images.filter((f) => f.size > MAX_IMAGE_BYTES);
+    const usable = images.filter((f) => f.size <= MAX_IMAGE_BYTES);
+
+    if (images.length === 0) {
+      setError("Those files aren't images.");
+      return;
+    }
+    if (tooBig.length > 0) {
+      setError(
+        `${tooBig.length === 1 ? "One photo is" : `${tooBig.length} photos are`} over ${
+          MAX_IMAGE_BYTES / 1024 / 1024
+        }MB and ${tooBig.length === 1 ? "was" : "were"} skipped.`
+      );
+    } else {
+      setError(null);
+    }
+    if (usable.length === 0) return;
+
     setBusy(true);
     try {
-      // Sequential, not parallel: each new card takes the next position, and
-      // firing them together would race for the same index.
-      let next = withImages.length;
-      for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/")) continue;
+      // Positions continue from the highest one already used, not from the
+      // count. A deleted photo leaves a gap, so counting would hand the new
+      // row a position an existing row already holds, and two rows sharing a
+      // position sort nondeterministically — the gallery would reshuffle
+      // itself on reload.
+      let next = order.reduce((max, d) => Math.max(max, d.position ?? 0), -1) + 1;
+      for (const file of usable) {
         const { path } = await uploadDeliverableImage(accessToken, projectId, file);
         await createDeliverable(accessToken, projectId, {
           title: null,
@@ -786,23 +902,41 @@ function ImageGallery({
       onChanged();
     } catch (err) {
       console.error("Image upload failed:", err);
+      setError("That upload didn't go through. Try again.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function commitOrder(from: number, to: number) {
-    if (from === to) return;
-    const next = [...order];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    setOrder(next);
+  /**
+   * Move one photo to a new index and persist the whole order.
+   *
+   * Takes the list from the functional updater rather than the render
+   * closure: two moves in quick succession would otherwise both compute from
+   * the same stale array and the second would undo the first.
+   */
+  async function move(from: number, to: number) {
+    if (from === to || to < 0 || to >= order.length) return;
+
+    let reordered: ProjectDetail["deliverables"] = [];
+    setOrder((current) => {
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      reordered = next;
+      return next;
+    });
+
     if (!accessToken) return;
     try {
-      await reorderDeliverables(accessToken, next.map((d) => d.id));
+      await reorderDeliverables(
+        accessToken,
+        reordered.map((d) => d.id)
+      );
       onChanged();
     } catch (err) {
       console.error("Reorder failed:", err);
+      setError("Couldn't save that order.");
       onChanged(); // Snap back to whatever the server actually has.
     }
   }
@@ -816,7 +950,13 @@ function ImageGallery({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+    <>
+      {error && (
+        <p role="status" className="mb-3 rounded-lg bg-runfree-pink px-3 py-2 text-xs font-medium text-runfree-magentaDeep">
+          {error}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
       {order.map((d, index) => {
         const url = d.image_path ? imageUrls[d.image_path] : undefined;
         const isDragging = dragFrom === index;
@@ -829,8 +969,19 @@ function ImageGallery({
             onDragStart={() => canEdit && setDragFrom(index)}
             onDragEnter={() => canEdit && dragFrom !== null && setDragTo(index)}
             onDragOver={(e) => canEdit && dragFrom !== null && e.preventDefault()}
+            onDrop={(e) => {
+              // Commit here as well as on dragEnd: a drop onto a sibling
+              // fires this, and relying on dragEnd alone lost the move
+              // whenever the pointer left the grid before releasing.
+              if (dragFrom !== null && dragTo !== null) {
+                e.preventDefault();
+                move(dragFrom, dragTo);
+                setDragFrom(null);
+                setDragTo(null);
+              }
+            }}
             onDragEnd={() => {
-              if (dragFrom !== null && dragTo !== null) commitOrder(dragFrom, dragTo);
+              if (dragFrom !== null && dragTo !== null) move(dragFrom, dragTo);
               setDragFrom(null);
               setDragTo(null);
             }}
@@ -867,14 +1018,33 @@ function ImageGallery({
             </a>
 
             {canEdit && (
-              <>
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute left-2 top-2 rounded-md bg-white/85 px-1.5 py-0.5 text-[10px] font-bold text-gray-500 opacity-0 shadow-sm transition group-hover:opacity-100"
-                >
-                  ⠿ drag
-                </span>
-                <button
+              /* Reordering has to work without a mouse. HTML5 drag events
+                 never fire on touch, so on the iPad a coach actually uses in
+                 a session the drag below is inert, and it is equally
+                 unreachable by keyboard. These buttons are the real control;
+                 dragging is the shortcut for people with a mouse.
+
+                 They sit at 60% opacity rather than hidden-until-hover,
+                 because hover does not exist on touch either. */
+              <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1 opacity-60 transition group-hover:opacity-100 focus-within:opacity-100">
+                <div className="flex gap-1">
+                  <IconButton
+                    label={`Move photo ${index + 1} earlier`}
+                    disabled={index === 0}
+                    onClick={() => move(index, index - 1)}
+                  >
+                    ←
+                  </IconButton>
+                  <IconButton
+                    label={`Move photo ${index + 1} later`}
+                    disabled={index === order.length - 1}
+                    onClick={() => move(index, index + 1)}
+                  >
+                    →
+                  </IconButton>
+                </div>
+                <IconButton
+                  label={`Remove photo ${index + 1}`}
                   onClick={async () => {
                     if (!accessToken) return;
                     // The storage object is deliberately left in place — the
@@ -884,12 +1054,10 @@ function ImageGallery({
                     await deleteDeliverable(accessToken, d.id);
                     onChanged();
                   }}
-                  title="Remove this photo"
-                  className="absolute right-2 top-2 rounded-md bg-white/85 px-1.5 py-0.5 text-[10px] font-bold text-gray-500 opacity-0 shadow-sm transition hover:text-runfree-magentaDeep group-hover:opacity-100"
                 >
                   ✕
-                </button>
-              </>
+                </IconButton>
+              </div>
             )}
           </div>
         );
@@ -935,7 +1103,8 @@ function ImageGallery({
           />
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -986,7 +1155,7 @@ function PrepareSection({
               <li key={r.id}>
                 {r.external_url ? (
                   <a
-                    href={r.external_url}
+                    href={safeExternalUrl(r.external_url)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-runfree-magenta/40 hover:text-runfree-ink"

@@ -137,16 +137,49 @@ export async function getProjectDetail(
  * The roster as CSV — "in case we need to copy and paste all of the emails to
  * send them all an email or easily add them to a group of contacts."
  *
- * Quotes every field and doubles embedded quotes, because a job title like
- * 'Pastor, "Family Life"' otherwise shifts every subsequent column.
+ * Two escaping concerns, not one:
+ *
+ * 1. Quoting. A job title like 'Pastor, "Family Life"' otherwise shifts every
+ *    subsequent column.
+ * 2. Formula injection. Excel and Sheets evaluate a cell beginning with
+ *    = + - @ (or tab/CR) as a formula, so a name typed as
+ *    `=HYPERLINK("http://evil","click")` becomes a live link in a file
+ *    RunFree opens and forwards. These fields are typed by church admins
+ *    rather than the public, but a roster is exactly the kind of file that
+ *    gets mailed around, and prefixing a quote costs nothing.
  */
 export function membersToCsv(members: ProjectMember[]): string {
-  const escape = (v: string | null) => `"${(v ?? "").replace(/"/g, '""')}"`;
+  const escape = (v: string | null) => {
+    const raw = v ?? "";
+    const neutralised = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+    return `"${neutralised.replace(/"/g, '""')}"`;
+  };
   const rows = [
     ["Name", "Email", "Role at church", "Portal access"],
     ...members.map((m) => [m.fullName, m.email, m.orgRole, m.role]),
   ];
   return rows.map((r) => r.map((c) => escape(c as string | null)).join(",")).join("\r\n");
+}
+
+/**
+ * An href we're willing to put in the DOM. Returns null for anything that
+ * isn't plain http(s) — notably `javascript:` and `data:`, which would
+ * otherwise execute when a client clicked a church's "website".
+ *
+ * These values are entered by staff, not the public, so this is defence in
+ * depth rather than a known hole — but the cost is one function and the
+ * failure mode is script execution in every project member's browser.
+ */
+export function safeExternalUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(/^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Group a list of section-labeled rows in template-declared order, then by first appearance. */

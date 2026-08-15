@@ -44,9 +44,16 @@ export function moduleOrder(section: string): number | null {
 export function moduleLabel(section: string): string {
   const stripped = section.replace(/^\s*Mod\s*#\s*\d+\s*/i, "").trim();
   if (!stripped) return section;
-  // The Asana sections are shouted; title case reads calmer at display size.
-  // Word boundaries are whitespace only — including the apostrophe here turns
-  // "DISCIPLE'S JOURNEY" into "Disciple'S Journey".
+  // Only re-case sections that are SHOUTED, which is how the Pivvot sections
+  // come out of Asana. Anything already mixed-case was authored that way and
+  // is left exactly alone — running the Younique section "Life-Making Cycle
+  // Resources" through the lowercase-then-recapitalise path produced
+  // "Life-making Cycle Resources", because word boundaries here are
+  // whitespace only. (They have to be: including the apostrophe turns
+  // "DISCIPLE'S JOURNEY" into "Disciple'S Journey".)
+  const isShouted = stripped === stripped.toUpperCase() && /[A-Z]/.test(stripped);
+  if (!isShouted) return stripped;
+
   return stripped
     .toLowerCase()
     .replace(/(^|\s)([a-z])/g, (_, lead, letter) => `${lead}${letter.toUpperCase()}`);

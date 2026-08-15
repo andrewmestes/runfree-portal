@@ -16,12 +16,13 @@ import {
   safeExternalUrl,
   updateMemberDetails,
   updateMemberRole,
+  updateProject,
   updateSession,
   type ProjectDetail,
   type ProjectMember,
   type ProjectRole,
 } from "@/lib/projects";
-import { getSignedImageUrls, uploadDeliverableImage } from "@/lib/storage";
+import { getSignedImageUrls, uploadDeliverableImage, uploadProjectLogo } from "@/lib/storage";
 import { extractLoomId } from "@/lib/loom";
 import { MODULE_META, moduleLabel, moduleOrder } from "@/lib/modules";
 import ModuleNav, { type NavModule } from "@/components/ModuleNav";
@@ -313,7 +314,13 @@ export default function ProjectDetailPage() {
         certificationAccess={profile.certification_access || profile.is_staff}
       />
 
-      <ChurchHero detail={detail} logoUrl={detail.logoPath ? imageUrls[detail.logoPath] : undefined} />
+      <ChurchHero
+        detail={detail}
+        logoUrl={detail.logoPath ? imageUrls[detail.logoPath] : undefined}
+        canManage={canManage}
+        accessToken={accessToken}
+        onChanged={refresh}
+      />
 
       <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8">
         <VisionStackCard
@@ -412,7 +419,59 @@ export default function ProjectDetailPage() {
  * open this and see themselves — not a RunFree product with their project
  * filed inside it.
  */
-function ChurchHero({ detail, logoUrl }: { detail: ProjectDetail; logoUrl?: string }) {
+function ChurchHero({
+  detail,
+  logoUrl,
+  canManage,
+  accessToken,
+  onChanged,
+}: {
+  detail: ProjectDetail;
+  logoUrl?: string;
+  canManage: boolean;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const logoInput = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    location: detail.location ?? "",
+    website_url: detail.websiteUrl ?? "",
+    about: detail.about ?? "",
+  });
+
+  async function uploadLogo(file: File | undefined) {
+    if (!file || !accessToken) return;
+    if (!file.type.startsWith("image/")) return;
+    setBusy(true);
+    try {
+      const { path } = await uploadProjectLogo(accessToken, detail.id, file);
+      await updateProject(accessToken, detail.id, { logo_path: path });
+      onChanged();
+    } catch (err) {
+      console.error("Logo upload failed:", err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveDetails() {
+    if (!accessToken) return;
+    setBusy(true);
+    try {
+      await updateProject(accessToken, detail.id, {
+        location: form.location || null,
+        website_url: form.website_url || null,
+        about: form.about || null,
+      });
+      onChanged();
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const lead = detail.members.find((m) => m.isLead);
   const initials = detail.name
     .replace(/\s*-\s*.*$/, "")
@@ -429,7 +488,21 @@ function ChurchHero({ detail, logoUrl }: { detail: ProjectDetail; logoUrl?: stri
     <div className="border-b border-gray-200 bg-white">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-          <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-200">
+          {/* Works for any engagement: a church's logo, or the person's
+              photo on a Younique or coaching project. */}
+          <div
+            onClick={() => canManage && logoInput.current?.click()}
+            onDragOver={(e) => canManage && e.preventDefault()}
+            onDrop={(e) => {
+              if (!canManage) return;
+              e.preventDefault();
+              uploadLogo(e.dataTransfer.files?.[0]);
+            }}
+            title={canManage ? "Upload a logo or photo" : undefined}
+            className={`group relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-200 ${
+              canManage ? "cursor-pointer hover:ring-runfree-magenta/40" : ""
+            }`}
+          >
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoUrl} alt={org} className="h-full w-full object-contain p-2" />
@@ -437,6 +510,20 @@ function ChurchHero({ detail, logoUrl }: { detail: ProjectDetail; logoUrl?: stri
               <span className="font-display text-2xl font-extrabold tracking-tight text-runfree-navy/40">
                 {initials}
               </span>
+            )}
+            {canManage && (
+              <>
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep opacity-0 transition group-hover:opacity-100">
+                  {busy ? "Uploading…" : logoUrl ? "Replace" : "Add logo"}
+                </span>
+                <input
+                  ref={logoInput}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => uploadLogo(e.target.files?.[0])}
+                />
+              </>
             )}
           </div>
 
@@ -481,8 +568,67 @@ function ChurchHero({ detail, logoUrl }: { detail: ProjectDetail; logoUrl?: stri
                 </>
               )}
             </p>
-            {detail.about && (
+            {detail.about && !editing && (
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">{detail.about}</p>
+            )}
+
+            {canManage && !editing && (
+              <button
+                onClick={() => setEditing(true)}
+                className="mt-3 text-xs font-medium text-runfree-magentaDeep outline-none hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+              >
+                Edit details
+              </button>
+            )}
+
+            {canManage && editing && (
+              <div className="mt-4 max-w-xl space-y-3 rounded-xl bg-gray-50 p-4 ring-1 ring-gray-200">
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex-1 min-w-[150px]">
+                    <Field label="Location">
+                      <input
+                        value={form.location}
+                        onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+                        placeholder="Athens, GA"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                      />
+                    </Field>
+                  </div>
+                  <div className="flex-1 min-w-[180px]">
+                    <Field label="Website">
+                      <input
+                        value={form.website_url}
+                        onChange={(e) => setForm((f) => ({ ...f, website_url: e.target.value }))}
+                        placeholder="athenachristian.org"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                      />
+                    </Field>
+                  </div>
+                </div>
+                <Field label="About">
+                  <textarea
+                    rows={2}
+                    value={form.about}
+                    onChange={(e) => setForm((f) => ({ ...f, about: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                  />
+                </Field>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveDetails}
+                    disabled={busy}
+                    className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                  >
+                    {busy ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-runfree-ink"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>

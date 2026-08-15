@@ -10,7 +10,7 @@ import {
   type ProjectDetail,
   type ProjectRole,
 } from "@/lib/projects";
-import { getSignedImageUrls, replaceDeliverableImage } from "@/lib/storage";
+import { getSignedImageUrls, replaceDeliverableImage, uploadDeliverableFile } from "@/lib/storage";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
@@ -77,9 +77,10 @@ export default function VisionStackPage() {
       setDetail(result);
       setStatus("ready");
 
-      const paths = result.deliverables
-        .map((d) => d.image_path)
-        .filter((p): p is string => !!p);
+      const paths = [
+        ...result.deliverables.map((d) => d.image_path),
+        ...result.deliverables.map((d) => d.file_path),
+      ].filter((p): p is string => !!p);
       setImageUrls(await getSignedImageUrls(session.access_token, paths));
     } catch (err) {
       console.error("Vision Stack load failed:", err);
@@ -304,6 +305,7 @@ function LayerBlock({
                 key={item.id}
                 item={item}
                 imageUrl={item.image_path ? imageUrls[item.image_path] : undefined}
+                fileUrl={item.file_path ? imageUrls[item.file_path] : undefined}
                 canEdit={canEdit}
                 accessToken={accessToken}
                 projectId={projectId}
@@ -320,6 +322,7 @@ function LayerBlock({
 function StackItem({
   item,
   imageUrl,
+  fileUrl,
   canEdit,
   accessToken,
   projectId,
@@ -327,6 +330,7 @@ function StackItem({
 }: {
   item: ProjectDetail["deliverables"][number];
   imageUrl?: string;
+  fileUrl?: string;
   canEdit: boolean;
   accessToken: string | null;
   projectId: string;
@@ -337,20 +341,37 @@ function StackItem({
 
   const done = !!item.published_at;
 
+  /**
+   * Accepts whatever the deliverable actually is. Most finished work is a
+   * PDF — Andrew: "most of it is just PDFs" — but a photographed flipchart is
+   * still an image, and the two want different treatment: an image is shown,
+   * a document is listed by name and opened deliberately.
+   */
   async function upload(file: File | undefined) {
     if (!file || !accessToken) return;
     setBusy(true);
     try {
-      const { path } = await replaceDeliverableImage(
-        accessToken,
-        item.image_path,
-        projectId,
-        file
-      );
-      await updateDeliverable(accessToken, item.id, {
-        image_path: path,
-        published_at: item.published_at ?? new Date().toISOString(),
-      });
+      if (file.type.startsWith("image/")) {
+        const { path } = await replaceDeliverableImage(
+          accessToken,
+          item.image_path,
+          projectId,
+          file
+        );
+        await updateDeliverable(accessToken, item.id, {
+          image_path: path,
+          published_at: item.published_at ?? new Date().toISOString(),
+        });
+      } else {
+        const doc = await uploadDeliverableFile(accessToken, projectId, file);
+        await updateDeliverable(accessToken, item.id, {
+          file_path: doc.path,
+          file_name: doc.name,
+          file_mime: doc.mime,
+          file_size: doc.size,
+          published_at: item.published_at ?? new Date().toISOString(),
+        });
+      }
       onChanged();
     } catch (err) {
       console.error("Upload failed:", err);
@@ -366,9 +387,9 @@ function StackItem({
       }`}
     >
       <div
-        onClick={() => canEdit && !imageUrl && inputRef.current?.click()}
+        onClick={() => canEdit && !imageUrl && !item.file_path && inputRef.current?.click()}
         className={`flex aspect-[4/3] items-center justify-center overflow-hidden bg-gray-50 ${
-          canEdit && !imageUrl ? "cursor-pointer" : ""
+          canEdit && !imageUrl && !item.file_path ? "cursor-pointer" : ""
         }`}
       >
         {imageUrl ? (
@@ -379,6 +400,29 @@ function StackItem({
               alt={item.title ?? "Deliverable"}
               className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-[1.03]"
             />
+          </a>
+        ) : item.file_path ? (
+          <a
+            href={fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center"
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-runfree-grad text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+                <path d="M14 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5Z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="line-clamp-2 text-xs font-medium text-runfree-ink">
+              {item.file_name ?? "Open document"}
+            </span>
+            {item.file_size && (
+              <span className="text-[10px] text-gray-400">
+                {(item.file_size / 1024 / 1024).toFixed(1)} MB
+              </span>
+            )}
           </a>
         ) : item.external_url ? (
           <a
@@ -391,14 +435,14 @@ function StackItem({
           </a>
         ) : (
           <span className="px-4 text-center text-xs text-gray-400">
-            {busy ? "Uploading…" : canEdit ? "Click to add" : "In progress"}
+            {busy ? "Uploading…" : canEdit ? "Click to add a PDF or image" : "In progress"}
           </span>
         )}
         {canEdit && (
           <input
             ref={inputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             className="hidden"
             onChange={(e) => upload(e.target.files?.[0])}
           />

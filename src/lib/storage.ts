@@ -56,6 +56,37 @@ export async function uploadProjectLogo(
   return { path };
 }
 
+/**
+ * Upload a document (usually a finished PDF) against a deliverable.
+ *
+ * Same bucket, and therefore the same RLS, as deliverable images — the
+ * bucket's name is historical, see migration 014. The original filename is
+ * preserved on the row rather than in the path, because two churches will
+ * both have a "Vision Frame.pdf" and the path has to stay unique.
+ */
+export async function uploadDeliverableFile(
+  accessToken: string,
+  projectId: string,
+  file: File
+): Promise<{ path: string; name: string; mime: string; size: number }> {
+  const client = createUserClient(accessToken);
+  const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+  const path = `${projectId}/doc-${crypto.randomUUID()}.${ext}`;
+
+  const { error } = await client.storage.from(BUCKET).upload(path, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+  if (error) throw error;
+
+  return {
+    path,
+    name: file.name,
+    mime: file.type || "application/octet-stream",
+    size: file.size,
+  };
+}
+
 export async function replaceDeliverableImage(
   accessToken: string,
   oldPath: string | null,

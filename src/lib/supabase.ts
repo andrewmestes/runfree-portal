@@ -274,6 +274,11 @@ export type Database = {
           external_url: string | null;
           /** Supabase Storage object path in the deliverable-images bucket, e.g. "{project_id}/{filename}". */
           image_path: string | null;
+          /** An uploaded document (usually a PDF) — see migration 014. */
+          file_path: string | null;
+          file_name: string | null;
+          file_mime: string | null;
+          file_size: number | null;
           position: number;
           published_at: string | null;
           created_at: string;
@@ -289,6 +294,10 @@ export type Database = {
           drive_file_id?: string | null;
           external_url?: string | null;
           image_path?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_mime?: string | null;
+          file_size?: number | null;
           position?: number;
           published_at?: string | null;
           created_at?: string;
@@ -302,6 +311,10 @@ export type Database = {
           drive_file_id?: string | null;
           external_url?: string | null;
           image_path?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_mime?: string | null;
+          file_size?: number | null;
           position?: number;
           published_at?: string | null;
         };

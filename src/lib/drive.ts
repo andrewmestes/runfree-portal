@@ -364,27 +364,32 @@ export type TemplateHandouts = {
 };
 
 /**
- * A shouted-out warning about the shared folder, because it decides who sees
- * what:
+ * WHAT THE PORTAL TAKES FROM DRIVE, AND WHAT IT DOES NOT.
  *
- * Every Pivvot engagement reads ONE folder, so anything dropped in it is
- * visible to every church running the process. That is the point for the
- * standard handouts — one PDF updated in Drive updates everyone — but it
- * makes a client-specific file a leak of that client's name to every other
- * client. `Combined Handouts` already holds one:
- * "Pivvot Notebook - JUNE 14 2026 (Christ Chapel).pdf".
+ * Drive supplies only the STANDARD RunFree handouts — the numbered module
+ * folders and the numbered combined PDFs that pair with them. That content is
+ * identical for every church, which is what makes mirroring it safe and
+ * useful: one PDF updated in Drive updates every engagement at once.
  *
- * So the rule for whole-process notebooks is deterministic and documented
- * rather than clever: a file with a PARENTHESISED SUFFIX is treated as
- * belonging to one church and is never surfaced. Naming a file
- * "... (Christ Chapel).pdf" is how you keep it private; leaving the
- * parentheses off is how you publish it to everyone. Per-module combined
- * handouts are matched on their leading number instead, so this rule never
- * touches them.
+ * Anything specific to one church is NOT read from Drive. It is uploaded to
+ * that church's project in the portal instead. Andrew, on why: "we don't
+ * mirror any client deliverables from google drive, but rather upload them to
+ * the site. most of it is just PDFs."
+ *
+ * An earlier version tried to separate the two by filename — a parenthesised
+ * suffix meant "belongs to one church, keep it private". It worked, and it
+ * was the wrong idea: it made correct behaviour depend on a naming convention
+ * every RunFree team member had to know and remember, where forgetting it
+ * showed one church another church's name. A rule that fails that way should
+ * not exist. So the boundary is now structural rather than lexical — numbered
+ * things are shared, everything else is ignored — and nobody has to remember
+ * anything.
+ *
+ * The practical consequence: a loose file dropped into Combined Handouts is
+ * simply not surfaced, whatever it is called. That is deliberate. If it
+ * belongs to a church, upload it to their project; if it belongs to everyone,
+ * give it a module number.
  */
-function isClientSpecific(name: string): boolean {
-  return /\([^)]+\)\s*\.[a-z0-9]{1,5}$/i.test(name);
-}
 
 /** Sheets that duplicate the module's own combined PDF, by title. */
 function sameTitle(a: string, b: string): boolean {
@@ -422,9 +427,10 @@ export async function listTemplateHandouts(rootId: string): Promise<TemplateHand
     entry.sheets = entry.sheets.filter((s) => !sameTitle(s.title, file.title));
   }
 
-  const notebooks = (combinedGroup?.files ?? []).filter(
-    (f) => f.order === Number.MAX_SAFE_INTEGER && !isClientSpecific(f.name)
-  );
+  // Deliberately empty: loose files in Combined Handouts are not surfaced.
+  // See the note above — the shared folder carries shared, numbered content
+  // only, and anything client-specific belongs on that client's project.
+  const notebooks: DriveListedFile[] = [];
 
   const extras = groups.filter(
     (g) => (g.order < 1 || g.order > 6) && !/combined handouts/i.test(g.name)

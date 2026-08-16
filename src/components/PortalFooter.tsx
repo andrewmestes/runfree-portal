@@ -25,6 +25,10 @@ export default function PortalFooter() {
         </div>
 
         <p className="mt-6 border-t border-gray-100 pt-6 text-xs text-gray-500">
+          <a href="/help" className="font-medium text-runfree-magentaDeep hover:underline">
+            Help &amp; FAQ
+          </a>
+          {" · "}
           Questions?{" "}
           <a
             href="mailto:andrew@runfree.co"

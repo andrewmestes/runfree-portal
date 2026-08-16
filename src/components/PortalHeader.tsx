@@ -124,6 +124,12 @@ export default function PortalHeader({
                 </span>
               </a>
             )}
+            <a
+              href="/help"
+              className="text-xs font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
+            >
+              Help
+            </a>
             {profile?.is_staff && (
               <a
                 href="/admin"
@@ -199,6 +205,14 @@ export default function PortalHeader({
                 <span aria-hidden>↗</span>
               </a>
             )}
+
+            <a
+              href="/help"
+              onClick={() => setMenuOpen(false)}
+              className="flex min-h-[44px] items-center rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"
+            >
+              Help
+            </a>
 
             {profile?.is_staff && (
               <a

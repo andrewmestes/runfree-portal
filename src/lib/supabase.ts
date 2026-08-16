@@ -380,6 +380,30 @@ export type Database = {
           },
         ];
       };
+      feedback: {
+        Row: {
+          id: string;
+          profile_id: string;
+          project_id: string | null;
+          kind: "question" | "problem" | "idea";
+          message: string;
+          from_staff: boolean;
+          resolved_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          project_id?: string | null;
+          kind?: "question" | "problem" | "idea";
+          message: string;
+          from_staff?: boolean;
+          resolved_at?: string | null;
+          created_at?: string;
+        };
+        Update: { resolved_at?: string | null };
+        Relationships: [];
+      };
       template_deliverables: {
         Row: {
           id: string;

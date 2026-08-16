@@ -1,0 +1,469 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { getCurrentProfile, logout } from "@/lib/auth";
+import { listFeedback, resolveFeedback, submitFeedback, type FeedbackKind, type FeedbackRow } from "@/lib/feedback";
+import PortalHeader from "@/components/PortalHeader";
+import PageLoader from "@/components/PageLoader";
+import PortalFooter from "@/components/PortalFooter";
+import AccessError from "@/components/AccessError";
+
+type Profile = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  is_staff: boolean;
+  is_owner: boolean;
+  certification_access: boolean;
+};
+
+/**
+ * Help, written twice.
+ *
+ * A church member and a RunFree coach are asking different questions, and a
+ * single page answering both would make each of them read past half of it.
+ * A client wants "where is the thing I was told about"; a coach wants "how do
+ * I set this up without breaking it". Staff see both, because a coach also
+ * needs to know what their client is looking at.
+ */
+export default function HelpPage() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [status, setStatus] = useState<"checking" | "ready" | "error">("checking");
+  const [mine, setMine] = useState<FeedbackRow[]>([]);
+
+  const load = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace("/auth/login");
+        return;
+      }
+      setAccessToken(session.access_token);
+      const current = (await getCurrentProfile()) as Profile | null;
+      if (!current) {
+        setStatus("error");
+        return;
+      }
+      setProfile(current);
+      setMine(await listFeedback(session.access_token));
+      setStatus("ready");
+    } catch (err) {
+      console.error("Help load failed:", err);
+      setStatus("error");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleSignOut() {
+    await logout();
+    router.replace("/auth/login");
+  }
+
+  if (status === "checking") return <PageLoader label="Loading help…" />;
+  if (status === "error") return <AccessError onRetry={load} />;
+  if (!profile) return null;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <PortalHeader
+        profile={profile}
+        onSignOut={handleSignOut}
+        backHref="/"
+        backLabel="Your projects"
+        title="Help"
+        subtitle="How this works, and how to reach a person."
+        certificationAccess={profile.certification_access || profile.is_staff}
+      />
+
+      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+        <ContactCard />
+
+        <Section title="Using your portal">
+          <Faq q="Where do I find the materials for our next session?">
+            Open your project and use the six icons across the middle — one per module
+            of the process. Selecting one shows everything for it: the handouts, the
+            videos to watch beforehand, photos from our working sessions, and what that
+            module produces. Nothing loads a new page, so you can move between them
+            freely.
+          </Faq>
+          <Faq q="What is the Vision Stack?">
+            It is the finished work — everything your team builds across the whole
+            engagement, arranged in four layers from the convictions underneath it all
+            up to the tools that put it into practice. It has its own page, linked from
+            the top of your project. Items appear there as they are completed, so it
+            fills in as you go.
+          </Faq>
+          <Faq q="Why can I see a session but not its notes?">
+            Notes appear once your coach has finished writing them up. Until then the
+            session is there but its recap is not — that is deliberate, so you are never
+            reading half-written notes.
+          </Faq>
+          <Faq q="Can I download the handouts?">
+            Yes. Each module leads with one combined PDF containing everything for it,
+            and the individual sheets are listed underneath if you only want one. They
+            open in a new tab, and you can save or print from there.
+          </Faq>
+          <Faq q="Who else can see our project?">
+            Only the people your church has had added, plus the RunFree team leading
+            your engagement. No other church can see any of it, and nothing is public.
+          </Faq>
+          <Faq q="I have not received my invitation.">
+            Check the spam folder first — the invitation arrives from our sign-in
+            system, so it does not always look like it came from a person. If it is not
+            there, email Andrew and he can send a fresh one.
+          </Faq>
+        </Section>
+
+        {profile.is_staff && (
+          <Section title="For the RunFree team" tone="staff">
+            <Faq q="Starting a new engagement">
+              <strong>+ New project</strong> from your projects page. Pick the template
+              — Pivvot Vision Framing or Younique — and the project is created with that
+              process&rsquo;s handouts, videos and deliverable slots already in place.
+              Choose <em>Private</em> unless you specifically want every RunFree staff
+              member to see it. You become its admin and its lead navigator; both can be
+              changed afterwards.
+            </Faq>
+            <Faq q="Adding the church's team">
+              Team &rarr; <strong>Manage</strong> &rarr; add them by email with their
+              role at the church. Give them <em>Viewer</em> unless they need to add
+              content. Access levels are per project: someone can be an admin on one
+              engagement and have no access to another.
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li><strong>Viewer</strong> — reads what has been published. Most church team members.</li>
+                <li><strong>Editor</strong> — can add and edit content. For a client leading their own process.</li>
+                <li><strong>Admin</strong> — everything an editor can do, plus adding and removing people.</li>
+              </ul>
+            </Faq>
+            <Faq q="After a session">
+              Sessions &rarr; <strong>+ Add a session</strong>, or open the existing one.
+              Set the date, tag which module it covered, paste the Loom or Zoom link,
+              then write the takeaways and the next steps. Drop in photos of any
+              flipcharts or screen work — they attach to that session. Nothing is visible
+              to the church until you tick <em>Visible to the church team</em>, so you
+              can write it up over several sittings.
+            </Faq>
+            <Faq q="Publishing deliverables">
+              Open the Vision Stack and click any empty tile to upload the finished PDF
+              or image. Each carries a <em>Draft</em> / <em>Live</em> toggle — the church
+              sees it only once it says Live. The counter at the top of the page reflects
+              what is finished, so it doubles as a progress read for you.
+            </Faq>
+            <Faq q="Where handouts come from">
+              The standard handouts are read live from Google Drive —
+              <em> RunFree Team &rsaquo; Pivvot Vision Framing &rsaquo; Handouts &rsaquo;
+              Pivvot Handouts (PDF)</em>. Update a PDF there and every church sees the new
+              one immediately; there is nothing to re-upload.
+              <br />
+              <br />
+              Two things worth knowing. Only the <strong>numbered</strong> folders and
+              files are picked up — <em>1 - Funnel Fusion</em>, <em>01 - Funnel Fusion
+              Handouts.pdf</em> — so a loose file dropped into Combined Handouts will not
+              appear. And anything specific to one church does not belong there at all:
+              upload it to that church&rsquo;s project instead, which is also what keeps
+              one client&rsquo;s name off another client&rsquo;s screen.
+            </Faq>
+            <Faq q="A church that is not doing the standard process">
+              Create the project from scratch rather than from a template, and build the
+              sections as you go — anywhere you pick a module there is a
+              <strong> + New section…</strong> option. That is also how Younique and
+              coaching engagements are organised, since they do not use the six Pivvot
+              modules.
+            </Faq>
+            <Faq q="Something looks wrong, or I need it to do something it doesn't">
+              Use the form below. It reaches Andrew with your name and which project you
+              were on attached, so nothing needs re-explaining.
+            </Faq>
+          </Section>
+        )}
+
+        <FeedbackForm
+          profile={profile}
+          accessToken={accessToken}
+          onSent={load}
+        />
+
+        {mine.length > 0 && (
+          <FeedbackList
+            rows={mine}
+            isOwner={profile.is_owner}
+            accessToken={accessToken}
+            onChanged={load}
+          />
+        )}
+      </main>
+
+      <PortalFooter />
+    </div>
+  );
+}
+
+function ContactCard() {
+  return (
+    <div className="overflow-hidden rounded-2xl bg-runfree-navy shadow-lg">
+      <div className="h-1.5 bg-runfree-grad" />
+      <div className="flex flex-wrap items-center justify-between gap-4 p-6 sm:p-7">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
+            Talk to a person
+          </p>
+          <h2 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-white">
+            We would rather you asked
+          </h2>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-white/70">
+            If anything here is unclear, or something is not working, say so. There is no
+            wrong question.
+          </p>
+        </div>
+        <a
+          href="mailto:andrew@runfree.co?subject=RunFree%20Portal"
+          className="shrink-0 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-runfree-navy transition hover:bg-runfree-pink"
+        >
+          andrew@runfree.co
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  tone,
+  children,
+}: {
+  title: string;
+  tone?: "staff";
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mt-10">
+      <div className="mb-4 flex items-center gap-3">
+        <h2 className="font-display text-xl font-extrabold tracking-tight text-runfree-ink">
+          {title}
+        </h2>
+        {tone === "staff" && (
+          <span className="rounded-full bg-runfree-indigo px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-navy">
+            RunFree only
+          </span>
+        )}
+      </div>
+      <div className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** Collapsed by default: a wall of open answers is not a page anyone reads. */
+function Faq({ q, children }: { q: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left outline-none transition hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-runfree-magenta"
+      >
+        <span className="text-sm font-semibold text-runfree-ink">{q}</span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden
+          className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="animate-fade px-5 pb-5 text-sm leading-relaxed text-gray-600">{children}</div>
+      )}
+    </div>
+  );
+}
+
+const KINDS: { value: FeedbackKind; label: string; hint: string }[] = [
+  { value: "question", label: "A question", hint: "Something you want explained." },
+  { value: "problem", label: "Something is broken", hint: "It did not do what you expected." },
+  { value: "idea", label: "An idea", hint: "Something you wish it did." },
+];
+
+function FeedbackForm({
+  profile,
+  accessToken,
+  onSent,
+}: {
+  profile: Profile;
+  accessToken: string | null;
+  onSent: () => void;
+}) {
+  const [kind, setKind] = useState<FeedbackKind>("question");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken || !message.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await submitFeedback(accessToken, {
+        profileId: profile.id,
+        kind,
+        message,
+        fromStaff: profile.is_staff,
+      });
+      setMessage("");
+      setSent(true);
+      onSent();
+    } catch (err) {
+      console.error("Feedback failed:", err);
+      setError("That did not send. Email andrew@runfree.co instead and it will not be lost.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-10">
+      <h2 className="mb-4 font-display text-xl font-extrabold tracking-tight text-runfree-ink">
+        {profile.is_staff ? "Ask for something" : "Get in touch"}
+      </h2>
+
+      <form onSubmit={submit} className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+        <div className="flex flex-wrap gap-2">
+          {KINDS.map((k) => (
+            <button
+              key={k.value}
+              type="button"
+              onClick={() => setKind(k.value)}
+              aria-pressed={kind === k.value}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                kind === k.value
+                  ? "bg-runfree-grad-deep text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-gray-500">{KINDS.find((k) => k.value === kind)?.hint}</p>
+
+        <textarea
+          rows={4}
+          value={message}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            setSent(false);
+          }}
+          placeholder={
+            kind === "problem"
+              ? "What were you doing, and what happened instead?"
+              : kind === "idea"
+                ? "What would you like it to do?"
+                : "What would you like to know?"
+          }
+          className="mt-4 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+        />
+
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={busy || !message.trim()}
+            className="rounded-lg bg-runfree-grad-deep px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
+          >
+            {busy ? "Sending…" : "Send to Andrew"}
+          </button>
+          {sent && (
+            <p role="status" className="text-sm font-medium text-runfree-magentaDeep">
+              Sent — thank you.
+            </p>
+          )}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+
+        <p className="mt-3 text-xs text-gray-400">
+          Sent as {profile.full_name || profile.email}.
+        </p>
+      </form>
+    </section>
+  );
+}
+
+function FeedbackList({
+  rows,
+  isOwner,
+  accessToken,
+  onChanged,
+}: {
+  rows: FeedbackRow[];
+  isOwner: boolean;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const open = rows.filter((r) => !r.resolved_at);
+  const done = rows.filter((r) => r.resolved_at);
+
+  return (
+    <section className="mt-10">
+      <h2 className="mb-4 font-display text-xl font-extrabold tracking-tight text-runfree-ink">
+        {isOwner ? "Everything that has come in" : "What you have sent"}
+        <span className="ml-2 text-sm font-normal text-gray-400">{open.length} open</span>
+      </h2>
+      <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
+        {[...open, ...done].map((r) => (
+          <li key={r.id} className="flex items-start gap-3 px-5 py-4">
+            <span
+              className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                r.kind === "problem"
+                  ? "bg-red-50 text-red-600"
+                  : r.kind === "idea"
+                    ? "bg-runfree-pink text-runfree-magentaDeep"
+                    : "bg-runfree-indigo text-runfree-navy"
+              }`}
+            >
+              {r.kind}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className={`whitespace-pre-line text-sm ${r.resolved_at ? "text-gray-400 line-through" : "text-gray-700"}`}>
+                {r.message}
+              </p>
+              <p className="mt-1 text-xs text-gray-400">
+                {new Date(r.created_at).toLocaleDateString(undefined, {
+                  day: "numeric",
+                  month: "short",
+                })}
+                {r.from_staff && " · RunFree"}
+              </p>
+            </div>
+            {isOwner && (
+              <button
+                onClick={async () => {
+                  if (!accessToken) return;
+                  await resolveFeedback(accessToken, r.id, !r.resolved_at);
+                  onChanged();
+                }}
+                className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-400 transition hover:bg-gray-100 hover:text-runfree-ink"
+              >
+                {r.resolved_at ? "Reopen" : "Done"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

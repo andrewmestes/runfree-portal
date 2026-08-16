@@ -380,6 +380,41 @@ export type Database = {
           },
         ];
       };
+      template_deliverables: {
+        Row: {
+          id: string;
+          template_id: string;
+          title: string;
+          section: string | null;
+          kind: "vision_stack" | "session_image";
+          stack_layer: string | null;
+          position: number;
+        };
+        Insert: {
+          id?: string;
+          template_id: string;
+          title: string;
+          section?: string | null;
+          kind?: "vision_stack" | "session_image";
+          stack_layer?: string | null;
+          position?: number;
+        };
+        Update: {
+          title?: string;
+          section?: string | null;
+          kind?: "vision_stack" | "session_image";
+          stack_layer?: string | null;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "template_deliverables_template_id_fkey";
+            columns: ["template_id"];
+            referencedRelation: "templates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       vision_stack_layers: {
         Row: {
           slug: string;

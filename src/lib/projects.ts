@@ -264,7 +264,76 @@ export async function createProject(
     .insert({ project_id: project.id, profile_id: creatorId, role: "admin" });
   if (memberErr) throw memberErr;
 
+  // Stamp the template's deliverables onto the new project.
+  //
+  // This has to happen AFTER the membership insert, not before: write_deliverables
+  // requires the caller to be an editor or admin ON THIS PROJECT, and until the
+  // row above exists they are neither. Ordering it the other way fails RLS on a
+  // project the same person just created, which reads like a permissions bug and
+  // is really a sequencing one.
+  //
+  // Failure here is reported rather than swallowed. A project with no
+  // deliverables looks finished — the module rail renders, because handouts and
+  // videos are keyed by template — and only reveals itself when someone opens
+  // the Vision Stack and finds four empty layers.
+  if (input.templateId) {
+    await stampTemplateDeliverables(accessToken, project.id, input.templateId);
+  }
+
   return { id: project.id };
+}
+
+/**
+ * Copy a template's deliverable scaffolding onto a project.
+ *
+ * Separated out so it can be re-run: if the bulk insert fails partway, or a
+ * project was created before templates carried deliverables at all, this
+ * fills in what is missing without duplicating what is already there.
+ * Matching on title is safe here because it is scoped to one project.
+ */
+export async function stampTemplateDeliverables(
+  accessToken: string,
+  projectId: string,
+  templateId: string
+): Promise<{ added: number }> {
+  const client = createUserClient(accessToken);
+
+  const [{ data: templateRows, error: tplErr }, { data: existing, error: exErr }] =
+    await Promise.all([
+      client
+        .from("template_deliverables")
+        .select("title, section, kind, stack_layer, position")
+        .eq("template_id", templateId)
+        .order("position", { ascending: true }),
+      client.from("deliverables").select("title").eq("project_id", projectId),
+    ]);
+
+  if (tplErr) throw tplErr;
+  if (exErr) throw exErr;
+  if (!templateRows?.length) return { added: 0 };
+
+  const already = new Set((existing ?? []).map((d) => (d.title ?? "").toLowerCase()));
+  const toInsert = templateRows
+    .filter((r) => !already.has(r.title.toLowerCase()))
+    .map((r) => ({
+      project_id: projectId,
+      title: r.title,
+      section: r.section,
+      kind: r.kind,
+      stack_layer: r.stack_layer,
+      position: r.position,
+      // Deliberately unpublished: the scaffolding is the coach's worklist, and
+      // a church should see a deliverable once it holds their actual work, not
+      // as two dozen empty placeholders on day one.
+      published_at: null,
+    }));
+
+  if (toInsert.length === 0) return { added: 0 };
+
+  const { error } = await client.from("deliverables").insert(toInsert);
+  if (error) throw error;
+
+  return { added: toInsert.length };
 }
 
 export async function createSession(

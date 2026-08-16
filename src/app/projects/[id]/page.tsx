@@ -7,13 +7,16 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentProfile, logout } from "@/lib/auth";
 import {
   createDeliverable,
+  availableSections,
   createSession,
   deleteDeliverable,
+  deleteSession,
   getProjectDetail,
   membersToCsv,
   removeMember,
   reorderDeliverables,
   safeExternalUrl,
+  setLeadNavigator,
   updateMemberDetails,
   updateMemberRole,
   updateProject,
@@ -388,7 +391,7 @@ export default function ProjectDetailPage() {
           sessions={detail.sessions}
           detail={detail}
           imageUrls={imageUrls}
-          moduleOptions={modules.map((m) => m.section)}
+          moduleOptions={availableSections(detail)}
           canEdit={canEdit}
           accessToken={accessToken}
           projectId={projectId}
@@ -1480,12 +1483,20 @@ function SessionsSection({
 }) {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
+  const [heldOn, setHeldOn] = useState("");
+  const [section, setSection] = useState("");
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!accessToken || !title.trim()) return;
-    await createSession(accessToken, projectId, { title: title.trim(), section: null });
+    await createSession(accessToken, projectId, {
+      title: title.trim(),
+      section: section || null,
+      held_on: heldOn || null,
+    });
     setTitle("");
+    setHeldOn("");
+    setSection("");
     setAdding(false);
     onChanged();
   }
@@ -1522,28 +1533,49 @@ function SessionsSection({
           (adding ? (
             <form
               onSubmit={add}
-              className="flex gap-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200"
+              className="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200"
             >
-              <input
-                autoFocus
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Session title, e.g. Module 2 — Crowd Cloud"
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-              />
-              <button
-                type="submit"
-                className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-              >
-                Add
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdding(false)}
-                className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-runfree-ink"
-              >
-                Cancel
-              </button>
+              <Field label="Session title">
+                <input
+                  autoFocus
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Session 3 — Crowd Cloud"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                />
+              </Field>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex-1 min-w-[150px]">
+                  <Field label="Date held">
+                    <input
+                      type="date"
+                      value={heldOn}
+                      onChange={(e) => setHeldOn(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                    />
+                  </Field>
+                </div>
+                <div className="flex-1 min-w-[180px]">
+                  <Field label="Module covered">
+                    <SectionPicker value={section} options={moduleOptions} onChange={setSection} />
+                  </Field>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                >
+                  Add session
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdding(false)}
+                  className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-runfree-ink"
+                >
+                  Cancel
+                </button>
+              </div>
             </form>
           ) : (
             <button
@@ -1582,6 +1614,7 @@ function SessionRow({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
+    title: session.title,
     held_on: session.held_on ?? "",
     section: session.section ?? "",
     recording_url: session.recording_url ?? "",
@@ -1596,6 +1629,7 @@ function SessionRow({
     setSaving(true);
     try {
       await updateSession(accessToken, session.id, {
+        title: form.title.trim() || session.title,
         held_on: form.held_on || null,
         section: form.section || null,
         recording_url: form.recording_url || null,
@@ -1677,21 +1711,22 @@ function SessionRow({
                       a session is not a module — tagging which one it covered
                       is what keeps the two views reconcilable. */}
                   <Field label="Module covered">
-                    <select
+                    <SectionPicker
                       value={form.section}
-                      onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-                    >
-                      <option value="">Not tied to one module</option>
-                      {moduleOptions.map((m) => (
-                        <option key={m} value={m}>
-                          {moduleLabel(m)}
-                        </option>
-                      ))}
-                    </select>
+                      options={moduleOptions}
+                      onChange={(v) => setForm((f) => ({ ...f, section: v }))}
+                    />
                   </Field>
                 </div>
               </div>
+
+              <Field label="Session title">
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                />
+              </Field>
 
               <Field label="Recording link (Loom or Zoom)">
                 <input
@@ -1741,13 +1776,26 @@ function SessionRow({
                 />
                 Visible to the church team
               </label>
-              <button
-                onClick={save}
-                disabled={saving}
-                className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-              >
-                {saving ? "Saving…" : "Save"}
-              </button>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!accessToken) return;
+                    if (!confirm(`Delete "${session.title}"? Its notes and photos go with it.`)) return;
+                    await deleteSession(accessToken, session.id);
+                    onChanged();
+                  }}
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                >
+                  Delete session
+                </button>
+              </div>
             </>
           ) : (
             <>
@@ -1812,6 +1860,77 @@ function SessionRow({
   );
 }
 
+/**
+ * Choose a section, or type a new one.
+ *
+ * The session form used to derive its options from sections that already had
+ * content, which meant a brand-new project offered nothing and a Younique or
+ * Meta Performance project offered nothing ever — neither uses "Mod #N"
+ * headings, and the module rail was what supplied the list. Nothing anywhere
+ * in the app could create a section, so those verticals had no way to be
+ * organised at all.
+ */
+function SectionPicker({
+  value,
+  options,
+  onChange,
+  allowNone = true,
+}: {
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  allowNone?: boolean;
+}) {
+  const [custom, setCustom] = useState(false);
+
+  if (custom) {
+    return (
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Name this section"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setCustom(false);
+            onChange("");
+          }}
+          className="shrink-0 rounded-lg px-2 text-xs text-gray-500 hover:text-runfree-ink"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === "__new__") {
+          setCustom(true);
+          onChange("");
+        } else {
+          onChange(e.target.value);
+        }
+      }}
+      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+    >
+      {allowNone && <option value="">Not tied to one section</option>}
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {moduleLabel(o)}
+        </option>
+      ))}
+      <option value="__new__">+ New section…</option>
+    </select>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -1866,13 +1985,30 @@ function TeamSection({
       {/* RunFree side — the constant two, plus whoever is leading this one. */}
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {runfree.map((m) => (
-          <PersonCard
-            key={m.profileId}
-            name={m.fullName || m.email}
-            role={m.isLead ? "Your Lead Navigator" : m.orgRole || "RunFree"}
-            email={m.email}
-            highlight={m.isLead}
-          />
+          <div key={m.profileId}>
+            <PersonCard
+              name={m.fullName || m.email}
+              role={m.isLead ? "Your Lead Navigator" : m.orgRole || "RunFree"}
+              email={m.email}
+              highlight={m.isLead}
+            />
+            {canManage && !m.isLead && (
+              /* Without this there is no way at all to say who is leading an
+                 engagement, so the hero's "led by …" line and the highlighted
+                 card below only ever appeared on projects whose row had been
+                 set by hand in SQL. */
+              <button
+                onClick={async () => {
+                  if (!accessToken) return;
+                  await setLeadNavigator(accessToken, projectId, m.profileId);
+                  onChanged();
+                }}
+                className="mt-1.5 w-full rounded-lg px-2 py-1 text-xs font-medium text-gray-400 transition hover:bg-runfree-pink hover:text-runfree-magentaDeep"
+              >
+                Make lead navigator
+              </button>
+            )}
+          </div>
         ))}
         {bios.map((b) => {
           const [name, role] = b.title.split(/\s+—\s+/);

@@ -69,10 +69,15 @@ export async function getProjectDetail(
       .from("project_members")
       .select("profile_id, role, org_role, is_lead, profiles(full_name, email, is_staff)")
       .eq("project_id", projectId),
+    // Date first, because that is how a coach thinks about ten sessions
+    // delivered over months. position only breaks ties — two sessions on one
+    // day, or sessions not yet dated, which sort last rather than leading the
+    // list with blanks.
     client
       .from("sessions")
       .select("*")
       .eq("project_id", projectId)
+      .order("held_on", { ascending: true, nullsFirst: false })
       .order("position", { ascending: true }),
     client
       .from("deliverables")
@@ -202,6 +207,26 @@ export function groupBySection<T extends { section: string | null }>(
   return ordered.map((section) => ({ section, items: groups.get(section)! }));
 }
 
+/**
+ * Every section this project can file something under: the template's declared
+ * outline first, then anything already in use that the template didn't name.
+ *
+ * Deriving this from content alone — which is what the session form did — meant
+ * a brand-new project offered nothing, and a Younique or Meta Performance
+ * project offered nothing ever, since neither uses "Mod #N" headings and the
+ * module rail is what supplied the list.
+ */
+export function availableSections(detail: ProjectDetail): string[] {
+  const declared = sectionOrderFromStructure(detail.template?.structure);
+  const inUse = [
+    ...detail.resources.map((r) => r.section),
+    ...detail.sessions.map((s) => s.section),
+    ...detail.deliverables.map((d) => d.section),
+  ].filter((s): s is string => !!s);
+
+  return [...new Set([...declared, ...inUse])];
+}
+
 /** templates.structure's declared shape — an ordered outline of section names. */
 export function sectionOrderFromStructure(structure: unknown): string[] {
   if (
@@ -259,9 +284,13 @@ export async function createProject(
     .single();
   if (projectErr || !project) throw projectErr ?? new Error("Project creation returned nothing");
 
+  // The person creating an engagement is the one running it, until someone
+  // says otherwise. Without this the hero's "led by …" line and the
+  // highlighted lead card never render on any project created in the browser
+  // — they only ever worked on Athena because that row was set by hand.
   const { error: memberErr } = await client
     .from("project_members")
-    .insert({ project_id: project.id, profile_id: creatorId, role: "admin" });
+    .insert({ project_id: project.id, profile_id: creatorId, role: "admin", is_lead: true });
   if (memberErr) throw memberErr;
 
   // Stamp the template's deliverables onto the new project.
@@ -339,16 +368,73 @@ export async function stampTemplateDeliverables(
 export async function createSession(
   accessToken: string,
   projectId: string,
-  input: { title: string; section: string | null }
+  input: { title: string; section: string | null; held_on?: string | null }
 ) {
   const client = createUserClient(accessToken);
+
+  // Continue from the highest position in use rather than defaulting to 0.
+  // Every session sharing position 0 is what made the numbered circles in the
+  // session list unstable between page loads.
+  const { data: last } = await client
+    .from("sessions")
+    .select("position")
+    .eq("project_id", projectId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const { data, error } = await client
     .from("sessions")
-    .insert({ project_id: projectId, title: input.title, section: input.section })
+    .insert({
+      project_id: projectId,
+      title: input.title,
+      section: input.section,
+      held_on: input.held_on ?? null,
+      position: (last?.position ?? -1) + 1,
+    })
     .select()
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function deleteSession(accessToken: string, sessionId: string) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("sessions").delete().eq("id", sessionId);
+  if (error) throw error;
+}
+
+/**
+ * Hand the lead-navigator flag to one member.
+ *
+ * Cleared everywhere on this project first, because a partial unique index
+ * (migration 016) allows exactly one true row per project — setting the new
+ * one while the old is still flagged violates it. Two statements rather than
+ * one, and the clear has to win the race, so it is awaited rather than
+ * fired alongside.
+ */
+export async function setLeadNavigator(
+  accessToken: string,
+  projectId: string,
+  profileId: string | null
+) {
+  const client = createUserClient(accessToken);
+
+  const { error: clearErr } = await client
+    .from("project_members")
+    .update({ is_lead: false })
+    .eq("project_id", projectId)
+    .eq("is_lead", true);
+  if (clearErr) throw clearErr;
+
+  if (!profileId) return;
+
+  const { error } = await client
+    .from("project_members")
+    .update({ is_lead: true })
+    .eq("project_id", projectId)
+    .eq("profile_id", profileId);
+  if (error) throw error;
 }
 
 export async function updateSession(

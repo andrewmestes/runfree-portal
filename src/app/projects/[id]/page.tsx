@@ -16,7 +16,9 @@ import {
   removeMember,
   reorderDeliverables,
   safeExternalUrl,
+  saveSectionNote,
   setLeadNavigator,
+  updatePriorities,
   updateMemberDetails,
   updateMemberRole,
   updateProject,
@@ -326,17 +328,35 @@ export default function ProjectDetailPage() {
       />
 
       <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8">
-        <VisionStackCard
-          projectId={projectId}
-          total={stackItems.length}
-          ready={stackReady}
-          layers={detail.stackLayers}
+        <PrioritiesBanner
+          detail={detail}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          onChanged={refresh}
         />
+
+        {/* Only Pivvot produces a Vision Stack. Younique and Meta Performance
+            have deliverables but not this four-layer artefact, and showing an
+            empty one on those was claiming a thing that does not exist. */}
+        {detail.template?.hasVisionStack && (
+          <VisionStackCard
+            projectId={projectId}
+            total={stackItems.length}
+            ready={stackReady}
+            layers={detail.stackLayers}
+          />
+        )}
 
         <QuickTiles
           prepCount={prepResources.length}
           sessionCount={detail.sessions.length}
           teamCount={detail.members.length}
+        />
+
+        <PrepareSection
+          id="prepare"
+          prep={prepResources}
+          overview={overviewResources}
         />
 
         {modules.length > 0 && (
@@ -379,12 +399,6 @@ export default function ProjectDetailPage() {
             </div>
           </section>
         )}
-
-        <PrepareSection
-          id="prepare"
-          prep={prepResources}
-          overview={overviewResources}
-        />
 
         <SessionsSection
           id="sessions"
@@ -655,6 +669,145 @@ function prettyDomain(url: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Priorities                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * "What am I supposed to be doing right now with my team?"
+ *
+ * The first question a church team member actually arrives with, and until now
+ * the page answered every other question first. Everything else here tells you
+ * where the material is, which only helps once you already know what you are
+ * meant to be doing with it.
+ *
+ * Above the Vision Stack on purpose. The finished work is what a church shows
+ * a board; this is what they need on a Tuesday.
+ */
+function PrioritiesBanner({
+  detail,
+  canEdit,
+  accessToken,
+  onChanged,
+}: {
+  detail: ProjectDetail;
+  canEdit: boolean;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(detail.priorities ?? "");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!accessToken) return;
+    setBusy(true);
+    try {
+      await updatePriorities(accessToken, detail.id, draft);
+      onChanged();
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Nothing set and nobody who could set it: show nothing rather than an
+  // empty promise.
+  if (!detail.priorities && !canEdit) return null;
+
+  const updated = detail.prioritiesUpdatedAt
+    ? new Date(detail.prioritiesUpdatedAt).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "long",
+      })
+    : null;
+
+  return (
+    <section className="mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-runfree-magenta/25">
+      <div className="h-1.5 bg-runfree-grad" />
+      <div className="p-6 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
+              Right now
+            </p>
+            <h2 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-runfree-ink">
+              What your team is working on
+            </h2>
+          </div>
+          {canEdit && !editing && (
+            <button
+              onClick={() => {
+                setDraft(detail.priorities ?? "");
+                setEditing(true);
+              }}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink"
+            >
+              {detail.priorities ? "Update" : "Set priorities"}
+            </button>
+          )}
+        </div>
+
+        {editing ? (
+          <div className="mt-4 space-y-3">
+            <textarea
+              autoFocus
+              rows={5}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={"What should this team do before you meet again?\n\nOne per line reads best:\nFinish the Kingdom Concept draft\nEveryone completes the 5 Eras assessment"}
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm leading-relaxed outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={save}
+                disabled={busy}
+                className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? "Saving…" : "Save"}
+              </button>
+              <button
+                onClick={() => setEditing(false)}
+                className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-runfree-ink"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : detail.priorities ? (
+          <>
+            {/* Rendered as a checklist when written one-per-line, which is
+                how a list of commitments is naturally written. */}
+            <ul className="mt-4 space-y-2.5">
+              {detail.priorities
+                .split("\n")
+                .map((l) => l.trim())
+                .filter(Boolean)
+                .map((line, i) => (
+                  <li key={i} className="flex items-start gap-3">
+                    <span
+                      aria-hidden
+                      className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-runfree-magenta"
+                    />
+                    <span className="text-[15px] leading-relaxed text-runfree-ink">{line}</span>
+                  </li>
+                ))}
+            </ul>
+            {updated && (
+              <p className="mt-4 text-xs text-gray-400">Updated {updated}</p>
+            )}
+          </>
+        ) : (
+          <p className="mt-4 rounded-xl border border-dashed border-gray-300 py-8 text-center text-sm text-gray-400">
+            Nothing set yet. This is the first thing your team sees — use it to
+            say what matters this month.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Vision Stack                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -718,15 +871,15 @@ function VisionStackCard({
 
         {/* The four layers, echoing the printed stack graphic: exploded plates,
             foundation at the bottom, toolbox on top. */}
-        <ul className="flex shrink-0 flex-col-reverse gap-1.5">
+        {/* Equal width and right-aligned: the staggered indent made four
+            different-length labels look like four different-size boxes. The
+            stack now steps cleanly, which is what the printed graphic does. */}
+        <ul className="flex w-full shrink-0 flex-col-reverse gap-1.5 sm:w-64">
           {layers.map((layer, i) => (
             <li
               key={layer.slug}
-              className="rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-white/80 ring-1 ring-white/10 transition duration-300 group-hover:bg-white/15"
-              style={{
-                marginLeft: `${i * 14}px`,
-                transitionDelay: `${i * 40}ms`,
-              }}
+              className="rounded-lg bg-white/10 px-4 py-2.5 text-center text-xs font-semibold text-white/80 ring-1 ring-white/10 transition duration-300 group-hover:bg-white/15"
+              style={{ transitionDelay: `${i * 40}ms` }}
             >
               {layer.name}
             </li>
@@ -752,7 +905,7 @@ function QuickTiles({
 }) {
   const tiles = [
     { href: "#prepare", label: "Prepare", detail: `${prepCount} to read and watch` },
-    { href: "#sessions", label: "Sessions", detail: sessionCount === 1 ? "1 recorded" : `${sessionCount} recorded` },
+    { href: "#sessions", label: "Session recordings", detail: sessionCount === 1 ? "1 recorded" : `${sessionCount} recorded` },
     { href: "#team", label: "Your team", detail: `${teamCount} ${teamCount === 1 ? "person" : "people"}` },
   ];
 
@@ -948,6 +1101,15 @@ function ModulePanel({
           </Block>
         )}
 
+        <SectionNote
+          projectId={detail.id}
+          section={section}
+          initial={detail.sectionNotes[section] ?? ""}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          onChanged={onChanged}
+        />
+
         <Block title="From our sessions">
           <ImageGallery
             images={images}
@@ -1020,6 +1182,104 @@ function IconButton({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Notes, next steps or homework for one module.
+ *
+ * Andrew: "I should have a nice place right here where I can add notes, next
+ * steps, or homework assignments." Distinct from the project-wide priorities
+ * banner, which is about right now across the whole engagement; this is what
+ * belongs with a specific tool.
+ */
+function SectionNote({
+  projectId,
+  section,
+  initial,
+  canEdit,
+  accessToken,
+  onChanged,
+}: {
+  projectId: string;
+  section: string;
+  initial: string;
+  canEdit: boolean;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(initial);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => setDraft(initial), [initial, section]);
+
+  if (!initial && !canEdit) return null;
+
+  async function save() {
+    if (!accessToken) return;
+    setBusy(true);
+    try {
+      await saveSectionNote(accessToken, projectId, section, draft);
+      onChanged();
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+          Notes &amp; homework
+        </h4>
+        {canEdit && !editing && (
+          <button
+            onClick={() => setEditing(true)}
+            className="text-xs font-medium text-runfree-magentaDeep hover:underline"
+          >
+            {initial ? "Edit" : "Add"}
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            autoFocus
+            rows={4}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="What should the team do with this module before you meet again?"
+            className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={save}
+              disabled={busy}
+              className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? "Saving…" : "Save"}
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-runfree-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : initial ? (
+        <p className="whitespace-pre-line rounded-xl bg-runfree-indigo/40 px-4 py-3 text-sm leading-relaxed text-runfree-ink">
+          {initial}
+        </p>
+      ) : (
+        <p className="rounded-xl border border-dashed border-gray-200 py-5 text-center text-xs text-gray-400">
+          No notes for this module yet.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -1485,18 +1745,25 @@ function SessionsSection({
   const [title, setTitle] = useState("");
   const [heldOn, setHeldOn] = useState("");
   const [section, setSection] = useState("");
+  const [recording, setRecording] = useState("");
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!accessToken || !title.trim()) return;
-    await createSession(accessToken, projectId, {
+    const created = await createSession(accessToken, projectId, {
       title: title.trim(),
       section: section || null,
       held_on: heldOn || null,
     });
+    // Saved in a second call so the recording field can live on the create
+    // form without widening createSession's contract for one caller.
+    if (recording.trim() && created) {
+      await updateSession(accessToken, created.id, { recording_url: recording.trim() });
+    }
     setTitle("");
     setHeldOn("");
     setSection("");
+    setRecording("");
     setAdding(false);
     onChanged();
   }
@@ -1561,6 +1828,14 @@ function SessionsSection({
                   </Field>
                 </div>
               </div>
+              <Field label="Recording link (Loom or Zoom)">
+                <input
+                  value={recording}
+                  onChange={(e) => setRecording(e.target.value)}
+                  placeholder="https://www.loom.com/share/…"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                />
+              </Field>
               <div className="flex gap-2">
                 <button
                   type="submit"

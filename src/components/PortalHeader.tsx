@@ -5,8 +5,6 @@ import Image from "next/image";
 
 type Profile = { full_name?: string | null; is_staff?: boolean } | null;
 
-export type NavLink = { href: string; label: string; title?: string };
-
 type Props = {
   profile: Profile;
   onSignOut: () => void;
@@ -17,13 +15,6 @@ type Props = {
   /** Where the "back" affordance points, if this isn't the top-level page. */
   backHref?: string;
   backLabel?: string;
-  /**
-   * Nav links for the current context. Unlike the CVF portal this was
-   * forked from — which had one fixed set of links for its one audience —
-   * every RunFree user's nav depends on which project they're inside, so
-   * the caller supplies it. Defaults to just Home.
-   */
-  links?: NavLink[];
   /**
    * False on pages that open with their own hero — the project page leads
    * with the church's name and mark, and a second title block above it would
@@ -49,8 +40,6 @@ const CVF_URL =
   process.env.NEXT_PUBLIC_CVF_PORTAL_URL ||
   "https://certified-vision-framers-portal-pearl.vercel.app";
 
-const HOME_LINK: NavLink[] = [{ href: "/", label: "Home" }];
-
 export default function PortalHeader({
   profile,
   onSignOut,
@@ -59,7 +48,6 @@ export default function PortalHeader({
   eyebrow,
   backHref,
   backLabel,
-  links,
   showTitleBlock = true,
   certificationAccess = false,
 }: Props) {
@@ -72,10 +60,6 @@ export default function PortalHeader({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
-
-  const navLinks = backHref
-    ? [{ href: backHref, label: backLabel || "Back" }]
-    : links ?? HOME_LINK;
 
   return (
     <header className="bg-runfree-navy">
@@ -95,23 +79,20 @@ export default function PortalHeader({
             />
           </a>
 
-          {/* Desktop nav. Below sm it collapses into the menu — a sideways
-              scroll strip with hidden scrollbars gave no sign the links past
-              the edge existed at all on a phone. */}
-          <nav className="hidden flex-1 items-center justify-center gap-x-9 sm:flex">
-            {navLinks.map((link) => (
+          {/* Everything lives on the right. A single "HOME" floating in the
+              middle of an otherwise empty bar read as a mistake — and the
+              logo already goes home, which is what people try first. Back
+              links stay, because those are contextual and genuinely needed. */}
+          <div className="ml-auto hidden shrink-0 items-center gap-4 text-sm sm:flex">
+            {backHref && (
               <a
-                key={link.href}
-                href={link.href}
-                title={link.title}
-                className="whitespace-nowrap text-sm font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
+                href={backHref}
+                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
               >
-                {link.label}
+                <span aria-hidden>←</span>
+                {backLabel || "Back"}
               </a>
-            ))}
-          </nav>
-
-          <div className="hidden shrink-0 items-center gap-4 text-sm sm:flex">
+            )}
             {certificationAccess && (
               <a
                 href={CVF_URL}
@@ -182,16 +163,15 @@ export default function PortalHeader({
             id="portal-mobile-menu"
             className="animate-fade border-b border-white/10 py-2 sm:hidden"
           >
-            {navLinks.map((link) => (
+            {backHref && (
               <a
-                key={link.href}
-                href={link.href}
+                href={backHref}
                 onClick={() => setMenuOpen(false)}
                 className="block rounded-lg px-2 py-3 text-sm font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 hover:text-white focus-visible:ring-2"
               >
-                {link.label}
+                ← {backLabel || "Back"}
               </a>
-            ))}
+            )}
 
             <div className="my-2 border-t border-white/10" />
 

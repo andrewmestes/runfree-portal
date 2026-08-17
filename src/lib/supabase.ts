@@ -64,6 +64,8 @@ export type Database = {
           is_owner: boolean;
           /** Portal-wide, independent of any project membership — see 006_client_portal_expansion.sql. */
           certification_access: boolean;
+          /** Headshot, in the deliverable-images bucket. One face per person, not per project. */
+          avatar_path: string | null;
           created_at: string;
         };
         Insert: {
@@ -73,6 +75,7 @@ export type Database = {
           is_staff?: boolean;
           is_owner?: boolean;
           certification_access?: boolean;
+          avatar_path?: string | null;
           created_at?: string;
         };
         Update: {
@@ -80,6 +83,7 @@ export type Database = {
           is_staff?: boolean;
           is_owner?: boolean;
           certification_access?: boolean;
+          avatar_path?: string | null;
         };
         Relationships: [];
       };
@@ -91,6 +95,8 @@ export type Database = {
           description: string | null;
           structure: unknown;
           is_active: boolean;
+          /** Only Pivvot produces a Vision Stack — see migration 018. */
+          has_vision_stack: boolean;
           created_at: string;
         };
         Insert: {
@@ -123,6 +129,9 @@ export type Database = {
           location: string | null;
           website_url: string | null;
           about: string | null;
+          /** "What your team is doing right now" — see migration 018. */
+          priorities: string | null;
+          priorities_updated_at: string | null;
           created_by: string;
           archived_at: string | null;
           created_at: string;
@@ -137,6 +146,8 @@ export type Database = {
           location?: string | null;
           website_url?: string | null;
           about?: string | null;
+          priorities?: string | null;
+          priorities_updated_at?: string | null;
           created_by: string;
           archived_at?: string | null;
           created_at?: string;
@@ -150,6 +161,8 @@ export type Database = {
           location?: string | null;
           website_url?: string | null;
           about?: string | null;
+          priorities?: string | null;
+          priorities_updated_at?: string | null;
           archived_at?: string | null;
         };
         Relationships: [
@@ -379,6 +392,22 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      section_notes: {
+        Row: {
+          project_id: string;
+          section: string;
+          body: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          project_id: string;
+          section: string;
+          body?: string | null;
+          updated_at?: string;
+        };
+        Update: { body?: string | null; updated_at?: string };
+        Relationships: [];
       };
       feedback: {
         Row: {

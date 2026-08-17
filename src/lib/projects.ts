@@ -35,7 +35,17 @@ export type ProjectDetail = {
   location: string | null;
   websiteUrl: string | null;
   about: string | null;
-  template: { id: string; name: string; slug: string; structure: unknown } | null;
+  priorities: string | null;
+  prioritiesUpdatedAt: string | null;
+  template: {
+    id: string;
+    name: string;
+    slug: string;
+    structure: unknown;
+    hasVisionStack: boolean;
+  } | null;
+  /** Per-module notes, keyed by section. */
+  sectionNotes: Record<string, string>;
   members: ProjectMember[];
   sessions: SessionRow[];
   deliverables: DeliverableRow[];
@@ -57,14 +67,15 @@ export async function getProjectDetail(
 
   const { data: project, error: projectErr } = await client
     .from("projects")
-    .select("*, templates(id, name, slug, structure)")
+    .select("*, templates(id, name, slug, structure, has_vision_stack)")
     .eq("id", projectId)
     .maybeSingle();
 
   if (projectErr) throw projectErr;
   if (!project) return null;
 
-  const [membersRes, sessionsRes, deliverablesRes, resourcesRes, layersRes] = await Promise.all([
+  const [membersRes, sessionsRes, deliverablesRes, resourcesRes, layersRes, notesRes] =
+    await Promise.all([
     client
       .from("project_members")
       .select("profile_id, role, org_role, is_lead, profiles(full_name, email, is_staff)")
@@ -92,6 +103,7 @@ export async function getProjectDetail(
           .order("position", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
     client.from("vision_stack_layers").select("*").order("position", { ascending: true }),
+    client.from("section_notes").select("section, body").eq("project_id", projectId),
   ]);
 
   if (membersRes.error) throw membersRes.error;
@@ -99,10 +111,14 @@ export async function getProjectDetail(
   if (deliverablesRes.error) throw deliverablesRes.error;
   if (resourcesRes.error) throw resourcesRes.error;
   if (layersRes.error) throw layersRes.error;
+  if (notesRes.error) throw notesRes.error;
 
-  const template = project.templates as unknown as
-    | { id: string; name: string; slug: string; structure: unknown }
+  const t = project.templates as unknown as
+    | { id: string; name: string; slug: string; structure: unknown; has_vision_stack: boolean }
     | null;
+  const template = t
+    ? { id: t.id, name: t.name, slug: t.slug, structure: t.structure, hasVisionStack: t.has_vision_stack }
+    : null;
 
   return {
     id: project.id,
@@ -114,7 +130,12 @@ export async function getProjectDetail(
     location: project.location,
     websiteUrl: project.website_url,
     about: project.about,
+    priorities: project.priorities,
+    prioritiesUpdatedAt: project.priorities_updated_at,
     template,
+    sectionNotes: Object.fromEntries(
+      (notesRes.data ?? []).map((n) => [n.section, n.body ?? ""])
+    ),
     members: (membersRes.data ?? []).map((m) => {
       const profile = m.profiles as unknown as {
         full_name: string | null;
@@ -396,6 +417,46 @@ export async function createSession(
     .single();
   if (error) throw error;
   return data;
+}
+
+/**
+ * Save the "what your team is doing right now" note.
+ *
+ * The timestamp is set here rather than by a trigger so the page can say when
+ * it was last changed — a priority from two months ago is worse than none,
+ * and the date is what tells a church which it is.
+ */
+export async function updatePriorities(
+  accessToken: string,
+  projectId: string,
+  priorities: string
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client
+    .from("projects")
+    .update({
+      priorities: priorities.trim() || null,
+      priorities_updated_at: priorities.trim() ? new Date().toISOString() : null,
+    })
+    .eq("id", projectId);
+  if (error) throw error;
+}
+
+/** Notes, next steps or homework attached to one module. */
+export async function saveSectionNote(
+  accessToken: string,
+  projectId: string,
+  section: string,
+  body: string
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client
+    .from("section_notes")
+    .upsert(
+      { project_id: projectId, section, body: body.trim() || null, updated_at: new Date().toISOString() },
+      { onConflict: "project_id,section" }
+    );
+  if (error) throw error;
 }
 
 export async function deleteSession(accessToken: string, sessionId: string) {

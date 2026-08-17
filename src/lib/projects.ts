@@ -16,6 +16,7 @@ export type ProjectMember = {
   isStaff: boolean;
   fullName: string | null;
   email: string;
+  avatarPath: string | null;
 };
 
 export type VisionStackLayer = {
@@ -43,6 +44,7 @@ export type ProjectDetail = {
     slug: string;
     structure: unknown;
     hasVisionStack: boolean;
+    isGroup: boolean;
   } | null;
   /** Per-module notes, keyed by section. */
   sectionNotes: Record<string, string>;
@@ -67,7 +69,7 @@ export async function getProjectDetail(
 
   const { data: project, error: projectErr } = await client
     .from("projects")
-    .select("*, templates(id, name, slug, structure, has_vision_stack)")
+    .select("*, templates(id, name, slug, structure, has_vision_stack, is_group)")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -78,7 +80,7 @@ export async function getProjectDetail(
     await Promise.all([
     client
       .from("project_members")
-      .select("profile_id, role, org_role, is_lead, profiles(full_name, email, is_staff)")
+      .select("profile_id, role, org_role, is_lead, profiles(full_name, email, is_staff, avatar_path)")
       .eq("project_id", projectId),
     // Date first, because that is how a coach thinks about ten sessions
     // delivered over months. position only breaks ties — two sessions on one
@@ -114,10 +116,24 @@ export async function getProjectDetail(
   if (notesRes.error) throw notesRes.error;
 
   const t = project.templates as unknown as
-    | { id: string; name: string; slug: string; structure: unknown; has_vision_stack: boolean }
+    | {
+        id: string;
+        name: string;
+        slug: string;
+        structure: unknown;
+        has_vision_stack: boolean;
+        is_group: boolean;
+      }
     | null;
   const template = t
-    ? { id: t.id, name: t.name, slug: t.slug, structure: t.structure, hasVisionStack: t.has_vision_stack }
+    ? {
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        structure: t.structure,
+        hasVisionStack: t.has_vision_stack,
+        isGroup: t.is_group,
+      }
     : null;
 
   return {
@@ -141,6 +157,7 @@ export async function getProjectDetail(
         full_name: string | null;
         email: string;
         is_staff: boolean;
+        avatar_path: string | null;
       } | null;
       return {
         profileId: m.profile_id,
@@ -150,6 +167,7 @@ export async function getProjectDetail(
         isStaff: profile?.is_staff ?? false,
         fullName: profile?.full_name ?? null,
         email: profile?.email ?? "",
+        avatarPath: profile?.avatar_path ?? null,
       };
     }),
     sessions: sessionsRes.data ?? [],
@@ -327,10 +345,54 @@ export async function createProject(
   // videos are keyed by template — and only reveals itself when someone opens
   // the Vision Stack and finds four empty layers.
   if (input.templateId) {
+    await stampTemplateMembers(accessToken, project.id, input.templateId);
     await stampTemplateDeliverables(accessToken, project.id, input.templateId);
   }
 
   return { id: project.id };
+}
+
+/**
+ * Add the RunFree people a template says belong on every engagement of its
+ * kind — Will and Brooke on Pivvot.
+ *
+ * Runs after the creator's own membership for the same reason stamping
+ * deliverables does: insert_members only lets an ADMIN ON THIS PROJECT add
+ * anyone, and until that first row exists the creator is not one.
+ *
+ * Failure is swallowed rather than thrown. A project missing Brooke's contact
+ * card is a cosmetic gap the team section can fix in two clicks; a project
+ * that failed to create because of it is not.
+ */
+export async function stampTemplateMembers(
+  accessToken: string,
+  projectId: string,
+  templateId: string
+): Promise<{ added: number }> {
+  const client = createUserClient(accessToken);
+
+  const { data: rows, error } = await client
+    .from("template_members")
+    .select("profile_id, role, org_role")
+    .eq("template_id", templateId)
+    .order("position", { ascending: true });
+
+  if (error || !rows?.length) return { added: 0 };
+
+  const { error: insertErr } = await client.from("project_members").insert(
+    rows.map((r) => ({
+      project_id: projectId,
+      profile_id: r.profile_id,
+      role: r.role,
+      org_role: r.org_role,
+    }))
+  );
+
+  if (insertErr) {
+    console.error("Could not add the template's RunFree team:", insertErr.message);
+    return { added: 0 };
+  }
+  return { added: rows.length };
 }
 
 /**
@@ -459,6 +521,13 @@ export async function saveSectionNote(
   if (error) throw error;
 }
 
+/** A person's headshot. One face per person, reused across every engagement. */
+export async function updateAvatar(accessToken: string, profileId: string, path: string) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("profiles").update({ avatar_path: path }).eq("id", profileId);
+  if (error) throw error;
+}
+
 export async function deleteSession(accessToken: string, sessionId: string) {
   const client = createUserClient(accessToken);
   const { error } = await client.from("sessions").delete().eq("id", sessionId);
@@ -527,6 +596,20 @@ export async function createDeliverable(
     .single();
   if (error) throw error;
   return data;
+}
+
+/** Name a session photo — "Coffee Shop Questions chart" — or clear the name. */
+export async function setDeliverableCaption(
+  accessToken: string,
+  deliverableId: string,
+  caption: string
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client
+    .from("deliverables")
+    .update({ caption: caption.trim() || null })
+    .eq("id", deliverableId);
+  if (error) throw error;
 }
 
 export async function deleteDeliverable(accessToken: string, deliverableId: string) {

@@ -97,6 +97,8 @@ export type Database = {
           is_active: boolean;
           /** Only Pivvot produces a Vision Stack — see migration 018. */
           has_vision_stack: boolean;
+          /** False for 1:1 engagements, which have no client "team" — see 020. */
+          is_group: boolean;
           created_at: string;
         };
         Insert: {
@@ -279,6 +281,8 @@ export type Database = {
           title: string | null;
           /** Which module PRODUCED it. Distinct from stack_layer — see 012. */
           section: string | null;
+          /** Optional label on a session photo — "Coffee Shop Questions chart". */
+          caption: string | null;
           /** vision_stack: a named, finished artifact. session_image: an untitled photo from a working session. */
           kind: "vision_stack" | "session_image";
           /** Which Vision Stack layer it BELONGS to. References vision_stack_layers.slug. */
@@ -302,6 +306,7 @@ export type Database = {
           session_id?: string | null;
           title?: string | null;
           section?: string | null;
+          caption?: string | null;
           kind?: "vision_stack" | "session_image";
           stack_layer?: string | null;
           drive_file_id?: string | null;
@@ -319,6 +324,7 @@ export type Database = {
           title?: string | null;
           session_id?: string | null;
           section?: string | null;
+          caption?: string | null;
           kind?: "vision_stack" | "session_image";
           stack_layer?: string | null;
           drive_file_id?: string | null;
@@ -431,6 +437,24 @@ export type Database = {
           created_at?: string;
         };
         Update: { resolved_at?: string | null };
+        Relationships: [];
+      };
+      template_members: {
+        Row: {
+          template_id: string;
+          profile_id: string;
+          role: "viewer" | "editor" | "admin";
+          org_role: string | null;
+          position: number;
+        };
+        Insert: {
+          template_id: string;
+          profile_id: string;
+          role?: "viewer" | "editor" | "admin";
+          org_role?: string | null;
+          position?: number;
+        };
+        Update: { role?: "viewer" | "editor" | "admin"; org_role?: string | null; position?: number };
         Relationships: [];
       };
       template_deliverables: {

@@ -17,8 +17,10 @@ import {
   reorderDeliverables,
   safeExternalUrl,
   saveSectionNote,
+  setDeliverableCaption,
   setLeadNavigator,
   updatePriorities,
+  updateAvatar,
   updateMemberDetails,
   updateMemberRole,
   updateProject,
@@ -104,6 +106,7 @@ export default function ProjectDetailPage() {
   const [status, setStatus] = useState<"checking" | "ready" | "not_found" | "error">("checking");
   const [activeModule, setActiveModule] = useState<string>("");
   const [handouts, setHandouts] = useState<HandoutLibrary | null>(null);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
@@ -134,9 +137,33 @@ export default function ProjectDetailPage() {
       // Logo and every session image in a single signing request.
       const paths = [
         ...(result.logoPath ? [result.logoPath] : []),
+        ...result.members.map((m) => m.avatarPath).filter((p): p is string => !!p),
         ...result.deliverables.map((d) => d.image_path).filter((p): p is string => !!p),
       ];
       setImageUrls(await getSignedImageUrls(session.access_token, paths));
+
+      // Real Loom stills, resolved server-side. Fired after the render like
+      // the handouts: a video card is usable without its picture, and waiting
+      // on an external provider before showing anything is the wrong trade.
+      const videoUrls = result.resources
+        .filter((r) => r.kind === "video" && r.external_url)
+        .map((r) => r.external_url!)
+        .concat(
+          result.sessions.map((x) => x.recording_url).filter((u): u is string => !!u)
+        );
+      if (videoUrls.length > 0) {
+        fetch("/api/loom-thumbnails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ urls: videoUrls }),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => d?.thumbnails && setThumbs(d.thumbnails))
+          .catch(() => {});
+      }
 
       // Handouts come from Drive and are the slowest part of the page, so
       // they load after the render rather than blocking it — a module shows
@@ -244,6 +271,7 @@ export default function ProjectDetailPage() {
     setDetail(result);
     const paths = [
       ...(result.logoPath ? [result.logoPath] : []),
+      ...result.members.map((m) => m.avatarPath).filter((p): p is string => !!p),
       ...result.deliverables.map((d) => d.image_path).filter((p): p is string => !!p),
     ];
     setImageUrls(await getSignedImageUrls(accessToken, paths));
@@ -357,6 +385,7 @@ export default function ProjectDetailPage() {
           id="prepare"
           prep={prepResources}
           overview={overviewResources}
+          thumbs={thumbs}
         />
 
         {modules.length > 0 && (
@@ -375,6 +404,7 @@ export default function ProjectDetailPage() {
               onChanged={refresh}
               handouts={handouts}
               onOpenHandout={openHandout}
+              thumbs={thumbs}
             />
           </section>
         )}
@@ -394,6 +424,7 @@ export default function ProjectDetailPage() {
                   onChanged={refresh}
                   handouts={handouts}
                   onOpenHandout={openHandout}
+                  thumbs={thumbs}
                 />
               ))}
             </div>
@@ -415,6 +446,7 @@ export default function ProjectDetailPage() {
         <TeamSection
           id="team"
           detail={detail}
+          imageUrls={imageUrls}
           canManage={canManage}
           accessToken={accessToken}
           projectId={projectId}
@@ -964,6 +996,7 @@ function ModulePanel({
   onChanged,
   handouts,
   onOpenHandout,
+  thumbs,
 }: {
   section: string;
   detail: ProjectDetail;
@@ -973,6 +1006,7 @@ function ModulePanel({
   onChanged: () => void;
   handouts: HandoutLibrary | null;
   onOpenHandout: (fileId: string, title: string) => void;
+  thumbs: Record<string, string>;
 }) {
   if (!section) return null;
 
@@ -1002,6 +1036,7 @@ function ModulePanel({
 
   const order = moduleOrder(section);
   const meta = order ? MODULE_META[order] : null;
+  const isGroupVertical = detail.template?.isGroup ?? true;
 
   // A section whose only rows are handouts and videos with no destination
   // yet has nothing to show. An editor still gets the panel, because the
@@ -1010,7 +1045,7 @@ function ModulePanel({
   const hasAnything =
     !!primaryHandout ||
     videos.length > 0 ||
-    exercises.length > 0 ||
+    (exercises.length > 0 && isGroupVertical) ||
     images.length > 0 ||
     moduleDeliverables.length > 0;
   if (!hasAnything && !canEdit) return null;
@@ -1080,14 +1115,19 @@ function ModulePanel({
           <Block title="Watch">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {videos.map((v) => (
-                <VideoCard key={v.id} title={v.title} url={v.external_url!} />
+                <VideoCard
+                  key={v.id}
+                  title={v.title}
+                  url={v.external_url!}
+                  thumbnail={thumbs[v.external_url!]}
+                />
               ))}
             </div>
           </Block>
         )}
 
-        {exercises.length > 0 && (
-          <Block title="In the room">
+        {exercises.length > 0 && isGroupVertical && (
+          <Block title="Exercises we'll use">
             <ul className="flex flex-wrap gap-2">
               {exercises.map((e) => (
                 <li
@@ -1312,7 +1352,15 @@ function DocIcon() {
  * costs a Loom request each on page load; a poster that swaps itself for the
  * player on click costs nothing until someone actually wants to watch.
  */
-function VideoCard({ title, url }: { title: string; url: string }) {
+function VideoCard({
+  title,
+  url,
+  thumbnail,
+}: {
+  title: string;
+  url: string;
+  thumbnail?: string;
+}) {
   const [playing, setPlaying] = useState(false);
   const loomId = extractLoomId(url);
 
@@ -1338,11 +1386,23 @@ function VideoCard({ title, url }: { title: string; url: string }) {
       onClick={() => (loomId ? setPlaying(true) : window.open(url, "_blank"))}
       className="group overflow-hidden rounded-2xl bg-white text-left ring-1 ring-gray-200 transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-runfree-magenta/30"
     >
-      <div className="relative flex aspect-video items-center justify-center bg-runfree-navy">
-        <span
-          aria-hidden
-          className="absolute inset-0 bg-runfree-sunset opacity-30 transition-opacity duration-300 group-hover:opacity-50"
-        />
+      <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-runfree-navy">
+        {thumbnail ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={thumbnail}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105"
+            />
+            <span aria-hidden className="absolute inset-0 bg-runfree-navy/25 transition group-hover:bg-runfree-navy/10" />
+          </>
+        ) : (
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-runfree-sunset opacity-30 transition-opacity duration-300 group-hover:opacity-50"
+          />
+        )}
         <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-white/95 shadow-lg transition-transform duration-300 group-hover:scale-110">
           <svg viewBox="0 0 24 24" className="ml-1 h-6 w-6 fill-runfree-magentaDeep">
             <path d="M8 5v14l11-7z" />
@@ -1557,6 +1617,25 @@ function ImageGallery({
               )}
             </a>
 
+            {(d.caption || canEdit) && (
+              <div className="border-t border-gray-100 px-2 py-1.5">
+                {canEdit ? (
+                  <input
+                    defaultValue={d.caption ?? ""}
+                    onBlur={async (e) => {
+                      if (!accessToken || e.target.value === (d.caption ?? "")) return;
+                      await setDeliverableCaption(accessToken, d.id, e.target.value);
+                      onChanged();
+                    }}
+                    placeholder="Name this photo…"
+                    className="w-full bg-transparent text-[11px] text-runfree-ink outline-none placeholder:text-gray-300 focus:placeholder:text-gray-400"
+                  />
+                ) : (
+                  <p className="truncate text-[11px] text-gray-600">{d.caption}</p>
+                )}
+              </div>
+            )}
+
             {canEdit && (
               /* Reordering has to work without a mouse. HTML5 drag events
                  never fire on touch, so on the iPad a coach actually uses in
@@ -1656,10 +1735,12 @@ function PrepareSection({
   id,
   prep,
   overview,
+  thumbs,
 }: {
   id: string;
   prep: ProjectDetail["resources"];
   overview: ProjectDetail["resources"];
+  thumbs: Record<string, string>;
 }) {
   if (prep.length === 0 && overview.length === 0) return null;
 
@@ -2222,6 +2303,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function TeamSection({
   id,
   detail,
+  imageUrls,
   canManage,
   accessToken,
   projectId,
@@ -2229,6 +2311,7 @@ function TeamSection({
 }: {
   id: string;
   detail: ProjectDetail;
+  imageUrls: Record<string, string>;
   canManage: boolean;
   accessToken: string | null;
   projectId: string;
@@ -2238,7 +2321,8 @@ function TeamSection({
 
   const runfree = detail.members.filter((m) => m.isStaff);
   const church = detail.members.filter((m) => !m.isStaff);
-  const bios = detail.resources.filter((r) => r.kind === "team_bio");
+  // Templates default to group; only an explicitly 1:1 vertical opts out.
+  const isGroup = detail.template?.isGroup ?? true;
 
   function downloadCsv() {
     const csv = membersToCsv(church.length > 0 ? church : detail.members);
@@ -2257,7 +2341,10 @@ function TeamSection({
     <section id={id} className="mt-20 scroll-mt-8">
       <SectionHeading eyebrow="Who you're working with" title="Your team" />
 
-      {/* RunFree side — the constant two, plus whoever is leading this one. */}
+      {/* RunFree side — real people, from project_members. The static
+          template "team_bio" rows are gone (migration 019): they duplicated
+          anyone who was also a member, and a string in a resources table has
+          no face, no address and nothing to click. */}
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {runfree.map((m) => (
           <div key={m.profileId}>
@@ -2266,6 +2353,14 @@ function TeamSection({
               role={m.isLead ? "Your Lead Navigator" : m.orgRole || "RunFree"}
               email={m.email}
               highlight={m.isLead}
+              avatarUrl={m.avatarPath ? imageUrls[m.avatarPath] : undefined}
+              canEditAvatar={canManage}
+              onAvatarPicked={async (file) => {
+                if (!accessToken) return;
+                const { path } = await uploadProjectLogo(accessToken, projectId, file);
+                await updateAvatar(accessToken, m.profileId, path);
+                onChanged();
+              }}
             />
             {canManage && !m.isLead && (
               /* Without this there is no way at all to say who is leading an
@@ -2285,13 +2380,19 @@ function TeamSection({
             )}
           </div>
         ))}
-        {bios.map((b) => {
-          const [name, role] = b.title.split(/\s+—\s+/);
-          return <PersonCard key={b.id} name={name} role={role || "RunFree"} />;
-        })}
+        {canManage && (
+          <AddRunFreeMember
+            accessToken={accessToken}
+            projectId={projectId}
+            onChanged={onChanged}
+          />
+        )}
       </div>
 
-      {/* The church's own team. */}
+      {/* The client's own team — only where there is one. A Younique or
+          coaching engagement is with a person, so offering to manage "Church
+          team — 0 people" there solves a problem that does not exist. */}
+      {isGroup && (
       <div className="mt-10 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4">
           <h3 className="font-display text-base font-bold text-runfree-ink">
@@ -2345,7 +2446,104 @@ function TeamSection({
           />
         )}
       </div>
+      )}
     </section>
+  );
+}
+
+/**
+ * Add another RunFree person to this engagement.
+ *
+ * Separate from the church roster's form on purpose: adding a colleague
+ * through a panel headed "Church team" was the only route before, which read
+ * as a mistake every time.
+ */
+function AddRunFreeMember({
+  accessToken,
+  projectId,
+  onChanged,
+}: {
+  accessToken: string | null;
+  projectId: string;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [orgRole, setOrgRole] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex min-h-[92px] items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 text-sm font-medium text-gray-500 transition hover:border-runfree-magenta/40 hover:text-runfree-magentaDeep"
+      >
+        + Add a RunFree teammate
+      </button>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!accessToken || !email.trim()) return;
+        setBusy(true);
+        setError(null);
+        try {
+          const res = await fetch(`/api/projects/${projectId}/members`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({ email: email.trim(), role: "editor", orgRole: orgRole.trim() || null }),
+          });
+          const body = await res.json();
+          if (!res.ok) setError(body.error || "Couldn't add them");
+          else {
+            setEmail("");
+            setOrgRole("");
+            setOpen(false);
+            onChanged();
+          }
+        } finally {
+          setBusy(false);
+        }
+      }}
+      className="space-y-2 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200"
+    >
+      <input
+        autoFocus
+        type="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="name@runfree.co"
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta"
+      />
+      <input
+        value={orgRole}
+        onChange={(e) => setOrgRole(e.target.value)}
+        placeholder="Their role, e.g. Navigator"
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta"
+      />
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-lg bg-runfree-grad-deep px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? "Adding…" : "Add"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="rounded-lg px-2 py-1.5 text-xs text-gray-500 hover:text-runfree-ink"
+        >
+          Cancel
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </form>
   );
 }
 
@@ -2354,12 +2552,20 @@ function PersonCard({
   role,
   email,
   highlight,
+  avatarUrl,
+  canEditAvatar,
+  onAvatarPicked,
 }: {
   name: string;
   role: string;
   email?: string;
   highlight?: boolean;
+  avatarUrl?: string;
+  canEditAvatar?: boolean;
+  onAvatarPicked?: (file: File) => void | Promise<void>;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -2375,8 +2581,42 @@ function PersonCard({
           : "bg-white ring-gray-200"
       }`}
     >
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-runfree-grad text-sm font-bold text-white">
-        {initials}
+      <span
+        onClick={() => canEditAvatar && fileRef.current?.click()}
+        title={canEditAvatar ? "Add a headshot" : undefined}
+        className={`group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-runfree-grad text-sm font-bold text-white ${
+          canEditAvatar ? "cursor-pointer" : ""
+        }`}
+      >
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
+        ) : (
+          initials
+        )}
+        {canEditAvatar && (
+          <>
+            <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-[9px] font-bold uppercase opacity-0 transition group-hover:opacity-100">
+              {busy ? "…" : avatarUrl ? "Change" : "Photo"}
+            </span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f || !onAvatarPicked) return;
+                setBusy(true);
+                try {
+                  await onAvatarPicked(f);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          </>
+        )}
       </span>
       <span className="min-w-0">
         <span className="block truncate font-semibold text-runfree-ink">{name}</span>

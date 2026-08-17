@@ -498,6 +498,8 @@ export type Database = {
           name: string;
           blurb: string | null;
           position: number;
+          /** Public path under /brand — null until an icon exists for it. */
+          icon_path: string | null;
         };
         Insert: {
           slug: string;

@@ -126,8 +126,6 @@ export default function VisionStackPage() {
   const stackItems = detail.deliverables.filter((d) => d.kind === "vision_stack");
   const ready = stackItems.filter((d) => d.published_at).length;
 
-  const layerSlugs = new Set(detail.stackLayers.map((l) => l.slug));
-  const unfiled = stackItems.filter((d) => !d.stack_layer || !layerSlugs.has(d.stack_layer));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -175,6 +173,7 @@ export default function VisionStackPage() {
               index={i}
               name={layer.name}
               blurb={layer.blurb}
+              iconPath={layer.icon_path}
               items={stackItems.filter((d) => d.stack_layer === layer.slug)}
               imageUrls={imageUrls}
               canEdit={canEdit}
@@ -184,26 +183,6 @@ export default function VisionStackPage() {
             />
           ))}
 
-          {/* Anything not assigned to one of the four layers — or assigned to
-              a layer that no longer exists. Without this the item is counted
-              in the header ("N of M complete") but appears nowhere on the
-              page, which is how "Future Team Z-lander Personal Vision Work"
-              went missing: it was seeded from Asana but never mapped in
-              migration 012. Guessing a layer for it would have been worse
-              than showing it honestly and letting Andrew file it. */}
-          {unfiled.length > 0 && (
-            <LayerBlock
-              index={detail.stackLayers.length}
-              name="Also in this engagement"
-              blurb="Work that hasn't been filed into a layer of the stack yet."
-              items={unfiled}
-              imageUrls={imageUrls}
-              canEdit={canEdit}
-              accessToken={accessToken}
-              projectId={projectId}
-              onChanged={load}
-            />
-          )}
         </div>
 
         {stackItems.every((d) => !d.published_at) && (
@@ -251,6 +230,7 @@ function LayerBlock({
   index,
   name,
   blurb,
+  iconPath,
   items,
   imageUrls,
   canEdit,
@@ -261,6 +241,7 @@ function LayerBlock({
   index: number;
   name: string;
   blurb: string | null;
+  iconPath: string | null;
   items: ProjectDetail["deliverables"];
   imageUrls: Record<string, string>;
   canEdit: boolean;
@@ -284,15 +265,32 @@ function LayerBlock({
     >
       <div className="h-1 bg-runfree-grad" />
       <div className="p-7 sm:p-9">
-        <div className="flex items-baseline gap-3">
-          <span className="font-display text-sm font-extrabold text-runfree-magenta/50">
-            {String(index + 1).padStart(2, "0")}
+        <div className="flex items-start gap-4">
+          {/* The layer's own mark. Three of the four are the process icons
+              already in the portal, which is not a coincidence — those layers
+              are the output of those tools. */}
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gray-50 ring-1 ring-gray-200">
+            {iconPath ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={iconPath} alt="" className="h-10 w-10 object-contain" />
+            ) : (
+              <span className="font-display text-base font-extrabold text-runfree-navy/30">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+            )}
           </span>
-          <h2 className="font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
-            {name}
-          </h2>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magenta/60">
+              Layer {String(index + 1).padStart(2, "0")}
+            </p>
+            <h2 className="mt-0.5 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
+              {name}
+            </h2>
+            {blurb && (
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">{blurb}</p>
+            )}
+          </div>
         </div>
-        {blurb && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">{blurb}</p>}
 
         {items.length === 0 ? (
           <p className="mt-6 rounded-xl border border-dashed border-gray-200 py-8 text-center text-sm text-gray-400">

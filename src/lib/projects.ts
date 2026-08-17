@@ -24,6 +24,7 @@ export type VisionStackLayer = {
   name: string;
   blurb: string | null;
   position: number;
+  icon_path: string | null;
 };
 
 export type ProjectDetail = {

@@ -147,10 +147,10 @@ export default function VisionStackPage() {
           className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-runfree-magenta/25 blur-3xl"
         />
         <div className="relative mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 lg:px-8 lg:py-24">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-runfree-pink">
+          <p className="font-display text-xl font-bold tracking-tight text-runfree-pink sm:text-2xl">
             {church}
           </p>
-          <h1 className="mt-3 font-display text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
+          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
             The Vision Stack
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-white/75">
@@ -166,7 +166,7 @@ export default function VisionStackPage() {
       </div>
 
       <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="space-y-10">
+        <div className="space-y-4">
           {detail.stackLayers.map((layer, i) => (
             <LayerBlock
               key={layer.slug}
@@ -250,6 +250,7 @@ function LayerBlock({
   onChanged: () => void;
 }) {
   const { ref, shown } = useReveal<HTMLElement>();
+  const [openLayer, setOpen] = useState(index === 0);
 
   return (
     <section
@@ -264,15 +265,23 @@ function LayerBlock({
       }`}
     >
       <div className="h-1 bg-runfree-grad" />
-      <div className="p-7 sm:p-9">
+      {/* Andrew: "consider doing a collapsible thing for each of the layers,
+          rather than having everything needing to be scrolled so that they
+          can see every single thing right out of the gate." The first layer
+          opens so the page is not four closed bars. */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={openLayer}
+        className="w-full p-5 text-left outline-none transition hover:bg-runfree-indigo/20 focus-visible:bg-runfree-indigo/20 sm:p-6"
+      >
         <div className="flex items-start gap-4">
           {/* The layer's own mark. Three of the four are the process icons
               already in the portal, which is not a coincidence — those layers
               are the output of those tools. */}
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gray-50 ring-1 ring-gray-200">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gray-50 ring-1 ring-gray-200">
             {iconPath ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={iconPath} alt="" className="h-10 w-10 object-contain" />
+              <img src={iconPath} alt="" className="h-8 w-8 object-contain" />
             ) : (
               <span className="font-display text-base font-extrabold text-runfree-navy/30">
                 {String(index + 1).padStart(2, "0")}
@@ -283,21 +292,43 @@ function LayerBlock({
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magenta/60">
               Layer {String(index + 1).padStart(2, "0")}
             </p>
-            <h2 className="mt-0.5 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
+            <h2 className="mt-0.5 font-display text-lg font-extrabold tracking-tight text-runfree-ink sm:text-xl">
               {name}
             </h2>
             {blurb && (
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">{blurb}</p>
             )}
           </div>
+          <span className="ml-auto flex shrink-0 items-center gap-3">
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
+              {items.filter((d) => d.published_at).length}/{items.length}
+            </span>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
+                openLayer ? "rotate-90" : ""
+              }`}
+            >
+              <path d="M7.5 4.5 13 10l-5.5 5.5" />
+            </svg>
+          </span>
         </div>
+      </button>
 
+      {openLayer && (
+      <div className="border-t border-gray-100 px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
         {items.length === 0 ? (
           <p className="mt-6 rounded-xl border border-dashed border-gray-200 py-8 text-center text-sm text-gray-400">
             Nothing in this layer yet.
           </p>
         ) : (
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {items.map((item) => (
               <StackItem
                 key={item.id}
@@ -313,6 +344,7 @@ function LayerBlock({
           </div>
         )}
       </div>
+      )}
     </section>
   );
 }

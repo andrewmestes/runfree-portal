@@ -60,6 +60,8 @@ export default function AdminPage() {
   const [status, setStatus] = useState<"checking" | "ready" | "denied" | "error">("checking");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AccountRole | "all">("all");
+  const [sort, setSort] = useState<"first" | "last" | "role">("first");
+  const [removing, setRemoving] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -130,16 +132,53 @@ export default function AdminPage() {
     }
   }
 
+  async function remove(r: Row) {
+    if (
+      !confirm(
+        `Remove ${r.full_name || r.email} completely?\n\nThis deletes their login, their project memberships and their place on the certification list. It cannot be undone.`
+      )
+    )
+      return;
+    setRemoving(r.id);
+    try {
+      const session = await getCurrentSession();
+      const res = await fetch(`/api/admin/people?id=${r.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const body = await res.json();
+      if (!res.ok) alert(body.error || "Couldn't remove them");
+      else await load();
+    } finally {
+      setRemoving(null);
+    }
+  }
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((r) => {
+    const filtered = rows.filter((r) => {
       if (filter !== "all" && r.account_role !== filter) return false;
       if (!q) return true;
       return (
         r.email.toLowerCase().includes(q) || (r.full_name ?? "").toLowerCase().includes(q)
       );
     });
-  }, [rows, query, filter]);
+
+    // Someone with no name sorts by the email, which is all we have to show.
+    const first = (r: Row) => (r.full_name || r.email).trim().toLowerCase();
+    const last = (r: Row) => {
+      const parts = (r.full_name || "").trim().split(/\s+/).filter(Boolean);
+      return (parts.length > 1 ? parts[parts.length - 1] : r.full_name || r.email)
+        .toLowerCase();
+    };
+    const rank = (r: Row) => ROLES.findIndex((x) => x.value === r.account_role);
+
+    return [...filtered].sort((a, b) => {
+      if (sort === "role") return rank(a) - rank(b) || first(a).localeCompare(first(b));
+      if (sort === "last") return last(a).localeCompare(last(b)) || first(a).localeCompare(first(b));
+      return first(a).localeCompare(first(b));
+    });
+  }, [rows, query, filter, sort]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -228,7 +267,33 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+            Sort by
+          </span>
+          {(
+            [
+              { key: "first", label: "First name" },
+              { key: "last", label: "Last name" },
+              { key: "role", label: "Permission" },
+            ] as const
+          ).map((o) => (
+            <button
+              key={o.key}
+              onClick={() => setSort(o.key)}
+              aria-pressed={sort === o.key}
+              className={`min-h-[32px] rounded-full px-3 text-xs font-semibold transition ${
+                sort === o.key
+                  ? "bg-runfree-ink text-white"
+                  : "bg-white text-gray-500 ring-1 ring-gray-200 hover:text-runfree-ink"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
           {shown.length === 0 ? (
             <p className="py-14 text-center text-sm text-gray-400">Nobody matches that.</p>
           ) : (
@@ -275,6 +340,19 @@ export default function AdminPage() {
                       </option>
                     ))}
                   </select>
+
+                  <button
+                    onClick={() => remove(r)}
+                    disabled={removing === r.id || r.id === profile?.id}
+                    title={
+                      r.id === profile?.id
+                        ? "You cannot remove your own account"
+                        : "Remove from the portal entirely"
+                    }
+                    className="min-h-[40px] shrink-0 rounded-md px-2.5 text-[11px] font-medium text-gray-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                  >
+                    {removing === r.id ? "Removing…" : "Remove"}
+                  </button>
                 </li>
               ))}
             </ul>

@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
     let inviteError: string | null = null;
 
     if (!existing && pick(payload, ["invite"]).toLowerCase() !== "false") {
-      const result = await inviteFramer(email, req.nextUrl.origin);
+      const result = await inviteFramer(email, req.nextUrl.origin, fullName);
       invited = result.outcome;
       inviteError = result.error;
     }

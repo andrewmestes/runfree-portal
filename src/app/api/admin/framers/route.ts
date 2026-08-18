@@ -228,7 +228,7 @@ export async function POST(req: NextRequest) {
   let inviteError: string | null = null;
 
   if (shouldInvite) {
-    const result = await inviteFramer(cleanEmail, req.nextUrl.origin);
+    const result = await inviteFramer(cleanEmail, req.nextUrl.origin, cleanName);
     invited = result.outcome;
     inviteError = result.error;
   }

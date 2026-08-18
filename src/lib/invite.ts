@@ -36,7 +36,13 @@ export type InviteResult = {
  */
 export async function invitePerson(
   email: string,
-  origin: string
+  origin: string,
+  /**
+   * Carried into the new account's metadata so the profile is created with a
+   * name. Without it every invited person showed up as their own email
+   * twice — the name was known at invite time and simply never passed on.
+   */
+  fullName?: string | null
 ): Promise<InviteResult> {
   const cleanEmail = email.trim().toLowerCase();
 
@@ -57,10 +63,16 @@ export async function invitePerson(
 
     if (hasLogin) return { outcome: "already_has_login", error: null };
 
-    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      cleanEmail,
-      { redirectTo: `${origin}/auth/callback` }
-    );
+    const cleanName = fullName?.trim();
+    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(cleanEmail, {
+      redirectTo: `${origin}/auth/callback`,
+      // A name equal to the email is no name; let the roster fallback in
+      // handle_new_user have its turn instead.
+      data:
+        cleanName && cleanName.toLowerCase() !== cleanEmail
+          ? { full_name: cleanName }
+          : undefined,
+    });
 
     if (error) return { outcome: "failed", error: error.message };
 

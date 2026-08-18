@@ -15,6 +15,8 @@ type Profile = {
   full_name: string | null;
   is_staff: boolean;
   is_owner: boolean;
+  /** Portal-wide certification access — see 006_client_portal_expansion.sql. */
+  certification_access: boolean;
 };
 
 type ProjectRow = {
@@ -146,6 +148,11 @@ export default function HomePage() {
         }
         title="Your projects"
         subtitle="Session recordings, coaching notes, and deliverables for each engagement."
+        // Andrew: "the certification link is missing on the home page." It was
+        // — this page rendered the header without the prop, so it defaulted to
+        // false and the switcher only ever appeared once you were inside a
+        // project.
+        certificationAccess={(profile?.certification_access ?? false) || (profile?.is_staff ?? false)}
       />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">

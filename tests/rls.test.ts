@@ -283,8 +283,18 @@ async function main() {
     }
 
     // -----------------------------------------------------------------
-    // Bonus 8: templates are staff-only — a gap in data-model.md's own RLS
-    // list that this migration closed (see 001_multi_tenant_schema.sql).
+    // Bonus 8: a member can read the template their OWN project runs on,
+    // and no other.
+    //
+    // This previously asserted the opposite — "non-staff project member
+    // cannot read templates" — which encoded a real bug as correct
+    // behaviour. templates was staff-only from migration 001, so for every
+    // actual church client the `projects, templates(...)` join in
+    // getProjectDetail resolved to null and the handouts route read a null
+    // folder id. The Vision Stack card and the entire handout library were
+    // invisible to the people the portal is for, silently, while any staff
+    // account saw a complete page. Migration 024 closed it; these checks now
+    // pin the behaviour that migration exists to guarantee.
     // -----------------------------------------------------------------
     let sharedTemplateId: string | null = null;
     {
@@ -297,12 +307,20 @@ async function main() {
       sharedTemplateId = template.id;
       cleanupTemplateIds.push(template.id);
 
+      // The grant is membership-derived, so projectA has to actually be on
+      // this template before viewerA can see it.
+      await supabaseAdmin.from("projects").update({ template_id: sharedTemplateId }).eq("id", projectA.id);
+
       const asViewer = createUserClient(viewerA.accessToken);
       const { data: viewerView } = await asViewer
         .from("templates")
         .select("*")
         .eq("slug", `rls-test-template-${RUN}`);
-      record("8a. non-staff project member cannot read templates", (viewerView?.length ?? -1) === 0, `got ${viewerView?.length}`);
+      record(
+        "8a. member CAN read the template their own project runs on",
+        viewerView?.length === 1,
+        `got ${viewerView?.length}`
+      );
 
       const asStaff = createUserClient(staffOutsider.accessToken);
       const { data: staffView } = await asStaff
@@ -310,6 +328,32 @@ async function main() {
         .select("*")
         .eq("slug", `rls-test-template-${RUN}`);
       record("8b. staff can read templates", staffView?.length === 1, `got ${staffView?.length}`);
+
+      // The grant is their own template, not the catalogue.
+      const asOutsider = createUserClient(viewerB.accessToken);
+      const { data: outsiderView } = await asOutsider
+        .from("templates")
+        .select("*")
+        .eq("slug", `rls-test-template-${RUN}`);
+      record(
+        "8c. member of a different project cannot read this template",
+        (outsiderView?.length ?? -1) === 0,
+        `got ${outsiderView?.length}`
+      );
+
+      // The handout folder id is the field the handouts route reads through
+      // the caller's own token. If this is ever null for a member again, the
+      // entire library goes quietly missing.
+      const { data: folderView } = await asViewer
+        .from("templates")
+        .select("handouts_folder_id")
+        .eq("id", sharedTemplateId)
+        .maybeSingle();
+      record(
+        "8d. member can read handouts_folder_id (the silent-empty-library guard)",
+        folderView !== null,
+        folderView === null ? "row invisible to member" : "visible"
+      );
     }
 
     // -----------------------------------------------------------------

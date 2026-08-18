@@ -447,6 +447,8 @@ export default function ProjectDetailPage() {
           accessToken={accessToken}
           fileUrls={imageUrls}
           onChanged={refresh}
+          handouts={handouts}
+          onOpenHandout={openHandout}
         />
 
         {modules.length > 0 && (
@@ -1153,23 +1155,7 @@ function ModulePanel({
               </button>
             )}
 
-            {otherHandouts.length > 0 && (
-              <ul className="mt-3 flex flex-wrap gap-2">
-                {otherHandouts.map((h) => (
-                  <li key={h.id}>
-                    <button
-                      onClick={() => onOpenHandout(h.id, h.title)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 outline-none transition hover:border-runfree-magenta/40 hover:text-runfree-ink focus-visible:ring-2 focus-visible:ring-runfree-magenta"
-                    >
-                      {h.num && (
-                        <span className="font-bold text-runfree-magenta/60">{h.num}</span>
-                      )}
-                      {h.label || h.title}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {otherHandouts.length > 0 && <SheetWalkthrough sheets={otherHandouts} onOpen={onOpenHandout} />}
           </Block>
         )}
 
@@ -1397,6 +1383,133 @@ function SectionNote({
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * The numbered sheets for one module, as the walkthrough they actually are.
+ *
+ * These were a wrapped cloud of grey pills. Funnel Fusion has fifteen of
+ * them, Crowd Cloud nineteen — and their order is the order the room works
+ * through them: "01 Welcome", "02 The Good News of Clarity", "03
+ * Expectations", on to "15 Problem Statement Worksheet". Rendered as pills
+ * that sequence is invisible, every sheet looks equally important, and the
+ * curriculum reads as a tag cloud.
+ *
+ * As a numbered list it reads as what a facilitator is holding: an agenda.
+ */
+function SheetWalkthrough({
+  sheets,
+  onOpen,
+}: {
+  sheets: HandoutFile[];
+  onOpen: (fileId: string, title: string) => void;
+}) {
+  return (
+    <div className="mt-4">
+      <p className="mb-2 text-xs text-gray-500">
+        {sheets.length} sheets, in the order we work through them.
+      </p>
+      <ol className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
+        {sheets.map((h, i) => (
+          <li key={h.id}>
+            <button
+              onClick={() => onOpen(h.id, h.title)}
+              className={`group flex w-full items-center gap-3 px-4 py-2.5 text-left outline-none transition hover:bg-runfree-indigo/40 focus-visible:bg-runfree-indigo/40 ${
+                i > 0 ? "border-t border-gray-100" : ""
+              }`}
+            >
+              <span className="w-7 shrink-0 text-right text-xs font-bold tabular-nums text-runfree-magenta/70">
+                {h.num || i + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-runfree-ink">
+                {h.label || h.title}
+              </span>
+              {prettySize(h.sizeBytes) && (
+                <span className="shrink-0 text-[11px] tabular-nums text-gray-400 max-sm:hidden">
+                  {prettySize(h.sizeBytes)}
+                </span>
+              )}
+              <span
+                aria-hidden
+                className="shrink-0 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-runfree-magenta"
+              >
+                →
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * The handout folders that are not one of the six modules.
+ *
+ * These were fetched from Drive on every page load and then rendered
+ * nowhere — `extras` came back through the API and no component ever read
+ * it. That silently hid the Vision Frame Field Guide, and it hid
+ * "Preparation Checklist.pdf" and "Guest Perspective 7 Checkpoints.pdf",
+ * which are the actual RunFree source for two of the prepare cards that
+ * looked empty.
+ *
+ * The Field Guide leads, because it is the one document that describes the
+ * whole engagement rather than one module of it.
+ */
+function ExtraHandouts({
+  extras,
+  onOpen,
+}: {
+  extras: HandoutLibrary["extras"];
+  onOpen: (fileId: string, title: string) => void;
+}) {
+  const groups = extras.filter((g) => g.files.length > 0);
+  if (groups.length === 0) return null;
+
+  const isFieldGuide = (name: string) => /field guide/i.test(name);
+  const fieldGuide = groups.find((g) => isFieldGuide(g.name));
+  const rest = groups.filter((g) => !isFieldGuide(g.name));
+
+  return (
+    <div className="mt-8 space-y-4">
+      {fieldGuide?.files[0] && (
+        <button
+          onClick={() => onOpen(fieldGuide.files[0].id, fieldGuide.files[0].title)}
+          className="group flex w-full items-center gap-4 rounded-2xl bg-runfree-grad-deep p-5 text-left text-white outline-none transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15">
+            <DocIcon />
+          </span>
+          <span className="min-w-0">
+            <span className="block font-semibold">
+              {fieldGuide.files[0].label || fieldGuide.files[0].title}
+            </span>
+            <span className="mt-0.5 block text-xs text-white/70">
+              The whole process in one document — start here
+              {prettySize(fieldGuide.files[0].sizeBytes) && (
+                <span> · {prettySize(fieldGuide.files[0].sizeBytes)}</span>
+              )}
+            </span>
+          </span>
+          <span
+            aria-hidden
+            className="ml-auto shrink-0 transition-transform group-hover:translate-x-1"
+          >
+            →
+          </span>
+        </button>
+      )}
+
+      {rest.map((g) => (
+        <div key={g.id} className="rounded-2xl bg-white p-5 ring-1 ring-gray-200/80 sm:p-6">
+          <h4 className="text-base font-semibold tracking-tight text-runfree-ink">
+            {moduleLabel(g.name)}
+          </h4>
+          <SheetWalkthrough sheets={g.files} onOpen={onOpen} />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -2370,6 +2483,8 @@ function PrepareSection({
   accessToken,
   fileUrls,
   onChanged,
+  handouts,
+  onOpenHandout,
 }: {
   id: string;
   prep: ProjectDetail["resources"];
@@ -2382,8 +2497,12 @@ function PrepareSection({
   accessToken: string | null;
   fileUrls: Record<string, string>;
   onChanged: () => void;
+  handouts: HandoutLibrary | null;
+  onOpenHandout: (fileId: string, title: string) => void;
 }) {
-  if (prep.length === 0 && overview.length === 0 && prepGroups.length === 0) return null;
+  const extras = handouts?.extras ?? [];
+  if (prep.length === 0 && overview.length === 0 && prepGroups.length === 0 && extras.length === 0)
+    return null;
 
   const videos = [...prep, ...overview].filter((r) => r.kind === "video" && r.external_url);
   const reading = [...prep, ...overview].filter((r) => r.kind !== "video");
@@ -2394,6 +2513,11 @@ function PrepareSection({
 
       {/* The editable work leads. The orientation videos below it are context;
           these cards are what the team actually has to act on. */}
+      {/* The standing RunFree documents — Field Guide, Preparation Checklist,
+          Guest Perspective 7 Checkpoints — before the church's own editable
+          cards, because they are what those cards are worked against. */}
+      <ExtraHandouts extras={extras} onOpen={onOpenHandout} />
+
       {prepGroups.length > 0 && (
         <div className="mt-8">
           <PrepCards

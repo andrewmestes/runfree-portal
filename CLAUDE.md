@@ -19,6 +19,18 @@ the binary directly instead:
 ./node_modules/.bin/tsx --env-file=.env.local tests/rls.test.ts
 ```
 
+## Which Supabase project — the names read backwards
+
+There were three Supabase projects in the org. The one **named**
+`runfree-client-portal` (`fbcrofawqxdldcibevfs`) was an empty scaffold from
+the first day of this repo and has been deleted. Everything real lives in the
+one **named** `runfree-portal` (`txaesavbpbtyqhzhcabm`), which started life as
+the CVF portal's project.
+
+So: if you are ever picking a Supabase project by name, you will pick the
+wrong one. Match the ref. (`rm-church-database` is unrelated — RunFree's
+church database, not this.)
+
 ## This project runs on the CVF portal's Supabase project — on purpose
 
 `NEXT_PUBLIC_SUPABASE_URL` points at `txaesavbpbtyqhzhcabm`, the **same**

@@ -452,6 +452,7 @@ export default function ProjectDetailPage() {
             view === "condensed"
               ? []
               : [
+                  canManage ? { href: "#access", label: "Access" } : null,
                   (detail.template?.isGroup ?? true)
                     ? { href: "#church-team", label: "Church team" }
                     : null,
@@ -489,6 +490,16 @@ export default function ProjectDetailPage() {
           />
         ) : (
           <>
+
+        {canManage && (
+          <ProjectAccess
+            id="access"
+            detail={detail}
+            projectId={projectId}
+            accessToken={accessToken}
+            onChanged={refresh}
+          />
+        )}
 
         {(detail.template?.isGroup ?? true) && (
           <ChurchTeamInfo
@@ -1074,7 +1085,226 @@ function SheetDropdown({
   );
 }
 
+/**
+ * Who can actually sign in, and at what level — at the top, where Andrew
+ * asked for it: "an additional element at the very top of the page that has,
+ * separate from the church team info, a section where we add people to this
+ * project. It immediately sends them access to the portal based on the
+ * permissions that we set for them."
+ *
+ * This is the ONLY control in the app that can send someone an email. The
+ * roster card below it is just names.
+ */
+function ProjectAccess({
+  id,
+  detail,
+  projectId,
+  accessToken,
+  onChanged,
+}: {
+  id: string;
+  detail: ProjectDetail;
+  projectId: string;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [email, setEmail] = useState("");
+  const [orgRole, setOrgRole] = useState("");
+  const [role, setRole] = useState<ProjectRole>("viewer");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const members = [...detail.members].sort((a, b) =>
+    a.isLead === b.isLead
+      ? (a.fullName || a.email).localeCompare(b.fullName || b.email)
+      : a.isLead
+        ? -1
+        : 1
+  );
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken || !email.trim()) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ email: email.trim(), role, orgRole: orgRole.trim() || null }),
+      });
+      const body = await res.json();
+      if (!res.ok) setMessage(body.error || "Couldn't add that person");
+      else {
+        setMessage(
+          body.invited ? `Invited ${email} — they have been emailed.` : `${email} now has access.`
+        );
+        setEmail("");
+        setOrgRole("");
+        setAdding(false);
+        onChanged();
+      }
+    } catch {
+      setMessage("Couldn't reach the server — try again");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field =
+    "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
+
+  return (
+    <section id={id} className="mt-8 scroll-mt-24">
+      <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-3 px-4 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30 sm:gap-3.5 sm:px-5"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-runfree-pink text-runfree-magentaDeep">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <rect x="4" y="10" width="16" height="10" rx="2" />
+              <path d="M8 10V7a4 4 0 1 1 8 0v3" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-runfree-ink">Project access</span>
+            <span className="block truncate text-xs text-gray-500">
+              Who can sign in, and what they can do
+            </span>
+          </span>
+          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
+            {members.length}
+          </span>
+          <span className="text-gray-400">
+            <Chevron open={open} />
+          </span>
+        </button>
+
+        {open && (
+          <div className="border-t border-gray-100 px-4 py-4 sm:px-5">
+            <ul className="divide-y divide-gray-100">
+              {members.map((m) => (
+                <li key={m.profileId} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
+                  <span className="min-w-0 flex-1 basis-full sm:basis-auto">
+                    <span className="block truncate text-sm font-medium text-runfree-ink">
+                      {m.fullName || m.email}
+                      {m.isLead && (
+                        <span className="ml-2 rounded-full bg-runfree-pink px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-runfree-magentaDeep">
+                          Lead
+                        </span>
+                      )}
+                    </span>
+                    <span className="block truncate text-xs text-gray-500">{m.email}</span>
+                  </span>
+                  <select
+                    value={m.role}
+                    aria-label={`Permission for ${m.fullName || m.email}`}
+                    onChange={async (e) => {
+                      if (!accessToken) return;
+                      await updateMemberRole(
+                        accessToken,
+                        projectId,
+                        m.profileId,
+                        e.target.value as ProjectRole
+                      );
+                      onChanged();
+                    }}
+                    className="min-h-[40px] flex-1 rounded-lg border border-gray-300 px-2.5 text-xs font-medium text-runfree-ink outline-none focus:border-runfree-magenta sm:flex-none"
+                  >
+                    <option value="viewer">Viewer</option>
+                    <option value="editor">Editor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button
+                    onClick={async () => {
+                      if (!accessToken) return;
+                      if (!confirm(`Remove access for ${m.fullName || m.email}? They stay on the roster.`))
+                        return;
+                      await removeMember(accessToken, projectId, m.profileId);
+                      onChanged();
+                    }}
+                    className="min-h-[40px] shrink-0 rounded-md px-2.5 text-[11px] font-medium text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-3">
+              {adding ? (
+                <form onSubmit={add} className="space-y-2 rounded-xl bg-gray-50/80 p-3">
+                  <input
+                    autoFocus
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Email address"
+                    className={field}
+                  />
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <input
+                      value={orgRole}
+                      onChange={(e) => setOrgRole(e.target.value)}
+                      placeholder="Title (e.g. Lead Pastor)"
+                      className={field}
+                    />
+                    <select
+                      value={role}
+                      aria-label="Permission level"
+                      onChange={(e) => setRole(e.target.value as ProjectRole)}
+                      className={field}
+                    >
+                      <option value="viewer">Viewer — read only</option>
+                      <option value="editor">Editor — can add content</option>
+                      <option value="admin">Admin — can manage people</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      disabled={busy || !email.trim()}
+                      className="min-h-[44px] rounded-lg bg-runfree-grad-deep px-4 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                    >
+                      {busy ? "Sending…" : "Grant access & invite"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdding(false)}
+                      className="min-h-[44px] rounded-lg px-3 text-xs font-medium text-gray-500 hover:text-runfree-ink"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    This sends them a welcome email with a link to sign in.
+                  </p>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setAdding(true)}
+                  className="min-h-[44px] w-full rounded-xl border border-dashed border-gray-300 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
+                >
+                  + Give someone access
+                </button>
+              )}
+              {message && (
+                <p className="mt-2 text-xs font-medium text-runfree-magentaDeep">{message}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Appears once you are far enough down to want it. */
+
 function BackToTop() {
   const [show, setShow] = useState(false);
   useEffect(() => {

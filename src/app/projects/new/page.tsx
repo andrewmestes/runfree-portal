@@ -26,7 +26,11 @@ export default function NewProjectPage() {
   const [status, setStatus] = useState<"checking" | "ready" | "error">("checking");
 
   const [name, setName] = useState("");
-  const [visibility, setVisibility] = useState<"private" | "team">("private");
+  // Andrew: "the visibility section of create-a-new-project can probably go
+  // away, I'd like the section at the top of the project to be where you add
+  // people and adjust their permissions." So a project is always created
+  // private and access is a deliberate act on the project itself.
+  const visibility = "private" as const;
   const [templateId, setTemplateId] = useState<string | "">("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,38 +178,6 @@ export default function NewProjectPage() {
               {templates.length === 0 && (
                 <p className="text-xs text-gray-500">No templates yet — starting from scratch is the only option.</p>
               )}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-runfree-ink">Visibility</label>
-            <div className="flex gap-3">
-              <label className="flex flex-1 cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 has-[:checked]:border-runfree-magenta has-[:checked]:bg-runfree-pink/40">
-                <input
-                  type="radio"
-                  name="visibility"
-                  checked={visibility === "private"}
-                  onChange={() => setVisibility("private")}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-runfree-ink">Private</span>
-                  <span className="block text-xs text-gray-500">Only people you add can see it.</span>
-                </span>
-              </label>
-              <label className="flex flex-1 cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 has-[:checked]:border-runfree-magenta has-[:checked]:bg-runfree-pink/40">
-                <input
-                  type="radio"
-                  name="visibility"
-                  checked={visibility === "team"}
-                  onChange={() => setVisibility("team")}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-runfree-ink">Team-wide</span>
-                  <span className="block text-xs text-gray-500">Every RunFree staff member can see it.</span>
-                </span>
-              </label>
             </div>
           </div>
 

@@ -221,9 +221,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // The roster row alone grants nothing — see syncCertificationRole.
-  await syncCertificationRole(cleanEmail, true);
-
   // Invite straight away unless told not to. Access is already granted at
   // this point, so a mail failure is reported rather than treated as a failed
   // add — the admin needs to know to retry the invitation, not the add.
@@ -235,6 +232,11 @@ export async function POST(req: NextRequest) {
     invited = result.outcome;
     inviteError = result.error;
   }
+
+  // After the invite, for the same reason as the webhook: inviting is what
+  // creates the profile. The trigger in migration 033 sets the role at
+  // creation; this catches someone who already had one.
+  await syncCertificationRole(cleanEmail, true);
 
   // Portal access is already granted at this point. GHL tagging is a
   // best-effort follow-on: a CRM outage must not undo or block access.

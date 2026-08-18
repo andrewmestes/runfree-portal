@@ -216,9 +216,6 @@ export async function POST(req: NextRequest) {
      * already on the list is routine in GHL, and each replay would otherwise
      * be another email to someone who has been in the portal for months.
      */
-    // Access, not just a roster row — see syncCertificationRole.
-    await syncCertificationRole(email, true);
-
     let invited: InviteOutcome = "skipped";
     let inviteError: string | null = null;
 
@@ -227,6 +224,13 @@ export async function POST(req: NextRequest) {
       invited = result.outcome;
       inviteError = result.error;
     }
+
+    // AFTER the invite, not before. Inviting is what creates the auth user,
+    // and the profile with it — running this first found no profile and did
+    // nothing, which is how Megan Estes arrived as a 'client'. The trigger
+    // (migration 033) now sets the role at creation, so this call is the
+    // belt to that braces: it catches someone who already had a profile.
+    await syncCertificationRole(email, true);
 
     await supabaseAdmin.from("ghl_sync_log").insert({
       ghl_contact_id: contactId || email,

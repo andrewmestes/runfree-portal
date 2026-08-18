@@ -857,6 +857,52 @@ async function main() {
       );
     }
 
+
+    // -----------------------------------------------------------------
+    // 21. A profile created AFTER a certified_framers row inherits the
+    // certification role (033).
+    //
+    // This is the Megan Estes bug. She was tagged in GoHighLevel, the roster
+    // row was written, the invite created her auth user 377ms later, and the
+    // profile trigger's default won — she arrived as a 'client' with a
+    // welcome email and an empty portal. Reordering the app calls alone does
+    // not cover it: someone can be rostered months before they accept, and a
+    // self-signup has no app code in the path at all.
+    // -----------------------------------------------------------------
+    {
+      const email = `rls-test-preroster-${RUN}@example.com`;
+
+      // Roster first, exactly as the webhook does it.
+      const { error: rosterErr } = await supabaseAdmin
+        .from("certified_framers")
+        .insert({ email, name: `RLS Preroster ${RUN}` });
+      record("21a. roster row can be created before any account", !rosterErr, rosterErr?.message);
+
+      const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: PASSWORD,
+        email_confirm: true,
+        user_metadata: { full_name: "RLS Preroster" },
+      });
+      if (created?.user) cleanupUserIds.push(created.user.id);
+      record("21b. the account is then created", !createErr, createErr?.message);
+
+      if (created?.user) {
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("account_role, certification_access")
+          .eq("id", created.user.id)
+          .single();
+        record(
+          "21c. the new profile inherits 'framer', not the 'client' default",
+          profile?.account_role === "framer" && profile?.certification_access === true,
+          `role=${profile?.account_role} cert=${profile?.certification_access}`
+        );
+      }
+
+      await supabaseAdmin.from("certified_framers").delete().eq("email", email);
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireCertificationAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { fetchDriveFile } from "@/lib/drive";
 import { listBooksLibrary, isDriveConfigured } from "@/lib/books";
@@ -17,32 +18,8 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-    if (!token) {
-      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-    }
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseAdmin.auth.getUser(token);
-
-    if (authError || !user?.email) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
-    }
-
-    const { data: framer } = await supabaseAdmin
-      .from("certified_framers")
-      .select("id")
-      .eq("email", user.email)
-      .single();
-
-    if (!framer) {
-      return NextResponse.json(
-        { error: "Not a certified Vision Framer" },
-        { status: 403 }
-      );
-    }
+    const access = await requireCertificationAccess(req);
+    if (!access.ok) return access.response;
 
     if (!isDriveConfigured()) {
       return NextResponse.json(

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createUserClient, type Database } from "./supabase";
+import { createUserClient, supabaseAdmin, type Database } from "./supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -107,4 +107,67 @@ export async function requireProjectAccess(
     canEdit: isOwner || role === "editor" || role === "admin",
     isAdmin: isOwner || role === "admin",
   };
+}
+
+/**
+ * Gate for the certification content routes (/api/books, /api/videos,
+ * /api/library, /api/guide and their file handlers).
+ *
+ * These eight routes came over from the CVF portal each carrying its own
+ * copy of the same check — the exact pattern that portal's own notes warn
+ * about, where a new route that forgets to paste it in is silently public.
+ * One helper now, so there is one place to be right.
+ *
+ * It also fixes what the copied check got wrong after the merge: it asked
+ * only "is there a certified_framers row?", which is a CVF-era question. A
+ * RunFree team member or a subscribed framer has certification access by
+ * their account_role and may have no legacy row at all. Either signal opens
+ * the door; the legacy row stays accepted so nothing that works today stops.
+ */
+export async function requireCertificationAccess(
+  request: Request
+): Promise<
+  | { ok: true; userId: string; email: string }
+  | { ok: false; response: NextResponse }
+> {
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!token) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Not signed in" }, { status: 401 }),
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabaseAdmin.auth.getUser(token);
+
+  if (authError || !user?.email) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Invalid session" }, { status: 401 }),
+    };
+  }
+
+  const [{ data: profile }, { data: framer }] = await Promise.all([
+    supabaseAdmin.from("profiles").select("account_role").eq("id", user.id).maybeSingle(),
+    supabaseAdmin.from("certified_framers").select("id").eq("email", user.email).maybeSingle(),
+  ]);
+
+  const byRole =
+    profile?.account_role != null &&
+    ["admin", "runfree_team", "framer", "framer_subscribed"].includes(profile.account_role);
+
+  if (!byRole && !framer) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "No certification access on this account" },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { ok: true, userId: user.id, email: user.email };
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireCertificationAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { resolveLoomThumbnails } from "@/lib/loom";
 
@@ -18,32 +19,8 @@ const TTL_MS = 60_000;
 
 export async function GET(req: NextRequest) {
   try {
-    const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-    if (!token) {
-      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-    }
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseAdmin.auth.getUser(token);
-
-    if (authError || !user?.email) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
-    }
-
-    const { data: framer } = await supabaseAdmin
-      .from("certified_framers")
-      .select("id")
-      .eq("email", user.email)
-      .single();
-
-    if (!framer) {
-      return NextResponse.json(
-        { error: "Not a certified Vision Framer" },
-        { status: 403 }
-      );
-    }
+    const access = await requireCertificationAccess(req);
+    if (!access.ok) return access.response;
 
     const fresh = req.nextUrl.searchParams.get("fresh") === "1";
     if (!fresh && cache && Date.now() - cache.at < TTL_MS) {

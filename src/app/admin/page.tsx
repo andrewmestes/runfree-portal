@@ -38,19 +38,50 @@ type Profile = {
 type Row = Profile & {
   projectCount: number;
   projectNames: string[];
+  /** Their per-project roles, counted — "Editor on 2, Viewer on 1". */
+  roleCounts: Record<string, number>;
   isFramer: boolean;
 };
 
+/**
+ * What someone is across the whole portal.
+ *
+ * `client` is labelled "Project Member" rather than split into editor and
+ * viewer, which is what Andrew asked about. Those two are per-PROJECT roles —
+ * the same person is an editor on one engagement and a viewer on another — so
+ * they cannot also be an account role without meaning two different things at
+ * once. The row shows what someone actually holds instead, which is the
+ * question the split was really trying to answer.
+ *
+ * Descriptions say what the role can and cannot reach, in that order. "Every-
+ * thing, everywhere" was true and useless.
+ */
 const ROLES: { value: AccountRole; label: string; hint: string }[] = [
-  { value: "admin", label: "Admin", hint: "Everything, everywhere." },
-  { value: "runfree_team", label: "RunFree team", hint: "Creates projects; sees team-wide work." },
+  {
+    value: "admin",
+    label: "Portal Admin",
+    hint: "Manages people and permissions, edits templates and shared content, and can open a subscribed framer's projects to help them troubleshoot. Does not see other RunFree members' private projects.",
+  },
+  {
+    value: "runfree_team",
+    label: "RunFree Team",
+    hint: "Creates and runs engagements, and sees anything shared team-wide. Full access to the certification library. Cannot change anyone's permissions.",
+  },
   {
     value: "framer_subscribed",
-    label: "Framer — subscribed",
-    hint: "Certification content, and runs their own client projects.",
+    label: "Certified Framer — Subscribed",
+    hint: "Everything a certified framer has, plus the ability to create and run their own client projects. Their projects stay theirs — RunFree staff cannot see them, though a Portal Admin can for support.",
   },
-  { value: "framer", label: "Certified Vision Framer", hint: "Certification content only." },
-  { value: "client", label: "Client", hint: "Only what a project gives them." },
+  {
+    value: "framer",
+    label: "Certified Vision Framer",
+    hint: "The certification library — handouts, training videos, Will's books and the Digital Facilitator's Guide. Joins a project only when invited to it.",
+  },
+  {
+    value: "client",
+    label: "Project Member",
+    hint: "No portal-wide access at all. What they can do is decided project by project — view only, or edit — wherever they have been added.",
+  },
 ];
 
 export default function AdminPage() {
@@ -83,17 +114,22 @@ export default function AdminPage() {
       const [{ data: profiles }, { data: members }, { data: framers }, { data: projects }] =
         await Promise.all([
           supabase.from("profiles").select("*").order("email"),
-          supabase.from("project_members").select("profile_id, project_id"),
+          supabase.from("project_members").select("profile_id, project_id, role"),
           supabase.from("certified_framers").select("email"),
           supabase.from("projects").select("id, name"),
         ]);
 
       const projectName = new Map((projects ?? []).map((p) => [p.id, p.name as string]));
       const byProfile = new Map<string, string[]>();
+      const rolesByProfile = new Map<string, Record<string, number>>();
       for (const m of members ?? []) {
         const list = byProfile.get(m.profile_id) ?? [];
         list.push(projectName.get(m.project_id) ?? "Untitled");
         byProfile.set(m.profile_id, list);
+
+        const counts = rolesByProfile.get(m.profile_id) ?? {};
+        counts[m.role] = (counts[m.role] ?? 0) + 1;
+        rolesByProfile.set(m.profile_id, counts);
       }
       const framerEmails = new Set(
         (framers ?? []).map((f) => (f.email as string).toLowerCase())
@@ -104,6 +140,7 @@ export default function AdminPage() {
           ...(p as Profile),
           projectNames: byProfile.get(p.id) ?? [],
           projectCount: (byProfile.get(p.id) ?? []).length,
+          roleCounts: rolesByProfile.get(p.id) ?? {},
           isFramer: framerEmails.has(p.email.toLowerCase()),
         }))
       );
@@ -216,8 +253,8 @@ export default function AdminPage() {
           await logout();
           router.replace("/auth/login");
         }}
-        title="Everyone"
-        subtitle="Project participants and certified vision framers, in one list."
+        title="People &amp; Permissions"
+        subtitle="Everyone with a RunFree login — church teams, the RunFree team, and certified vision framers — and what each of them can reach."
         certificationAccess
       />
 
@@ -313,12 +350,30 @@ export default function AdminPage() {
                         Certified
                       </span>
                     )}
-                    {r.projectCount > 0 && (
-                      <span
-                        title={r.projectNames.join(", ")}
-                        className="rounded-full bg-runfree-pink px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-runfree-magentaDeep"
-                      >
-                        {r.projectCount} project{r.projectCount === 1 ? "" : "s"}
+                    {/* Andrew asked whether "client" should split into editor
+                        and viewer. It cannot — those are per-project — but this
+                        is the question underneath it: what does this person
+                        actually hold, and where. */}
+                    {(["admin", "editor", "viewer"] as const)
+                      .filter((role) => (r.roleCounts[role] ?? 0) > 0)
+                      .map((role) => (
+                        <span
+                          key={role}
+                          title={r.projectNames.join(", ")}
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            role === "admin"
+                              ? "bg-runfree-magentaDeep text-white"
+                              : role === "editor"
+                                ? "bg-runfree-pink text-runfree-magentaDeep"
+                                : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {role} on {r.roleCounts[role]}
+                        </span>
+                      ))}
+                    {r.projectCount === 0 && (
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-300">
+                        No projects
                       </span>
                     )}
                   </span>
@@ -361,20 +416,23 @@ export default function AdminPage() {
 
         <div className="mt-5 rounded-2xl bg-white p-5 ring-1 ring-gray-200">
           <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-            What each role means
+            What each permission level means
           </h2>
           <dl className="mt-3 space-y-2">
             {ROLES.map((r) => (
-              <div key={r.value} className="flex flex-wrap gap-x-3">
-                <dt className="w-44 shrink-0 text-sm font-semibold text-runfree-ink">{r.label}</dt>
-                <dd className="min-w-0 flex-1 text-sm text-gray-600">{r.hint}</dd>
+              <div key={r.value} className="flex flex-col gap-x-4 gap-y-1 sm:flex-row">
+                <dt className="shrink-0 text-sm font-semibold text-runfree-ink sm:w-56">
+                  {r.label}
+                </dt>
+                <dd className="min-w-0 flex-1 text-sm leading-relaxed text-gray-600">{r.hint}</dd>
               </div>
             ))}
           </dl>
-          <p className="mt-4 text-xs text-gray-500">
-            A role here says what someone is across the whole portal. What they can do on any one
-            project — view, edit, or manage people — is set on that project, under Project access.
-            A certified framer still has to be invited to each project they work on.
+          <p className="mt-5 border-t border-gray-100 pt-4 text-xs leading-relaxed text-gray-500">
+            These say what someone is across the whole portal. What they can do inside any one
+            engagement — view, edit, or manage its people — is set on that project itself, under
+            Project access, and is shown beside their name above. Being a certified framer grants
+            the library, never a project; those are always by invitation.
           </p>
         </div>
       </main>

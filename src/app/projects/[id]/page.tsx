@@ -2524,12 +2524,20 @@ function ModulePanel({
   const primaryHandout = driveHandouts?.combined ?? null;
   const otherHandouts = driveHandouts?.sheets ?? [];
 
-  // Photos uploaded straight to the module. Ones attached to a session are
-  // deliberately excluded — they render inside that session, and a photo
-  // appearing twice on the same page reads as a duplicate rather than as
-  // two views of the same thing.
+  // Every chart for this module, including the ones a coach uploaded while
+  // logging a session.
+  //
+  // These used to be excluded, on the reasoning that a photo appearing twice
+  // on one page reads as a duplicate. Andrew wanted the opposite: "I do want
+  // the images that I take of charts to show up under the module portion
+  // rather than just the session recordings... it might be nice for a coach
+  // to be able to upload all of that at the same time."
+  //
+  // So the upload stays on the session, where it is convenient, and the
+  // DISPLAY lives here, where a team looks for it. The session's own copy is
+  // inside the coach's edit form only, so nobody sees it twice.
   const images = detail.deliverables.filter(
-    (d) => d.section === section && d.kind === "session_image" && !d.session_id
+    (d) => d.section === section && d.kind === "session_image"
   );
   const moduleDeliverables = detail.deliverables.filter(
     (d) => d.section === section && d.kind === "vision_stack"

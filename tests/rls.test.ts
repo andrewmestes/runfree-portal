@@ -780,6 +780,83 @@ async function main() {
       );
     }
 
+
+    // -----------------------------------------------------------------
+    // 20. Powerful, not omniscient (032). An admin can SEE a subscribed
+    // framer's client project, because that is the tier RunFree sells and
+    // has to support. An admin canNOT see a RunFree team member's private
+    // project — Andrew: "there's still privacy we'd like to keep for runfree
+    // team members' projects."
+    // -----------------------------------------------------------------
+    {
+      const siteAdmin = await createTestUser("site-admin", {});
+      const subFramer = await createTestUser("sub-framer-2", {});
+      cleanupUserIds.push(siteAdmin.id, subFramer.id);
+      await supabaseAdmin.from("profiles").update({ account_role: "admin" }).eq("id", siteAdmin.id);
+      await supabaseAdmin
+        .from("profiles")
+        .update({ account_role: "framer_subscribed" })
+        .eq("id", subFramer.id);
+
+      const { data: framerProject } = await supabaseAdmin
+        .from("projects")
+        .insert({
+          name: `RLS Framer Support ${RUN}`,
+          visibility: "private",
+          created_by: subFramer.id,
+        })
+        .select()
+        .single();
+      if (framerProject) cleanupProjectIds.push(framerProject.id);
+
+      const asSiteAdmin = createUserClient(siteAdmin.accessToken);
+
+      if (framerProject) {
+        const { data: seen } = await asSiteAdmin
+          .from("projects")
+          .select("id")
+          .eq("id", framerProject.id);
+        record(
+          "20a. admin CAN see a subscribed framer's project (support access)",
+          seen?.length === 1,
+          `got ${seen?.length}`
+        );
+      }
+
+      // projectB belongs to RunFree's adminB and siteAdmin is not a member.
+      const { data: staffPrivate } = await asSiteAdmin
+        .from("projects")
+        .select("id")
+        .eq("id", projectB.id);
+      record(
+        "20b. admin cannot see a RunFree member's private project",
+        (staffPrivate?.length ?? -1) === 0,
+        `got ${staffPrivate?.length}`
+      );
+
+      // The admin still holds content authority without being owner.
+      const { error: tmplErr } = await asSiteAdmin
+        .from("templates")
+        .update({ description: `touched ${RUN}` })
+        .eq("id", sharedTemplateId!);
+      record(
+        "20c. admin can edit templates without being owner",
+        !tmplErr,
+        tmplErr?.message
+      );
+
+      const { data: adminFlags } = await supabaseAdmin
+        .from("profiles")
+        .select("is_owner")
+        .eq("id", siteAdmin.id)
+        .single();
+      record(
+        "20d. account_role 'admin' does NOT grant is_owner",
+        adminFlags?.is_owner === false,
+        `is_owner=${adminFlags?.is_owner}`
+      );
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

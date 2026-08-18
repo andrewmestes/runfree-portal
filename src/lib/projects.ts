@@ -59,6 +59,23 @@ export type PrepItem = {
   position: number;
 };
 
+/**
+ * Homework and next steps. One row, three places: the banner at the top of
+ * the project, the module it belongs to, and the session that produced it.
+ */
+export type ProjectTask = {
+  id: string;
+  project_id: string;
+  session_id: string | null;
+  section: string | null;
+  title: string;
+  notes: string | null;
+  due_on: string | null;
+  is_done: boolean;
+  completed_at: string | null;
+  position: number;
+};
+
 export type ChurchContact = {
   id: string;
   project_id: string;
@@ -105,6 +122,8 @@ export type ProjectDetail = {
    * 026.
    */
   contacts: ChurchContact[];
+  /** Homework and next steps across the whole engagement. */
+  tasks: ProjectTask[];
 };
 
 /**
@@ -138,6 +157,7 @@ export async function getProjectDetail(
     prepGroupsRes,
     prepItemsRes,
     contactsRes,
+    tasksRes,
   ] = await Promise.all([
     client
       .from("project_members")
@@ -184,6 +204,12 @@ export async function getProjectDetail(
       .select("*")
       .eq("project_id", projectId)
       .order("position", { ascending: true }),
+    client
+      .from("project_tasks")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("is_done", { ascending: true })
+      .order("position", { ascending: true }),
   ]);
 
   if (membersRes.error) throw membersRes.error;
@@ -195,6 +221,7 @@ export async function getProjectDetail(
   if (prepGroupsRes.error) throw prepGroupsRes.error;
   if (prepItemsRes.error) throw prepItemsRes.error;
   if (contactsRes.error) throw contactsRes.error;
+  if (tasksRes.error) throw tasksRes.error;
 
   const t = project.templates as unknown as
     | {
@@ -258,6 +285,7 @@ export async function getProjectDetail(
     prepGroups: (prepGroupsRes.data as PrepGroup[]) ?? [],
     prepItems: (prepItemsRes.data as PrepItem[]) ?? [],
     contacts: (contactsRes.data as ChurchContact[]) ?? [],
+    tasks: (tasksRes.data as ProjectTask[]) ?? [],
   };
 }
 
@@ -706,6 +734,58 @@ export async function deleteProject(accessToken: string, projectId: string) {
   }
 
   const { error } = await client.from("projects").delete().eq("id", projectId);
+  if (error) throw error;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tasks — homework and next steps                                            */
+/* -------------------------------------------------------------------------- */
+
+export async function createTask(
+  accessToken: string,
+  projectId: string,
+  input: {
+    title: string;
+    notes?: string | null;
+    section?: string | null;
+    session_id?: string | null;
+    due_on?: string | null;
+  },
+  siblings: { position: number }[] = []
+) {
+  const client = createUserClient(accessToken);
+  const position = siblings.reduce((max, t) => Math.max(max, t.position), -1) + 1;
+  const { error } = await client
+    .from("project_tasks")
+    .insert({ ...input, project_id: projectId, position });
+  if (error) throw error;
+}
+
+export async function updateTask(
+  accessToken: string,
+  taskId: string,
+  patch: { title?: string; notes?: string | null; section?: string | null; due_on?: string | null }
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("project_tasks").update(patch).eq("id", taskId);
+  if (error) throw error;
+}
+
+export async function deleteTask(accessToken: string, taskId: string) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("project_tasks").delete().eq("id", taskId);
+  if (error) throw error;
+}
+
+/**
+ * Ticking a task is the one write a VIEWER is allowed to make, and RLS cannot
+ * restrict an UPDATE to a single column. So it goes through a
+ * security-definer function (migration 030) that flips is_done and nothing
+ * else, after checking the caller can see the project.
+ */
+export async function setTaskDone(accessToken: string, taskId: string, done: boolean) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.rpc("set_task_done", { p_task_id: taskId, p_done: done });
   if (error) throw error;
 }
 

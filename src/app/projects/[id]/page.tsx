@@ -10,9 +10,11 @@ import {
   availableSections,
   createContact,
   createPrepItem,
+  createTask,
   createSession,
   deleteContact,
   deleteDeliverable,
+  deleteTask,
   deleteProject,
   deletePrepItem,
   deleteSession,
@@ -25,6 +27,7 @@ import {
   setDeliverableCaption,
   setLeadNavigator,
   setProjectArchived,
+  setTaskDone,
   updatePriorities,
   updateAvatar,
   updateMemberDetails,
@@ -37,6 +40,7 @@ import {
   type PrepGroup,
   type PrepGroupKind,
   type PrepItem,
+  type ProjectTask,
   type ProjectDetail,
   type ProjectMember,
   type ProjectRole,
@@ -442,6 +446,8 @@ export default function ProjectDetailPage() {
           detail={detail}
           canEdit={canEdit}
           accessToken={accessToken}
+          projectId={projectId}
+          moduleOptions={availableSections(detail)}
           onChanged={refresh}
         />
 
@@ -627,6 +633,7 @@ export default function ProjectDetailPage() {
           sessions={detail.sessions}
           detail={detail}
           imageUrls={imageUrls}
+          thumbs={thumbs}
           moduleOptions={availableSections(detail)}
           canEdit={canEdit}
           accessToken={accessToken}
@@ -1082,6 +1089,258 @@ function SheetDropdown({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Homework, wherever you are standing.
+ *
+ * The same rows render in three places — the banner at the top of the
+ * project, the module they belong to, and the session that produced them —
+ * because Andrew wanted a coach to upload once and a team to find the work
+ * without hunting: "anytime a coach adds something there, it should
+ * auto-populate to the top of the page as a task to complete. Once they
+ * complete that task, it should fill both in a module and turn green."
+ *
+ * Ticking is deliberately available to VIEWERS. The church does the homework;
+ * they are not editors. That write goes through set_task_done (migration 030)
+ * rather than a policy, because RLS cannot restrict an UPDATE to one column.
+ */
+function TaskList({
+  tasks,
+  accessToken,
+  onChanged,
+  canEdit,
+  emptyLabel,
+  showSection = false,
+}: {
+  tasks: ProjectTask[];
+  accessToken: string | null;
+  onChanged: () => void;
+  canEdit: boolean;
+  emptyLabel?: string;
+  showSection?: boolean;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  if (tasks.length === 0) {
+    return emptyLabel ? (
+      <p className="rounded-xl border border-dashed border-gray-200 py-5 text-center text-xs text-gray-400">
+        {emptyLabel}
+      </p>
+    ) : null;
+  }
+
+  async function toggle(t: ProjectTask) {
+    if (!accessToken || busyId) return;
+    setBusyId(t.id);
+    try {
+      await setTaskDone(accessToken, t.id, !t.is_done);
+      onChanged();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <ul className="space-y-1.5">
+      {tasks.map((t) => (
+        <li
+          key={t.id}
+          className={`group/task flex flex-wrap items-start gap-x-3 gap-y-1 rounded-xl px-3 py-2.5 transition ${
+            t.is_done ? "bg-emerald-50/60" : "bg-white ring-1 ring-gray-200/80"
+          }`}
+        >
+          <button
+            onClick={() => toggle(t)}
+            disabled={!accessToken || busyId === t.id}
+            aria-label={t.is_done ? `Mark "${t.title}" not done` : `Mark "${t.title}" done`}
+            className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${
+              t.is_done
+                ? "border-emerald-500 bg-emerald-500 text-white"
+                : "border-gray-300 bg-white hover:border-runfree-magenta"
+            }`}
+          >
+            {t.is_done && (
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                <path
+                  fillRule="evenodd"
+                  d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.8 3.8 6.8-6.8a1 1 0 0 1 1.4 0Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            )}
+          </button>
+
+          <span className="min-w-0 flex-1">
+            <span
+              className={`block text-sm font-medium ${
+                t.is_done ? "text-gray-400 line-through" : "text-runfree-ink"
+              }`}
+            >
+              {t.title}
+            </span>
+            {t.notes && (
+              <span className="mt-0.5 block whitespace-pre-line text-xs leading-relaxed text-gray-500">
+                {t.notes}
+              </span>
+            )}
+            <span className="mt-1 flex flex-wrap items-center gap-2">
+              {showSection && t.section && (
+                <span className="rounded-full bg-runfree-indigo px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-runfree-navy">
+                  {moduleLabel(t.section)}
+                </span>
+              )}
+              {t.due_on && (
+                <span className="text-[11px] font-medium text-gray-400">
+                  Due {formatSessionDate(t.due_on)}
+                </span>
+              )}
+            </span>
+          </span>
+
+          {canEdit && (
+            <button
+              onClick={async () => {
+                if (!accessToken) return;
+                if (!confirm(`Remove "${t.title}"?`)) return;
+                await deleteTask(accessToken, t.id);
+                onChanged();
+              }}
+              className="min-h-[36px] shrink-0 rounded-md px-2 text-[11px] font-medium text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover/task:opacity-100 focus:opacity-100 max-sm:opacity-100"
+            >
+              Remove
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The one place a coach types homework. Used by the banner and by a session. */
+function AddTask({
+  projectId,
+  accessToken,
+  siblings,
+  section,
+  sessionId,
+  moduleOptions,
+  onChanged,
+}: {
+  projectId: string;
+  accessToken: string | null;
+  siblings: ProjectTask[];
+  section?: string | null;
+  sessionId?: string | null;
+  moduleOptions?: string[];
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
+  const [due, setDue] = useState("");
+  const [pickedSection, setPickedSection] = useState(section ?? "");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken || !title.trim()) return;
+    setBusy(true);
+    try {
+      await createTask(
+        accessToken,
+        projectId,
+        {
+          title: title.trim(),
+          notes: notes.trim() || null,
+          due_on: due || null,
+          section: pickedSection || null,
+          session_id: sessionId ?? null,
+        },
+        siblings
+      );
+      setTitle("");
+      setNotes("");
+      setDue("");
+      setOpen(false);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field =
+    "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="min-h-[44px] w-full rounded-xl border border-dashed border-gray-300 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
+      >
+        + Add homework or a next step
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-2 rounded-xl bg-gray-50/80 p-3">
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="What should the team do?"
+        className={field}
+      />
+      <textarea
+        rows={2}
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Detail (optional)"
+        className={field}
+      />
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <input
+          type="date"
+          value={due}
+          onChange={(e) => setDue(e.target.value)}
+          aria-label="Due date"
+          className={field}
+        />
+        {moduleOptions && moduleOptions.length > 0 && (
+          <select
+            value={pickedSection}
+            onChange={(e) => setPickedSection(e.target.value)}
+            aria-label="Module"
+            className={field}
+          >
+            <option value="">No module — top of the project only</option>
+            {moduleOptions.map((m) => (
+              <option key={m} value={m}>
+                {moduleLabel(m)}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          disabled={busy || !title.trim()}
+          className="min-h-[44px] rounded-lg bg-runfree-grad-deep px-4 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? "Saving…" : "Add"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="min-h-[44px] rounded-lg px-3 text-xs font-medium text-gray-500 hover:text-runfree-ink"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -1622,6 +1881,7 @@ function CondensedBoard({
           sessions={detail.sessions}
           detail={detail}
           imageUrls={imageUrls}
+          thumbs={thumbs}
           moduleOptions={availableSections(detail)}
           canEdit={canEdit}
           accessToken={accessToken}
@@ -1907,8 +2167,12 @@ function PrioritiesBanner({
   detail,
   canEdit,
   accessToken,
+  projectId,
+  moduleOptions,
   onChanged,
 }: {
+  projectId: string;
+  moduleOptions: string[];
   detail: ProjectDetail;
   canEdit: boolean;
   accessToken: string | null;
@@ -1932,7 +2196,9 @@ function PrioritiesBanner({
 
   // Nothing set and nobody who could set it: show nothing rather than an
   // empty promise.
-  if (!detail.priorities && !canEdit) return null;
+  const open = detail.tasks.filter((t) => !t.is_done);
+  const done = detail.tasks.filter((t) => t.is_done);
+  if (!detail.priorities && detail.tasks.length === 0 && !canEdit) return null;
 
   const updated = detail.prioritiesUpdatedAt
     ? new Date(detail.prioritiesUpdatedAt).toLocaleDateString(undefined, {
@@ -2016,11 +2282,54 @@ function PrioritiesBanner({
               <p className="mt-4 text-xs text-gray-400">Updated {updated}</p>
             )}
           </>
-        ) : (
+        ) : detail.tasks.length === 0 ? (
           <p className="mt-4 rounded-xl border border-dashed border-gray-300 py-8 text-center text-sm text-gray-400">
             Nothing set yet. This is the first thing your team sees — use it to
             say what matters this month.
           </p>
+        ) : null}
+
+        {/* Homework, gathered from every session and module. Andrew: "have
+            that populate at the very top of their project." */}
+        {(detail.tasks.length > 0 || canEdit) && (
+          <div className="mt-5 space-y-2.5">
+            {open.length > 0 && (
+              <TaskList
+                tasks={open}
+                accessToken={accessToken}
+                onChanged={onChanged}
+                canEdit={canEdit}
+                showSection
+              />
+            )}
+
+            {done.length > 0 && (
+              <details className="group">
+                <summary className="cursor-pointer list-none text-xs font-semibold text-gray-400 hover:text-runfree-ink">
+                  {done.length} finished
+                </summary>
+                <div className="mt-2">
+                  <TaskList
+                    tasks={done}
+                    accessToken={accessToken}
+                    onChanged={onChanged}
+                    canEdit={canEdit}
+                    showSection
+                  />
+                </div>
+              </details>
+            )}
+
+            {canEdit && (
+              <AddTask
+                projectId={projectId}
+                accessToken={accessToken}
+                siblings={detail.tasks}
+                moduleOptions={moduleOptions}
+                onChanged={onChanged}
+              />
+            )}
+          </div>
         )}
       </div>
     </section>
@@ -2319,6 +2628,33 @@ function ModulePanel({
             </div>
           </Block>
         )}
+
+        {(() => {
+          const mine = detail.tasks.filter((t) => t.section === section);
+          if (mine.length === 0 && !canEdit) return null;
+          return (
+            <Block title="Homework &amp; next steps">
+              <div className="space-y-2.5">
+                <TaskList
+                  tasks={mine}
+                  accessToken={accessToken}
+                  onChanged={onChanged}
+                  canEdit={canEdit}
+                  emptyLabel="Nothing assigned for this module yet."
+                />
+                {canEdit && (
+                  <AddTask
+                    projectId={detail.id}
+                    accessToken={accessToken}
+                    siblings={detail.tasks}
+                    section={section}
+                    onChanged={onChanged}
+                  />
+                )}
+              </div>
+            </Block>
+          );
+        })()}
 
         <SectionNote
           projectId={detail.id}
@@ -3715,6 +4051,7 @@ function PrepareSection({
 function SessionsSection({
   id,
   bare = false,
+  thumbs = {},
   sessions,
   detail,
   imageUrls,
@@ -3727,6 +4064,7 @@ function SessionsSection({
   id: string;
   /** Inside a Condensed fold the heading and margin come from the fold. */
   bare?: boolean;
+  thumbs?: Record<string, string>;
   sessions: ProjectDetail["sessions"];
   detail: ProjectDetail;
   imageUrls: Record<string, string>;
@@ -3785,6 +4123,8 @@ function SessionsSection({
             imageUrls={imageUrls}
             moduleOptions={moduleOptions}
             canEdit={canEdit}
+            thumb={s.recording_url ? thumbs[s.recording_url] : undefined}
+            tasks={detail.tasks.filter((t) => t.session_id === s.id)}
             accessToken={accessToken}
             projectId={projectId}
             onChanged={onChanged}
@@ -3867,6 +4207,8 @@ function SessionRow({
   imageUrls,
   moduleOptions,
   canEdit,
+  thumb,
+  tasks,
   accessToken,
   projectId,
   onChanged,
@@ -3877,6 +4219,10 @@ function SessionRow({
   imageUrls: Record<string, string>;
   moduleOptions: string[];
   canEdit: boolean;
+  /** Loom still for the collapsed row. */
+  thumb?: string;
+  /** Homework this session produced. */
+  tasks: ProjectTask[];
   accessToken: string | null;
   projectId: string;
   onChanged: () => void;
@@ -3940,11 +4286,21 @@ function SessionRow({
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-3">
-          {session.recording_url && (
+          {/* Andrew: "under the session recordings, I would like to see a
+              thumbnail there, and then you can click on it and it will drop
+              down with any additional information." */}
+          {session.recording_url && thumb ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={thumb}
+              alt=""
+              className="hidden h-11 w-20 shrink-0 rounded-lg object-cover ring-1 ring-gray-200 sm:block"
+            />
+          ) : session.recording_url ? (
             <span className="rounded-full bg-runfree-pink px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
               Recording
             </span>
-          )}
+          ) : null}
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -4014,14 +4370,38 @@ function SessionRow({
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
                 />
               </Field>
-              <Field label="Next steps &amp; homework">
-                <textarea
-                  rows={3}
-                  value={form.commitments}
-                  onChange={(e) => setForm((f) => ({ ...f, commitments: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-                />
-              </Field>
+              {/* Andrew: "I typically upload a Session Recap, which would be
+                  the notes... but to be able to pull out some homework
+                  elements or some next steps and have that populate at the
+                  very top of their project would be good."
+                  So prose stays prose, and homework becomes real rows that
+                  also appear at the top of the project and in the module. */}
+              <div>
+                <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                  Next steps &amp; homework
+                </h5>
+                <div className="space-y-2.5">
+                  <TaskList
+                    tasks={tasks}
+                    accessToken={accessToken}
+                    onChanged={onChanged}
+                    canEdit={canEdit}
+                    emptyLabel="Nothing assigned from this session yet."
+                  />
+                  <AddTask
+                    projectId={projectId}
+                    accessToken={accessToken}
+                    siblings={tasks}
+                    section={session.section}
+                    sessionId={session.id}
+                    moduleOptions={moduleOptions}
+                    onChanged={onChanged}
+                  />
+                  <p className="text-[11px] text-gray-400">
+                    These show at the top of the project and inside the module.
+                  </p>
+                </div>
+              </div>
               <div>
                 <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
                   Photos from this session
@@ -4069,6 +4449,19 @@ function SessionRow({
             </>
           ) : (
             <>
+              {tasks.length > 0 && (
+                <div>
+                  <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                    Next steps &amp; homework
+                  </h5>
+                  <TaskList
+                    tasks={tasks}
+                    accessToken={accessToken}
+                    onChanged={onChanged}
+                    canEdit={false}
+                  />
+                </div>
+              )}
               {loomId && (
                 <div className="overflow-hidden rounded-xl bg-black">
                   <div className="aspect-video">

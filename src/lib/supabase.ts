@@ -235,6 +235,8 @@ export type Database = {
           transcript: string | null;
           takeaways: string | null;
           commitments: string | null;
+          /** What we covered — the session recap a coach writes afterwards. */
+          recap: string | null;
           published_at: string | null;
           created_at: string;
         };
@@ -249,6 +251,7 @@ export type Database = {
           transcript?: string | null;
           takeaways?: string | null;
           commitments?: string | null;
+          recap?: string | null;
           published_at?: string | null;
           created_at?: string;
         };
@@ -261,6 +264,7 @@ export type Database = {
           transcript?: string | null;
           takeaways?: string | null;
           commitments?: string | null;
+          recap?: string | null;
           published_at?: string | null;
         };
         Relationships: [
@@ -492,6 +496,42 @@ export type Database = {
           },
         ];
       };
+      /** Homework and next steps — see migration 030. */
+      project_tasks: {
+        Row: {
+          id: string;
+          project_id: string;
+          session_id: string | null;
+          section: string | null;
+          title: string;
+          notes: string | null;
+          due_on: string | null;
+          is_done: boolean;
+          completed_at: string | null;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          session_id?: string | null;
+          section?: string | null;
+          title: string;
+          notes?: string | null;
+          due_on?: string | null;
+          is_done?: boolean;
+          position?: number;
+        };
+        Update: {
+          title?: string;
+          notes?: string | null;
+          due_on?: string | null;
+          section?: string | null;
+          is_done?: boolean;
+          position?: number;
+        };
+        Relationships: [];
+      };
       /** The church roster: who is on the team. NOT who can log in. */
       church_contacts: {
         Row: {
@@ -615,6 +655,12 @@ export type Database = {
           file_mime: string | null;
           file_size: number | null;
           is_done: boolean;
+          /** Multi-day key dates: an onsite weekend is one row, not three. */
+          end_on: string | null;
+          /** Zoom/Meet link for a virtual session. */
+          meeting_url: string | null;
+          /** Hidden from viewers; editors and admins still see it. */
+          is_private: boolean;
           position: number;
           created_at: string;
         };
@@ -631,6 +677,9 @@ export type Database = {
           file_mime?: string | null;
           file_size?: number | null;
           is_done?: boolean;
+          end_on?: string | null;
+          meeting_url?: string | null;
+          is_private?: boolean;
           position?: number;
           created_at?: string;
         };
@@ -644,6 +693,9 @@ export type Database = {
           file_mime?: string | null;
           file_size?: number | null;
           is_done?: boolean;
+          end_on?: string | null;
+          meeting_url?: string | null;
+          is_private?: boolean;
           position?: number;
         };
         Relationships: [
@@ -685,6 +737,15 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      /**
+       * Ticking a task is the one write a viewer may make, and RLS cannot
+       * limit an UPDATE to a single column — see migration 030.
+       */
+      set_task_done: {
+        Args: { p_task_id: string; p_done: boolean };
+        Returns: undefined;
+      };
+    };
   };
 };

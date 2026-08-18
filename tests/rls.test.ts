@@ -631,6 +631,77 @@ async function main() {
         );
       }
     }
+
+    // -----------------------------------------------------------------
+    // 18. project_tasks (030). Homework is created by coaches, but TICKED
+    // by the church — who are viewers. RLS cannot restrict an UPDATE to one
+    // column, so ticking goes through set_task_done(). These checks pin
+    // both halves: a viewer may flip is_done and may NOT edit or delete.
+    // -----------------------------------------------------------------
+    {
+      const asAdmin = createUserClient(adminA.accessToken);
+      const asViewer = createUserClient(viewerA.accessToken);
+      const asOutsider = createUserClient(viewerB.accessToken);
+
+      const { data: task, error: createErr } = await asAdmin
+        .from("project_tasks")
+        .insert({ project_id: projectA.id, title: `RLS Test Task ${RUN}` })
+        .select()
+        .single();
+      record("18a. editor/admin can create a task", !createErr, createErr?.message);
+
+      const { error: viewerCreateErr } = await asViewer
+        .from("project_tasks")
+        .insert({ project_id: projectA.id, title: "viewer should not create this" });
+      record(
+        "18b. viewer cannot create a task",
+        !!viewerCreateErr,
+        viewerCreateErr ? "correctly rejected" : "insert unexpectedly succeeded"
+      );
+
+      if (task) {
+        const { error: tickErr } = await asViewer.rpc("set_task_done", {
+          p_task_id: task.id,
+          p_done: true,
+        });
+        const { data: after } = await asAdmin
+          .from("project_tasks")
+          .select("is_done, completed_at")
+          .eq("id", task.id)
+          .single();
+        record(
+          "18c. viewer CAN tick a task done (the church does the homework)",
+          !tickErr && after?.is_done === true && !!after?.completed_at,
+          tickErr ? tickErr.message : `is_done=${after?.is_done}`
+        );
+
+        const { error: renameErr } = await asViewer
+          .from("project_tasks")
+          .update({ title: "viewer renamed this" })
+          .eq("id", task.id);
+        const { data: afterRename } = await asAdmin
+          .from("project_tasks")
+          .select("title")
+          .eq("id", task.id)
+          .single();
+        record(
+          "18d. viewer cannot rename a task",
+          !!renameErr || afterRename?.title !== "viewer renamed this",
+          renameErr ? "correctly rejected" : `title=${afterRename?.title}`
+        );
+
+        const { error: outsiderTickErr } = await asOutsider.rpc("set_task_done", {
+          p_task_id: task.id,
+          p_done: false,
+        });
+        record(
+          "18e. non-member cannot tick another project's task",
+          !!outsiderTickErr,
+          outsiderTickErr ? "correctly rejected" : "rpc unexpectedly succeeded"
+        );
+      }
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

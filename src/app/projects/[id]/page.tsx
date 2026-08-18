@@ -8,9 +8,12 @@ import { getCurrentProfile, logout } from "@/lib/auth";
 import {
   createDeliverable,
   availableSections,
+  createContact,
   createPrepItem,
   createSession,
+  deleteContact,
   deleteDeliverable,
+  deleteProject,
   deletePrepItem,
   deleteSession,
   getProjectDetail,
@@ -21,13 +24,16 @@ import {
   saveSectionNote,
   setDeliverableCaption,
   setLeadNavigator,
+  setProjectArchived,
   updatePriorities,
   updateAvatar,
   updateMemberDetails,
   updateMemberRole,
+  updateContact,
   updatePrepItem,
   updateProject,
   updateSession,
+  type ChurchContact,
   type PrepGroup,
   type PrepGroupKind,
   type PrepItem,
@@ -359,7 +365,7 @@ export default function ProjectDetailPage() {
   // by position alone interleaves the two sections — Key Dates(1), Guest
   // Perspective(1), Preparation Checklist(2) — which reads as a shuffled
   // deck rather than one list with an appendix.
-  const prepareGroups = detail.prepGroups
+  const allNonModuleGroups = detail.prepGroups
     .filter((g) => !moduleSections.has(g.section))
     .sort(
       (a, b) =>
@@ -367,6 +373,19 @@ export default function ProjectDetailPage() {
         a.section.localeCompare(b.section) ||
         a.position - b.position
     );
+
+  // Andrew's IA: key dates, preparation, deliverables and team-coaching work
+  // are four different things that were all sharing one "prepare" block.
+  // A group's `section` now says which of them it belongs to.
+  const dateGroups = allNonModuleGroups.filter((g) => g.kind === "dates");
+  const deliverableGroups = allNonModuleGroups.filter((g) => g.section === "DELIVERABLES");
+  const teamGroups = allNonModuleGroups.filter((g) => g.section === "TEAM");
+  const prepareGroups = allNonModuleGroups.filter(
+    (g) =>
+      g.kind !== "dates" &&
+      g.section !== "DELIVERABLES" &&
+      g.section !== "TEAM"
+  );
   const stackItems = detail.deliverables.filter((d) => d.kind === "vision_stack");
   const stackReady = stackItems.filter((d) => d.published_at).length;
 
@@ -448,29 +467,51 @@ export default function ProjectDetailPage() {
           />
         ) : (
           <>
-        {/* Only Pivvot produces a Vision Stack. Younique and Meta Performance
-            have deliverables but not this four-layer artefact, and showing an
-            empty one on those was claiming a thing that does not exist. */}
-        {detail.template?.hasVisionStack && (
-          <VisionStackCard
+        <JumpNav
+          items={[
+            (detail.template?.isGroup ?? true)
+              ? { href: "#church-team", label: "Church team" }
+              : null,
+            dateGroups.length > 0 ? { href: "#dates", label: "Key dates" } : null,
+            prepareGroups.length > 0 || prepResources.length > 0
+              ? { href: "#prepare", label: "Preparation work" }
+              : null,
+            modules.length > 0 ? { href: "#process", label: "The process" } : null,
+            detail.template?.hasVisionStack || deliverableGroups.length > 0
+              ? { href: "#deliverables", label: "Deliverables" }
+              : null,
+            { href: "#sessions", label: "Session recordings" },
+            { href: "#team", label: "Your team" },
+          ].filter((x): x is { href: string; label: string } => x !== null)}
+        />
+
+        {(detail.template?.isGroup ?? true) && (
+          <ChurchTeamInfo
+            id="church-team"
+            contacts={detail.contacts}
             projectId={projectId}
-            total={stackItems.length}
-            ready={stackReady}
-            layers={detail.stackLayers}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            onChanged={refresh}
           />
         )}
 
-        <QuickTiles
-          prepCount={
-            prepResources.length +
-            overviewResources.length +
-            detail.prepItems.filter((i) =>
-              prepareGroups.some((g) => g.id === i.group_id)
-            ).length
-          }
-          sessionCount={detail.sessions.length}
-          teamCount={detail.members.length}
-        />
+        {dateGroups.length > 0 && (
+          <section id="dates" className="mt-14 scroll-mt-20">
+            <SectionHeading eyebrow="The calendar" title="Key dates" />
+            <div className="mt-8">
+              <PrepCards
+                groups={dateGroups}
+                items={detail.prepItems}
+                projectId={projectId}
+                canEdit={canEdit}
+                accessToken={accessToken}
+                fileUrls={imageUrls}
+                onChanged={refresh}
+              />
+            </div>
+          </section>
+        )}
 
         <PrepareSection
           id="prepare"
@@ -489,8 +530,8 @@ export default function ProjectDetailPage() {
         />
 
         {modules.length > 0 && (
-          <section className="mt-16">
-            <SectionHeading eyebrow="The process" title="Six tools, in order" />
+          <section id="process" className="mt-16 scroll-mt-20">
+            <SectionHeading eyebrow="The process" title="Pivvot Vision Framing Process" />
             <div className="mt-10">
               <ModuleNav modules={modules} active={activeModule} onSelect={setActiveModule} />
             </div>
@@ -505,6 +546,13 @@ export default function ProjectDetailPage() {
               handouts={handouts}
               onOpenHandout={openHandout}
               thumbs={thumbs}
+            />
+
+            {/* Andrew: "the additional handouts should be part of the
+                process, not part of the preparation section." */}
+            <ExtraHandouts
+              extras={(handouts?.extras ?? []).filter((g) => !/field guide/i.test(g.name))}
+              onOpen={openHandout}
             />
           </section>
         )}
@@ -531,6 +579,33 @@ export default function ProjectDetailPage() {
           </section>
         )}
 
+        {(detail.template?.hasVisionStack || deliverableGroups.length > 0) && (
+          <section id="deliverables" className="mt-16 scroll-mt-20">
+            <SectionHeading eyebrow="What we build" title="Deliverables" />
+            {detail.template?.hasVisionStack && (
+              <VisionStackCard
+                projectId={projectId}
+                total={stackItems.length}
+                ready={stackReady}
+                layers={detail.stackLayers}
+              />
+            )}
+            {deliverableGroups.length > 0 && (
+              <div className="mt-6">
+                <PrepCards
+                  groups={deliverableGroups}
+                  items={detail.prepItems}
+                  projectId={projectId}
+                  canEdit={canEdit}
+                  accessToken={accessToken}
+                  fileUrls={imageUrls}
+                  onChanged={refresh}
+                />
+              </div>
+            )}
+          </section>
+        )}
+
         <SessionsSection
           id="sessions"
           sessions={detail.sessions}
@@ -543,11 +618,22 @@ export default function ProjectDetailPage() {
           onChanged={refresh}
         />
 
+        {canManage && (
+          <ProjectSettings
+            detail={detail}
+            projectId={projectId}
+            accessToken={accessToken}
+            onChanged={refresh}
+          />
+        )}
+
         <TeamSection
           id="team"
           detail={detail}
           imageUrls={imageUrls}
           canManage={canManage}
+          canEdit={canEdit}
+          teamGroups={teamGroups}
           accessToken={accessToken}
           projectId={projectId}
           onChanged={refresh}
@@ -558,6 +644,268 @@ export default function ProjectDetailPage() {
 
       <PortalFooter />
     </div>
+  );
+}
+
+/**
+ * The column headers, as a jump bar.
+ *
+ * Andrew: "at the top, under the church name and info, I want a kind of
+ * header that I can click and it takes me to the elements I'm searching for.
+ * Right now I have to scroll a bit to find any given thing."
+ *
+ * These are the Asana columns a client already knows, in the order this page
+ * uses them. Sticky, so it stays reachable once you have scrolled past it —
+ * the whole point is not having to scroll back up to move somewhere else.
+ * Entries whose section is empty for this template are dropped rather than
+ * pointing at nothing.
+ */
+function JumpNav({ items }: { items: { href: string; label: string }[] }) {
+  if (items.length === 0) return null;
+  return (
+    <nav
+      aria-label="Jump to a section"
+      className="sticky top-0 z-20 -mx-4 mt-6 border-b border-gray-200/80 bg-gray-50/95 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6"
+    >
+      <ul className="flex gap-1 overflow-x-auto">
+        {items.map((it) => (
+          <li key={it.href}>
+            <a
+              href={it.href}
+              className="inline-block whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-500 transition hover:bg-white hover:text-runfree-magentaDeep"
+            >
+              {it.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/**
+ * The church roster, near the top and collapsed by default.
+ *
+ * This is DATA, not access. Andrew: "any time we have a team member on a
+ * project, it sends them a welcome email... I think we want a place where it
+ * says Church Team Info" separate from "a section where we add people to this
+ * project [which] immediately sends them access."
+ *
+ * So nothing here touches project_members and nothing here can send mail.
+ * Granting access is the separate control in the team section at the bottom,
+ * which is the only path that creates an account.
+ */
+function ChurchTeamInfo({
+  id,
+  contacts,
+  projectId,
+  canEdit,
+  accessToken,
+  onChanged,
+}: {
+  id: string;
+  contacts: ChurchContact[];
+  projectId: string;
+  canEdit: boolean;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken || !name.trim()) return;
+    setBusy(true);
+    try {
+      await createContact(
+        accessToken,
+        projectId,
+        { full_name: name.trim(), email: email.trim() || null, title: title.trim() || null },
+        contacts
+      );
+      setName(""); setEmail(""); setTitle(""); setAdding(false);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(c: ChurchContact) {
+    if (!accessToken || !confirm(`Remove ${c.full_name} from the roster?`)) return;
+    await deleteContact(accessToken, c.id);
+    onChanged();
+  }
+
+  if (contacts.length === 0 && !canEdit) return null;
+
+  const field =
+    "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
+
+  return (
+    <section id={id} className="mt-8 scroll-mt-20">
+      <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
+        >
+          <span aria-hidden className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`}>
+            ▸
+          </span>
+          <span className="flex-1 text-sm font-semibold text-runfree-ink">Church team info</span>
+          <span className="shrink-0 text-[11px] font-medium tabular-nums text-gray-400">
+            {contacts.length} {contacts.length === 1 ? "person" : "people"}
+          </span>
+        </button>
+
+        {open && (
+          <div className="border-t border-gray-100 px-5 py-4">
+            <p className="mb-3 text-xs text-gray-500">
+              Names and contact details only. Nobody here has portal access until they are
+              added under <a href="#team" className="font-medium text-runfree-magentaDeep hover:underline">Your team</a>.
+            </p>
+
+            {contacts.length > 0 && (
+              <ul className="divide-y divide-gray-100">
+                {contacts.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2.5">
+                    <span className="text-sm font-semibold text-runfree-ink">{c.full_name}</span>
+                    {c.title && (
+                      <span className="rounded-full bg-runfree-pink px-2 py-0.5 text-[11px] font-medium text-runfree-magentaDeep">
+                        {c.title}
+                      </span>
+                    )}
+                    {c.email && (
+                      <a
+                        href={`mailto:${c.email}`}
+                        className="text-xs text-gray-500 hover:text-runfree-magentaDeep hover:underline"
+                      >
+                        {c.email}
+                      </a>
+                    )}
+                    {canEdit && (
+                      <button
+                        onClick={() => remove(c)}
+                        className="ml-auto rounded-md px-2 py-1 text-[11px] font-medium text-gray-400 hover:bg-red-50 hover:text-red-600"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {canEdit && (
+              <div className="mt-3">
+                {adding ? (
+                  <form onSubmit={add} className="space-y-2 rounded-xl bg-gray-50/80 p-3">
+                    <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" className={field} />
+                    <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (e.g. Lead Pastor)" className={field} />
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (optional)" className={field} />
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={busy || !name.trim()} className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+                        {busy ? "Saving…" : "Add to roster"}
+                      </button>
+                      <button type="button" onClick={() => setAdding(false)} className="rounded-lg px-3 py-2 text-xs font-medium text-gray-500 hover:text-runfree-ink">
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-gray-400">This does not send an email or create a login.</p>
+                  </form>
+                ) : (
+                  <button
+                    onClick={() => setAdding(true)}
+                    className="w-full rounded-xl border border-dashed border-gray-300 py-2.5 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
+                  >
+                    + Add someone to the roster
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Archive or delete, admins only, at the bottom where it belongs. */
+function ProjectSettings({
+  detail,
+  projectId,
+  accessToken,
+  onChanged,
+}: {
+  detail: ProjectDetail;
+  projectId: string;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const archived = !!detail.archivedAt;
+
+  async function toggleArchive() {
+    if (!accessToken) return;
+    setBusy(true);
+    try {
+      await setProjectArchived(accessToken, projectId, !archived);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function destroy() {
+    if (!accessToken) return;
+    const typed = prompt(
+      `This permanently deletes "${detail.name}" and everything in it — sessions, deliverables, uploaded charts and PDFs, the roster. This cannot be undone.\n\nType the project name to confirm:`
+    );
+    if (typed !== detail.name) return;
+    setBusy(true);
+    try {
+      await deleteProject(accessToken, projectId);
+      router.push("/");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-20">
+      <div className="rounded-2xl border border-dashed border-gray-300 p-5">
+        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+          Project settings
+        </h4>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            onClick={toggleArchive}
+            disabled={busy}
+            className="rounded-lg bg-white px-3.5 py-2 text-xs font-semibold text-runfree-ink ring-1 ring-gray-300 transition hover:ring-runfree-magenta/50 disabled:opacity-50"
+          >
+            {archived ? "Restore this project" : "Archive this project"}
+          </button>
+          <span className="text-xs text-gray-500">
+            {archived
+              ? "Archived — hidden from the project list, nothing deleted."
+              : "Hides it from the project list. Nothing is deleted."}
+          </span>
+          <button
+            onClick={destroy}
+            disabled={busy}
+            className="ml-auto rounded-lg px-3.5 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+          >
+            Delete permanently
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -622,41 +970,57 @@ function ViewToggle({
 function Fold({
   title,
   meta,
+  accent = "bg-gray-300",
   defaultOpen = false,
   children,
 }: {
   title: string;
   meta?: string;
+  /** A colour rail so the condensed list reads as parts, not a grey ladder. */
+  accent?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
-      >
-        <span
-          aria-hidden
-          className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`}
+    <section className="flex overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
+      <span aria-hidden className={`w-1.5 shrink-0 ${accent}`} />
+      <div className="min-w-0 flex-1">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
         >
-          ▸
-        </span>
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-runfree-ink">
-          {title}
-        </span>
-        {meta && (
-          <span className="shrink-0 text-[11px] font-medium tabular-nums text-gray-400">
-            {meta}
+          <span
+            aria-hidden
+            className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`}
+          >
+            ▸
           </span>
-        )}
-      </button>
-      {open && <div className="border-t border-gray-100 px-5 py-5">{children}</div>}
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-runfree-ink">
+            {title}
+          </span>
+          {meta && (
+            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
+              {meta}
+            </span>
+          )}
+        </button>
+        {open && <div className="border-t border-gray-100 px-5 py-5">{children}</div>}
+      </div>
     </section>
   );
 }
+
+/** One accent per module, so the six tools stay visually distinct. */
+const MODULE_ACCENTS = [
+  "bg-runfree-magenta",
+  "bg-orange-400",
+  "bg-amber-400",
+  "bg-emerald-400",
+  "bg-sky-400",
+  "bg-indigo-400",
+];
 
 function CondensedBoard({
   detail,
@@ -722,7 +1086,7 @@ function CondensedBoard({
       </div>
 
       {detail.template?.hasVisionStack && (
-        <Fold title="Vision Stack" meta={`${stackReady}/${stackItems.length}`}>
+        <Fold title="Vision Stack" accent="bg-runfree-magentaDeep" meta={`${stackReady}/${stackItems.length}`}>
           <div className="space-y-2">
             {detail.stackLayers.map((layer) => {
               const items = stackItems.filter((d) => d.stack_layer === layer.slug);
@@ -751,7 +1115,7 @@ function CondensedBoard({
         </Fold>
       )}
 
-      <Fold title="Prepare your team" meta={`${prepCount} item${prepCount === 1 ? "" : "s"}`}>
+      <Fold title="Prepare your team" accent="bg-runfree-magenta" meta={`${prepCount} item${prepCount === 1 ? "" : "s"}`}>
         <PrepareSection
           id="prepare-condensed"
           prep={prepResources}
@@ -781,6 +1145,7 @@ function CondensedBoard({
           <Fold
             key={m.section}
             title={`${moduleOrder(m.section) ?? ""}. ${moduleLabel(m.section)}`.replace(/^\. /, "")}
+            accent={MODULE_ACCENTS[(moduleOrder(m.section) ?? 1) - 1] ?? "bg-gray-300"}
             meta={total > 0 ? `${done}/${total}` : undefined}
           >
             <ModulePanel
@@ -816,7 +1181,7 @@ function CondensedBoard({
         </Fold>
       ))}
 
-      <Fold title="Session recordings" meta={`${detail.sessions.length}`}>
+      <Fold title="Session recordings" accent="bg-sky-500" meta={`${detail.sessions.length}`}>
         <SessionsSection
           id="sessions-condensed"
           sessions={detail.sessions}
@@ -831,7 +1196,7 @@ function CondensedBoard({
         />
       </Fold>
 
-      <Fold title="Your team" meta={`${detail.members.length}`}>
+      <Fold title="Your team" accent="bg-emerald-500" meta={`${detail.members.length}`}>
         <TeamSection
           id="team-condensed"
           detail={detail}
@@ -1148,10 +1513,10 @@ function PrioritiesBanner({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
-              Right now
+              Coming up
             </p>
             <h2 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-runfree-ink">
-              What your team is working on
+              What we're working on right now
             </h2>
           </div>
           {canEdit && !editing && (
@@ -1496,7 +1861,7 @@ function ModulePanel({
         )}
 
         {videos.length > 0 && (
-          <Block title="Watch">
+          <Block title={`${moduleLabel(section)} training videos`}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {videos.map((v) => (
                 <VideoCard
@@ -1508,36 +1873,6 @@ function ModulePanel({
               ))}
             </div>
           </Block>
-        )}
-
-        {exercises.length > 0 && isGroupVertical && (
-          <Block title="Exercises we'll use">
-            <ul className="flex flex-wrap gap-2">
-              {exercises.map((e) => (
-                <li
-                  key={e.id}
-                  className="inline-flex items-center rounded-full bg-gray-50 px-3.5 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200"
-                >
-                  {e.title}
-                </li>
-              ))}
-            </ul>
-          </Block>
-        )}
-
-        {/* A module can carry its own prepare cards. Guest Perspective
-            Evaluation is the one that does today — Andrew wanted it to hold
-            "notes + PDF upload", which is a prep group, not a resource pill. */}
-        {sectionGroups.length > 0 && (
-          <PrepCards
-            groups={sectionGroups}
-            items={detail.prepItems}
-            projectId={detail.id}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            fileUrls={imageUrls}
-            onChanged={onChanged}
-          />
         )}
 
         <SectionNote
@@ -2852,10 +3187,10 @@ function PrepareSection({
 
       {/* The editable work leads. The orientation videos below it are context;
           these cards are what the team actually has to act on. */}
-      {/* The standing RunFree documents — Field Guide, Preparation Checklist,
-          Guest Perspective 7 Checkpoints — before the church's own editable
-          cards, because they are what those cards are worked against. */}
-      <ExtraHandouts extras={extras} onOpen={onOpenHandout} />
+      {/* The Field Guide leads the preparation block: it is the one document
+          that describes the whole engagement. The rest of the extras moved to
+          the process section, where the module handouts are. */}
+      <ExtraHandouts extras={extras.filter((g) => /field guide/i.test(g.name))} onOpen={onOpenHandout} />
 
       {prepGroups.length > 0 && (
         <div className="mt-8">
@@ -2983,7 +3318,7 @@ function SessionsSection({
   }
 
   return (
-    <section id={id} className="mt-20 scroll-mt-8">
+    <section id={id} className="mt-20 scroll-mt-20">
       {!bare && <SectionHeading eyebrow="Every time we met" title="Session recordings" />}
 
       <div className="mx-auto mt-8 max-w-3xl space-y-3">
@@ -3439,6 +3774,8 @@ function TeamSection({
   detail,
   imageUrls,
   canManage,
+  canEdit = false,
+  teamGroups = [],
   accessToken,
   projectId,
   onChanged,
@@ -3449,13 +3786,27 @@ function TeamSection({
   detail: ProjectDetail;
   imageUrls: Record<string, string>;
   canManage: boolean;
+  canEdit?: boolean;
+  /** Insights profiles and other team-coaching uploads. */
+  teamGroups?: PrepGroup[];
   accessToken: string | null;
   projectId: string;
   onChanged: () => void;
 }) {
   const [managing, setManaging] = useState(false);
 
-  const runfree = detail.members.filter((m) => m.isStaff);
+  // Lead navigator first, then Will, then Brooke, then anyone else.
+  // Andrew: "make sure that Will Mancini comes before Brooke Domek, but the
+  // lead navigator is always first."
+  const RUNFREE_ORDER = ["will@runfree.co", "brooke@runfree.co"];
+  const runfree = detail.members
+    .filter((m) => m.isStaff)
+    .sort((a, b) => {
+      if (a.isLead !== b.isLead) return a.isLead ? -1 : 1;
+      const ai = RUNFREE_ORDER.indexOf(a.email.toLowerCase());
+      const bi = RUNFREE_ORDER.indexOf(b.email.toLowerCase());
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
   const church = detail.members.filter((m) => !m.isStaff);
   // Templates default to group; only an explicitly 1:1 vertical opts out.
   const isGroup = detail.template?.isGroup ?? true;
@@ -3474,7 +3825,7 @@ function TeamSection({
   }
 
   return (
-    <section id={id} className="mt-20 scroll-mt-8">
+    <section id={id} className="mt-20 scroll-mt-20">
       {!bare && <SectionHeading eyebrow="Who you're working with" title="Your team" />}
 
       {/* RunFree side — real people, from project_members. The static

@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentProfile, listMyProjects, logout } from "@/lib/auth";
+import { getCurrentProfile, getCurrentSession, listMyProjects, logout } from "@/lib/auth";
+import { createUserClient } from "@/lib/supabase";
+import { getSignedImageUrls } from "@/lib/storage";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
@@ -23,12 +25,26 @@ type ProjectRow = {
   id: string;
   name: string;
   visibility: "private" | "team";
+  logo_path: string | null;
+  location: string | null;
   templates: { name: string; slug: string } | null;
+  /** Filled in after the list loads — one signing call, one members call. */
+  logoUrl?: string;
+  leadContact?: string | null;
 };
 
 export default function HomePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [layout, setLayout] = useState<"cards" | "list">("cards");
+  useEffect(() => {
+    const saved = window.localStorage.getItem("rf-projects-layout");
+    if (saved === "list" || saved === "cards") setLayout(saved);
+  }, []);
+  function chooseLayout(l: "cards" | "list") {
+    setLayout(l);
+    window.localStorage.setItem("rf-projects-layout", l);
+  }
   const [status, setStatus] = useState<
     "checking" | "missing_profile" | "ready" | "error"
   >("checking");
@@ -90,6 +106,44 @@ export default function HomePage() {
 
         setProjects(mine);
         setStatus("ready");
+
+        // Logos and a lead contact, after the list is already on screen —
+        // a card is useful without its mark, and neither is worth delaying
+        // the page for.
+        void (async () => {
+          try {
+            const session = await getCurrentSession();
+            if (!session) return;
+            const paths = mine
+              .map((p: ProjectRow) => p.logo_path)
+              .filter((x): x is string => !!x);
+            const urls = paths.length > 0 ? await getSignedImageUrls(session.access_token, paths) : {};
+
+            const client = createUserClient(session.access_token);
+            const { data: contacts } = await client
+              .from("church_contacts")
+              .select("project_id, full_name, title, position")
+              .in("project_id", mine.map((p: ProjectRow) => p.id))
+              .order("position", { ascending: true });
+
+            const leadByProject = new Map<string, string>();
+            for (const c of contacts ?? []) {
+              if (/pastor|lead/i.test(c.title ?? "") && !leadByProject.has(c.project_id)) {
+                leadByProject.set(c.project_id, c.full_name);
+              }
+            }
+
+            setProjects((prev) =>
+              prev.map((p) => ({
+                ...p,
+                logoUrl: p.logo_path ? urls[p.logo_path] : undefined,
+                leadContact: leadByProject.get(p.id) ?? null,
+              }))
+            );
+          } catch {
+            /* cosmetic only */
+          }
+        })();
       } catch (err) {
         console.error("Home init failed:", err);
         setStatus("error");
@@ -156,19 +210,45 @@ export default function HomePage() {
       />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <div className="mb-6 flex items-center justify-end gap-2">
+          <div className="inline-flex rounded-lg bg-white p-1 ring-1 ring-gray-200">
+            {(["cards", "list"] as const).map((l) => (
+              <button
+                key={l}
+                onClick={() => chooseLayout(l)}
+                aria-pressed={layout === l}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                  layout === l
+                    ? "bg-runfree-grad-deep text-white"
+                    : "text-gray-500 hover:text-runfree-ink"
+                }`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
         {profile?.is_staff && (
-          <div className="mb-6 flex justify-end">
+          <>
             <a
               href="/projects/new"
               className="inline-flex items-center gap-1.5 rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
             >
               + New project
             </a>
-          </div>
+          </>
         )}
+        </div>
 
         {projects.length === 0 ? (
           <EmptyState isStaff={profile?.is_staff ?? false} />
+        ) : layout === "list" ? (
+          <ul className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
+            {projects.map((project, i) => (
+              <li key={project.id}>
+                <ProjectListRow project={project} first={i === 0} />
+              </li>
+            ))}
+          </ul>
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => (
@@ -198,6 +278,48 @@ function EmptyState({ isStaff }: { isStaff: boolean }) {
   );
 }
 
+/**
+ * "Christ Chapel - Pivvot Vision Framing" with "Pivvot Vision Framing"
+ * printed above it said the same thing twice. The template name is the
+ * eyebrow; the church's own name is the heading, with the suffix stripped.
+ */
+function churchName(project: ProjectRow): string {
+  const t = project.templates?.name;
+  if (!t) return project.name;
+  return project.name.replace(new RegExp(`\\s*[-–—]\\s*${t}\\s*$`, "i"), "").trim() || project.name;
+}
+
+function ProjectMark({ project, size }: { project: ProjectRow; size: number }) {
+  const initials = churchName(project)
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+  return project.logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={project.logoUrl}
+      alt=""
+      style={{ width: size, height: size }}
+      className="shrink-0 rounded-xl object-contain ring-1 ring-gray-200"
+    />
+  ) : (
+    <span
+      style={{ width: size, height: size }}
+      className="grid shrink-0 place-items-center rounded-xl bg-runfree-indigo text-sm font-bold text-runfree-navy"
+    >
+      {initials}
+    </span>
+  );
+}
+
+function ProjectMeta({ project }: { project: ProjectRow }) {
+  const bits = [project.leadContact, project.location].filter(Boolean) as string[];
+  if (bits.length === 0) return null;
+  return <p className="mt-1 truncate text-xs text-gray-500">{bits.join(" · ")}</p>;
+}
+
 function ProjectCard({ project }: { project: ProjectRow }) {
   return (
     <a
@@ -205,23 +327,45 @@ function ProjectCard({ project }: { project: ProjectRow }) {
       className="group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-runfree-magenta/35"
     >
       <div className="h-1 bg-runfree-grad" />
-      <div className="flex flex-1 flex-col p-6">
-        <div className="flex items-center gap-2">
-          {project.visibility === "team" && (
-            <span className="inline-flex rounded-full bg-runfree-indigo px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-runfree-navy">
-              Team-wide
-            </span>
-          )}
+      <div className="flex flex-1 items-start gap-4 p-6">
+        <ProjectMark project={project} size={48} />
+        <div className="min-w-0">
           {project.templates?.name && (
-            <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
               {project.templates.name}
             </span>
           )}
+          <h2 className="mt-0.5 font-display text-lg font-bold leading-snug text-runfree-ink">
+            {churchName(project)}
+          </h2>
+          <ProjectMeta project={project} />
         </div>
-        <h2 className="mt-3 font-display text-lg font-bold text-runfree-ink">
-          {project.name}
-        </h2>
       </div>
+    </a>
+  );
+}
+
+function ProjectListRow({ project, first }: { project: ProjectRow; first: boolean }) {
+  return (
+    <a
+      href={`/projects/${project.id}`}
+      className={`flex items-center gap-4 px-5 py-3.5 transition hover:bg-runfree-indigo/30 ${
+        first ? "" : "border-t border-gray-100"
+      }`}
+    >
+      <ProjectMark project={project} size={36} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-runfree-ink">{churchName(project)}</p>
+        <ProjectMeta project={project} />
+      </div>
+      {project.templates?.name && (
+        <span className="hidden shrink-0 text-[11px] font-medium uppercase tracking-wide text-gray-400 sm:block">
+          {project.templates.name}
+        </span>
+      )}
+      <span aria-hidden className="shrink-0 text-gray-300">
+        →
+      </span>
     </a>
   );
 }

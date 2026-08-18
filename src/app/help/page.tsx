@@ -85,7 +85,6 @@ export default function HelpPage() {
       />
 
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-        <ContactCard />
 
         <Section title="Using your portal">
           <Faq q="Where do I find the materials for our next session?">
@@ -207,34 +206,6 @@ export default function HelpPage() {
   );
 }
 
-function ContactCard() {
-  return (
-    <div className="overflow-hidden rounded-2xl bg-runfree-navy shadow-lg">
-      <div className="h-1.5 bg-runfree-grad" />
-      <div className="flex flex-wrap items-center justify-between gap-4 p-6 sm:p-7">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
-            Talk to a person
-          </p>
-          <h2 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-white">
-            We would rather you asked
-          </h2>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-white/70">
-            If anything here is unclear, or something is not working, say so. There is no
-            wrong question.
-          </p>
-        </div>
-        <a
-          href="mailto:andrew@runfree.co?subject=RunFree%20Portal"
-          className="shrink-0 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-runfree-navy transition hover:bg-runfree-pink"
-        >
-          andrew@runfree.co
-        </a>
-      </div>
-    </div>
-  );
-}
-
 function Section({
   title,
   tone,
@@ -293,9 +264,17 @@ function Faq({ q, children }: { q: string; children: React.ReactNode }) {
 }
 
 const KINDS: { value: FeedbackKind; label: string; hint: string }[] = [
-  { value: "question", label: "A question", hint: "Something you want explained." },
-  { value: "problem", label: "Something is broken", hint: "It did not do what you expected." },
-  { value: "idea", label: "An idea", hint: "Something you wish it did." },
+  { value: "question", label: "Ask a question", hint: "Something you want explained." },
+  {
+    value: "problem",
+    label: "Technical support",
+    hint: "Something is broken or did not do what you expected.",
+  },
+  {
+    value: "idea",
+    label: "Suggest an improvement",
+    hint: "Something you would like the portal to do.",
+  },
 ];
 
 function FeedbackForm({
@@ -338,9 +317,16 @@ function FeedbackForm({
 
   return (
     <section className="mt-10">
-      <h2 className="mb-4 font-display text-xl font-extrabold tracking-tight text-runfree-ink">
-        {profile.is_staff ? "Ask for something" : "Get in touch"}
+      <h2 className="font-display text-xl font-extrabold tracking-tight text-runfree-ink">
+        Contact us
       </h2>
+      <p className="mb-4 mt-1 text-sm text-gray-500">
+        Reach us directly at{" "}
+        <a href="mailto:andrew@runfree.co" className="font-medium text-runfree-magentaDeep hover:underline">
+          andrew@runfree.co
+        </a>
+        , or send it here.
+      </p>
 
       <form onSubmit={submit} className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
         <div className="flex flex-wrap gap-2">
@@ -385,11 +371,11 @@ function FeedbackForm({
             disabled={busy || !message.trim()}
             className="rounded-lg bg-runfree-grad-deep px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
           >
-            {busy ? "Sending…" : "Send to Andrew"}
+            {busy ? "Sending…" : "Submit"}
           </button>
           {sent && (
             <p role="status" className="text-sm font-medium text-runfree-magentaDeep">
-              Sent — thank you.
+              Sent to RunFree — thank you.
             </p>
           )}
           {error && <p className="text-sm text-red-600">{error}</p>}

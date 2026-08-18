@@ -59,6 +59,15 @@ export type PrepItem = {
   position: number;
 };
 
+export type ChurchContact = {
+  id: string;
+  project_id: string;
+  full_name: string;
+  email: string | null;
+  title: string | null;
+  position: number;
+};
+
 export type ProjectDetail = {
   id: string;
   name: string;
@@ -90,6 +99,12 @@ export type ProjectDetail = {
   prepGroups: PrepGroup[];
   /** This project's own prepare rows, across every group. */
   prepItems: PrepItem[];
+  /**
+   * The church roster — name, email, title. Deliberately NOT project_members:
+   * being on the roster grants no access and sends no email. See migration
+   * 026.
+   */
+  contacts: ChurchContact[];
 };
 
 /**
@@ -122,6 +137,7 @@ export async function getProjectDetail(
     notesRes,
     prepGroupsRes,
     prepItemsRes,
+    contactsRes,
   ] = await Promise.all([
     client
       .from("project_members")
@@ -163,6 +179,11 @@ export async function getProjectDetail(
       .select("*")
       .eq("project_id", projectId)
       .order("position", { ascending: true }),
+    client
+      .from("church_contacts")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("position", { ascending: true }),
   ]);
 
   if (membersRes.error) throw membersRes.error;
@@ -173,6 +194,7 @@ export async function getProjectDetail(
   if (notesRes.error) throw notesRes.error;
   if (prepGroupsRes.error) throw prepGroupsRes.error;
   if (prepItemsRes.error) throw prepItemsRes.error;
+  if (contactsRes.error) throw contactsRes.error;
 
   const t = project.templates as unknown as
     | {
@@ -235,6 +257,7 @@ export async function getProjectDetail(
     stackLayers: (layersRes.data as VisionStackLayer[]) ?? [],
     prepGroups: (prepGroupsRes.data as PrepGroup[]) ?? [],
     prepItems: (prepItemsRes.data as PrepItem[]) ?? [],
+    contacts: (contactsRes.data as ChurchContact[]) ?? [],
   };
 }
 
@@ -643,6 +666,85 @@ export async function updateSession(
     .single();
   if (error) throw error;
   return data;
+}
+
+/**
+ * Archive hides a finished engagement from the project list without touching
+ * a single row of its content — the church's whole Vision Frame is still
+ * there if it is ever un-archived. This is the one to reach for.
+ */
+export async function setProjectArchived(
+  accessToken: string,
+  projectId: string,
+  archived: boolean
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client
+    .from("projects")
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq("id", projectId);
+  if (error) throw error;
+}
+
+/**
+ * Delete is permanent and cascades: sessions, deliverables, prep items,
+ * roster, membership, and every uploaded image and PDF belonging to the
+ * project go with it. Storage objects are removed first, because once the
+ * project row is gone the RLS policies that authorise deleting its files no
+ * longer resolve and the bucket keeps them forever.
+ */
+export async function deleteProject(accessToken: string, projectId: string) {
+  const client = createUserClient(accessToken);
+
+  const { data: files } = await client.storage.from("deliverable-images").list(projectId, {
+    limit: 1000,
+  });
+  if (files && files.length > 0) {
+    await client.storage
+      .from("deliverable-images")
+      .remove(files.map((f) => `${projectId}/${f.name}`));
+  }
+
+  const { error } = await client.from("projects").delete().eq("id", projectId);
+  if (error) throw error;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Church roster                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Roster rows only. None of these functions can grant access or send mail —
+ * that is project_members, and it stays a separate, deliberate action.
+ */
+export async function createContact(
+  accessToken: string,
+  projectId: string,
+  input: { full_name: string; email?: string | null; title?: string | null },
+  siblings: { position: number }[] = []
+) {
+  const client = createUserClient(accessToken);
+  const position = siblings.reduce((max, s) => Math.max(max, s.position), -1) + 1;
+  const { error } = await client
+    .from("church_contacts")
+    .insert({ ...input, project_id: projectId, position });
+  if (error) throw error;
+}
+
+export async function updateContact(
+  accessToken: string,
+  contactId: string,
+  patch: { full_name?: string; email?: string | null; title?: string | null }
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("church_contacts").update(patch).eq("id", contactId);
+  if (error) throw error;
+}
+
+export async function deleteContact(accessToken: string, contactId: string) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("church_contacts").delete().eq("id", contactId);
+  if (error) throw error;
 }
 
 /* -------------------------------------------------------------------------- */

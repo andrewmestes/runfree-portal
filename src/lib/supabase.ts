@@ -492,6 +492,41 @@ export type Database = {
           },
         ];
       };
+      /** The church roster: who is on the team. NOT who can log in. */
+      church_contacts: {
+        Row: {
+          id: string;
+          project_id: string;
+          full_name: string;
+          email: string | null;
+          title: string | null;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          full_name: string;
+          email?: string | null;
+          title?: string | null;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          full_name?: string;
+          email?: string | null;
+          title?: string | null;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "church_contacts_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       /** The prepare buckets a template declares — see migration 022. */
       template_prep_groups: {
         Row: {

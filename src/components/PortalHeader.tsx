@@ -112,16 +112,11 @@ export default function PortalHeader({
               Help
             </a>
             {profile?.is_staff && (
-              /* The admin screens live in the CVF portal; this app has no
-                 /admin route, so the link 404'd. Pointing it where the pages
-                 actually are until the two portals merge. */
               <a
-                href={`${CVF_URL}/admin`}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/admin"
                 className="text-xs font-bold uppercase tracking-wider text-runfree-pink transition hover:text-white"
               >
-                Admin ↗
+                Admin
               </a>
             )}
             {profile?.full_name && (
@@ -201,9 +196,7 @@ export default function PortalHeader({
 
             {profile?.is_staff && (
               <a
-                href={`${CVF_URL}/admin`}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/admin"
                 onClick={() => setMenuOpen(false)}
                 /* min-h keeps this at a comfortable tap size. */
                 className="flex min-h-[44px] items-center rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-runfree-pink outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"

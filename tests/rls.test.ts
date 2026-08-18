@@ -702,6 +702,84 @@ async function main() {
       }
     }
 
+
+    // -----------------------------------------------------------------
+    // 19. account_role (031). The subscription tier is the point here: a
+    // framer running their own clients must not see RunFree's team-wide
+    // projects, and RunFree must not see theirs except by membership.
+    // This is Andrew's "subscription-model admins must not see team-wide
+    // projects", pinned.
+    // -----------------------------------------------------------------
+    {
+      const subscribed = await createTestUser("framer-sub", {});
+      cleanupUserIds.push(subscribed.id);
+      await supabaseAdmin
+        .from("profiles")
+        .update({ account_role: "framer_subscribed" })
+        .eq("id", subscribed.id);
+
+      const asSubscribed = createUserClient(subscribed.accessToken);
+
+      const { data: teamSeen } = await asSubscribed
+        .from("projects")
+        .select("id")
+        .eq("id", projectTeam.id);
+      record(
+        "19a. subscribed framer cannot see RunFree's team-wide project",
+        (teamSeen?.length ?? -1) === 0,
+        `got ${teamSeen?.length}`
+      );
+
+      // Their own project, created by them, is theirs.
+      const { data: ownProject, error: ownErr } = await supabaseAdmin
+        .from("projects")
+        .insert({
+          name: `RLS Framer Own ${RUN}`,
+          visibility: "private",
+          created_by: subscribed.id,
+        })
+        .select()
+        .single();
+      if (ownProject) cleanupProjectIds.push(ownProject.id);
+      record("19b. subscribed framer's own project is created", !ownErr, ownErr?.message);
+
+      if (ownProject) {
+        const { data: mine } = await asSubscribed
+          .from("projects")
+          .select("id")
+          .eq("id", ownProject.id);
+        record(
+          "19c. subscribed framer sees their own client project",
+          mine?.length === 1,
+          `got ${mine?.length}`
+        );
+
+        // RunFree staff who are not members do NOT get it for free.
+        const asStaff = createUserClient(staffOutsider.accessToken);
+        const { data: staffSees } = await asStaff
+          .from("projects")
+          .select("id")
+          .eq("id", ownProject.id);
+        record(
+          "19d. RunFree staff cannot see a framer's private client project",
+          (staffSees?.length ?? -1) === 0,
+          `got ${staffSees?.length}`
+        );
+      }
+
+      // The trigger keeps the legacy booleans in step for the live CVF app.
+      const { data: flags } = await supabaseAdmin
+        .from("profiles")
+        .select("is_staff, is_owner, certification_access")
+        .eq("id", subscribed.id)
+        .single();
+      record(
+        "19e. account_role syncs the legacy flags the CVF app still reads",
+        flags?.certification_access === true && flags?.is_owner === false,
+        `cert=${flags?.certification_access} owner=${flags?.is_owner} staff=${flags?.is_staff}`
+      );
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

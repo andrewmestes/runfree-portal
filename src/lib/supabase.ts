@@ -52,6 +52,18 @@ export const supabaseAdmin: SupabaseClient<Database> = supabaseServiceKey
   ? createClient<Database>(supabaseUrl, supabaseServiceKey)
   : supabase;
 
+/**
+ * Portal-wide identity. Deliberately separate from a project membership:
+ * the same person is an editor on one project and a viewer on another, which
+ * project_members.role covers. See migration 031.
+ */
+export type AccountRole =
+  | "admin"
+  | "runfree_team"
+  | "framer_subscribed"
+  | "framer"
+  | "client";
+
 export type Database = {
   public: {
     Tables: {
@@ -66,6 +78,13 @@ export type Database = {
           certification_access: boolean;
           /** Headshot, in the deliverable-images bucket. One face per person, not per project. */
           avatar_path: string | null;
+          /**
+           * Who someone is portal-wide (migration 031). Distinct from
+           * project_members.role, which is what they may do on ONE project.
+           * The three booleans above are legacy, kept in sync by a trigger
+           * while the CVF app still reads them.
+           */
+          account_role: AccountRole;
           created_at: string;
         };
         Insert: {
@@ -84,6 +103,7 @@ export type Database = {
           is_owner?: boolean;
           certification_access?: boolean;
           avatar_path?: string | null;
+          account_role?: AccountRole;
         };
         Relationships: [];
       };
@@ -495,6 +515,26 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      /**
+       * CVF's table, read-only from this app. Declared so the merged admin
+       * can show who is certified alongside who is on a project — the two
+       * portals answered "who is this person?" separately and nothing showed
+       * both at once. Never written from here; the CVF app owns it.
+       */
+      certified_framers: {
+        Row: {
+          id: string;
+          email: string;
+          name: string;
+          ghl_contact_id: string | null;
+          is_admin: boolean | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
       };
       /** Homework and next steps — see migration 030. */
       project_tasks: {

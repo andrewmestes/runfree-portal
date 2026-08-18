@@ -72,3 +72,64 @@ export async function invitePerson(
     };
   }
 }
+
+/**
+ * The certification routes came over from the CVF portal calling this
+ * inviteFramer. It is the same function — one invite path, whether the
+ * person is joining a church project or the certification programme — so it
+ * is an alias rather than a second copy that could drift.
+ */
+export const inviteFramer = invitePerson;
+
+/**
+ * Keep the portal's permission in step with the certification list.
+ *
+ * Being on `certified_framers` and being allowed to SEE the certification
+ * content are two different records — the first is the GoHighLevel-synced
+ * roster, the second is `profiles.account_role` (migration 031). Before the
+ * merge only the first existed, so every path that added or removed a framer
+ * updated one and left the other alone. The visible symptom would be someone
+ * getting a welcome email, signing in, and finding an empty portal.
+ *
+ * Deliberately conservative in both directions:
+ *
+ *  - granting never demotes. An admin or RunFree team member who is also
+ *    certified must not be knocked down to 'framer' by a tag sync.
+ *  - revoking only touches 'framer' and 'framer_subscribed'. Removing the
+ *    certified tag from a RunFree admin should not lock them out of the
+ *    portal they run.
+ *
+ * A missing profile is not an error: someone can be on the roster before they
+ * ever sign in, and the row appears when they do.
+ */
+export async function syncCertificationRole(
+  email: string,
+  grant: boolean
+): Promise<void> {
+  const cleanEmail = email.trim().toLowerCase();
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("id, account_role")
+    .ilike("email", cleanEmail)
+    .maybeSingle();
+
+  if (!profile) return;
+
+  if (grant) {
+    if (profile.account_role === "client") {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ account_role: "framer" })
+        .eq("id", profile.id);
+    }
+    return;
+  }
+
+  if (profile.account_role === "framer" || profile.account_role === "framer_subscribed") {
+    await supabaseAdmin
+      .from("profiles")
+      .update({ account_role: "client" })
+      .eq("id", profile.id);
+  }
+}

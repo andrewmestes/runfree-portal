@@ -183,6 +183,28 @@ export default function AdminPage() {
       />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* The two screens that came over from the CVF portal. They manage
+            different records than this page does — the certification roster
+            and the video library — so they stay separate rather than being
+            crammed into one list. */}
+        <nav className="mb-6 flex flex-wrap gap-2">
+          <span className="rounded-full bg-runfree-grad-deep px-3.5 py-1.5 text-xs font-semibold text-white">
+            People
+          </span>
+          <a
+            href="/admin/framers"
+            className="rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-500 ring-1 ring-gray-200 transition hover:text-runfree-ink"
+          >
+            Certified framers
+          </a>
+          <a
+            href="/admin/videos"
+            className="rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-500 ring-1 ring-gray-200 transition hover:text-runfree-ink"
+          >
+            Training videos
+          </a>
+        </nav>
+
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={query}

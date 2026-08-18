@@ -166,3 +166,20 @@ export async function getCurrentFramer() {
   }
   return data;
 }
+
+/**
+ * Admin, for a client component.
+ *
+ * True for the merged model (profiles.account_role = 'admin') OR the CVF-era
+ * flag (certified_framers.is_admin), so the ported admin screens keep working
+ * for people who have one and not the other. A RunFree admin has no framer
+ * row; an old CVF admin may have no account_role yet.
+ */
+export async function isPortalAdmin(): Promise<boolean> {
+  const profile = await getCurrentProfile();
+  if (profile && (profile as { account_role?: string }).account_role === "admin") return true;
+  if (profile && (profile as { is_owner?: boolean }).is_owner) return true;
+
+  const framer = (await getCurrentFramer()) as { is_admin?: boolean } | null;
+  return Boolean(framer?.is_admin);
+}

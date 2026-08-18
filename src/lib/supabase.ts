@@ -516,7 +516,26 @@ export type Database = {
           },
         ];
       };
-      /** CVF's training video library — read-only from this app. */
+      /** Audit trail for the GoHighLevel tag webhook. Append-only. */
+      ghl_sync_log: {
+        Row: {
+          id: string;
+          ghl_contact_id: string;
+          status: string;
+          last_synced_at: string | null;
+          error_message: string | null;
+        };
+        Insert: {
+          id?: string;
+          ghl_contact_id: string;
+          status: string;
+          last_synced_at?: string | null;
+          error_message?: string | null;
+        };
+        Update: { status?: string; error_message?: string | null };
+        Relationships: [];
+      };
+      /** The training video library. Managed from /admin/videos after the merge. */
       training_videos: {
         Row: {
           id: string;
@@ -530,15 +549,33 @@ export type Database = {
           created_at: string;
           updated_at: string;
         };
-        Insert: never;
-        Update: never;
+        Insert: {
+          id?: string;
+          title: string;
+          url: string;
+          description?: string | null;
+          module?: string | null;
+          sort_order?: number;
+          is_published?: boolean;
+          created_by?: string | null;
+        };
+        Update: {
+          title?: string;
+          url?: string;
+          description?: string | null;
+          module?: string | null;
+          sort_order?: number;
+          is_published?: boolean;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       /**
-       * CVF's table, read-only from this app. Declared so the merged admin
-       * can show who is certified alongside who is on a project — the two
-       * portals answered "who is this person?" separately and nothing showed
-       * both at once. Never written from here; the CVF app owns it.
+       * Who is certified. Was CVF's table and read-only from here; the merge
+       * moved its management screens into this app, so this app now owns it.
+       * The GoHighLevel webhook and /admin/framers both write it — and both
+       * must also set profiles.account_role, or someone gets a login and
+       * sees an empty portal.
        */
       certified_framers: {
         Row: {
@@ -550,8 +587,20 @@ export type Database = {
           created_at: string | null;
           updated_at: string | null;
         };
-        Insert: never;
-        Update: never;
+        Insert: {
+          id?: string;
+          email: string;
+          name: string;
+          ghl_contact_id?: string | null;
+          is_admin?: boolean | null;
+        };
+        Update: {
+          email?: string;
+          name?: string;
+          ghl_contact_id?: string | null;
+          is_admin?: boolean | null;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       /** Homework and next steps — see migration 030. */

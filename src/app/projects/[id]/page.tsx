@@ -2047,7 +2047,7 @@ function PrepRow({
   const href = safeExternalUrl(item.external_url);
 
   return (
-    <li className="group/row flex items-start gap-3 py-3">
+    <li className="group/row flex flex-wrap items-start gap-x-3 gap-y-1 py-3">
       {group.kind === "checklist" && (
         <button
           onClick={toggle}
@@ -2140,17 +2140,23 @@ function PrepRow({
       </div>
 
       {canEdit && (
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover/row:opacity-100 focus-within:opacity-100 max-sm:opacity-100">
+        // On a phone the actions drop to their own line rather than stealing
+        // width from the title, which otherwise wraps to three lines beside
+        // two buttons. On desktop they stay inline and appear on hover.
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover/row:opacity-100 focus-within:opacity-100 max-sm:order-last max-sm:w-full max-sm:justify-end max-sm:opacity-100">
+          {/* Roomier on a phone. These sit inside a list row, so at their
+              desktop size they are a 25px target — the same reason the photo
+              reorder controls are 36px rather than drag handles. */}
           <button
             onClick={() => setEditing(true)}
-            className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-400 hover:bg-gray-50 hover:text-runfree-ink"
+            className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-400 hover:bg-gray-50 hover:text-runfree-ink max-sm:min-h-[36px] max-sm:px-3"
           >
             Edit
           </button>
           <button
             onClick={remove}
             disabled={busy}
-            className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+            className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 max-sm:min-h-[36px] max-sm:px-3"
           >
             Remove
           </button>

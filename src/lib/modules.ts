@@ -58,3 +58,15 @@ export function moduleLabel(section: string): string {
     .toLowerCase()
     .replace(/(^|\s)([a-z])/g, (_, lead, letter) => `${lead}${letter.toUpperCase()}`);
 }
+
+/* Ported from the CVF portal during the merge. */
+
+/** True for the six numbered process modules, false for the extra folders. */
+export function isProcessModule(order: number): boolean {
+  return order >= 1 && order <= 6;
+}
+
+/** "2 - Crowd Cloud" -> "Crowd Cloud" */
+export function stripModuleNumber(name: string): string {
+  return name.replace(/^\s*\d+\s*-\s*/, "");
+}

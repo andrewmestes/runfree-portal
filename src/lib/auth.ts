@@ -139,3 +139,30 @@ export async function listMyProjects() {
   if (error) throw error;
   return data;
 }
+
+/**
+ * The certified-framer record for the signed-in user, or null.
+ *
+ * Ported during the portal merge so the certification pages keep working
+ * unchanged. `certified_framers` is CVF's table and is read-only from here;
+ * whether someone may SEE those pages is decided by profiles.account_role
+ * (migration 031), not by this row — a RunFree admin has no framer row and
+ * still gets in.
+ */
+export async function getCurrentFramer() {
+  const user = await getCurrentUser();
+  if (!user?.email) return null;
+
+  // maybeSingle, not single: "no row" is an ordinary answer here.
+  const { data, error } = await supabase
+    .from("certified_framers")
+    .select("*")
+    .eq("email", user.email)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching framer:", error);
+    return null;
+  }
+  return data;
+}

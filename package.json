@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.0",
+    "@types/archiver": "^8.0.0",
+    "archiver": "^8.0.0",
+    "axios": "^1.19.0",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
     "googleapis": "^173.0.0",

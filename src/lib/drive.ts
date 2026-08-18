@@ -438,3 +438,144 @@ export async function listTemplateHandouts(rootId: string): Promise<TemplateHand
 
   return { byModule, extras, notebooks };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Certification library — ported from the CVF portal during the merge        */
+/* -------------------------------------------------------------------------- */
+
+export type PortalFile = {
+  id: string;
+  name: string;
+  /** Display title: extension and the "- CERT" marker removed, number kept. */
+  title: string;
+  /** The leading "01" / "03.1", split out so the UI can style it. */
+  num: string | null;
+  /** Title without the leading number. */
+  label: string;
+  mimeType: string;
+  sizeBytes: number | null;
+  modifiedTime: string | null;
+  /** Sort key taken from a leading number in the filename, if present. */
+  order: number;
+};
+
+export type PortalModule = {
+  id: string;
+  name: string;
+  /** Leading number of the folder ("2 - Crowd Cloud" -> 2), else large. */
+  order: number;
+  files: PortalFile[];
+};
+
+
+/**
+ * Read the shared Drive folder and return it grouped by module subfolder.
+ *
+ * This IS the resource list — the portal keeps no copy, so whatever is in
+ * Drive is what framers see. Adding, renaming, or removing a file in Drive
+ * needs no action here.
+ */
+export async function listPortalLibrary(): Promise<PortalModule[]> {
+  const rootId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+  if (!rootId) {
+    throw new Error("GOOGLE_DRIVE_FOLDER_ID is not set");
+  }
+
+  const drive = getDriveClient();
+
+  // One flat query, then rebuild the tree locally — far fewer round trips
+  // than walking folder by folder.
+  const all: {
+    id: string;
+    name: string;
+    mimeType: string;
+    parents?: string[];
+    size?: string;
+    modifiedTime?: string;
+  }[] = [];
+
+  let pageToken: string | undefined;
+  do {
+    const res = await drive.files.list({
+      pageSize: 1000,
+      pageToken,
+      q: "trashed = false",
+      fields:
+        "nextPageToken, files(id,name,mimeType,parents,size,modifiedTime)",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+    all.push(...((res.data.files || []) as typeof all));
+    pageToken = res.data.nextPageToken || undefined;
+  } while (pageToken);
+
+  const folders = all.filter((f) => f.mimeType === FOLDER_MIME);
+  const files = all.filter((f) => f.mimeType !== FOLDER_MIME);
+
+  // Hide a timestamped export when a cleaner twin of the same doc exists.
+  const canonical = new Set(
+    files
+      .filter((f) => !isTimestampedExport(f.name))
+      .map((f) => toTitle(f.name).toLowerCase())
+  );
+
+  const childrenOf = (folderId: string) =>
+    files
+      .filter((f) => (f.parents || []).includes(folderId))
+      .filter(
+        (f) =>
+          !isTimestampedExport(f.name) ||
+          !canonical.has(toTitle(f.name).toLowerCase())
+      )
+      .map<PortalFile>((f) => {
+        const title = toTitle(f.name);
+        const { num, rest } = splitNumber(title);
+        return {
+          id: f.id,
+          name: f.name,
+          title,
+          num,
+          label: rest,
+          mimeType: f.mimeType,
+          sizeBytes: f.size ? Number(f.size) : null,
+          modifiedTime: f.modifiedTime || null,
+          order: leadingNumber(f.name),
+        };
+      })
+      .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+
+  const moduleFolders = folders.filter((f) =>
+    (f.parents || []).includes(rootId)
+  );
+
+  const modules: PortalModule[] = moduleFolders.map((folder) => {
+    // Roll nested subfolders (e.g. "Additional Tools") into their parent
+    // module rather than surfacing a second level of nesting.
+    const nested = folders.filter((f) => (f.parents || []).includes(folder.id));
+    const own = childrenOf(folder.id);
+    const inherited = nested.flatMap((n) => childrenOf(n.id));
+
+    return {
+      id: folder.id,
+      name: folder.name,
+      order: leadingNumber(folder.name),
+      files: [...own, ...inherited],
+    };
+  });
+
+  // Files sitting loose in the root become their own group.
+  const loose = childrenOf(rootId);
+  if (loose.length) {
+    modules.push({
+      id: rootId,
+      name: "General",
+      order: Number.MAX_SAFE_INTEGER,
+      files: loose,
+    });
+  }
+
+  return modules
+    .filter((m) => m.files.length > 0)
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+}

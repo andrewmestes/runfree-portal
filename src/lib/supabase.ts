@@ -516,6 +516,24 @@ export type Database = {
           },
         ];
       };
+      /** CVF's training video library — read-only from this app. */
+      training_videos: {
+        Row: {
+          id: string;
+          title: string;
+          url: string;
+          description: string | null;
+          module: string | null;
+          sort_order: number;
+          is_published: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       /**
        * CVF's table, read-only from this app. Declared so the merged admin
        * can show who is certified alongside who is on a project — the two

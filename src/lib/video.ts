@@ -93,3 +93,31 @@ export const PROVIDER_LABEL: Record<VideoProvider, string> = {
   drive: "Google Drive",
   unknown: "Link",
 };
+
+/**
+ * The `description` column carries two different things depending on the
+ * video: sometimes a runtime ("19 min", "Under 3 min"), sometimes a real
+ * subtitle ("Reinforcement training"), and sometimes both joined by a
+ * middot. Rather than rewrite a column Andrew maintains by hand, split it
+ * on read so a runtime renders as a badge on the thumbnail and anything
+ * else renders as supporting copy where it can actually be read.
+ */
+export function splitVideoMeta(description: string | null): {
+  duration: string | null;
+  subtitle: string | null;
+} {
+  const raw = (description || "").trim();
+  if (!raw) return { duration: null, subtitle: null };
+
+  const [head, ...rest] = raw.split("·").map((p) => p.trim());
+  const tail = rest.join(" · ").trim();
+
+  // "19 min", "Under 3 min", "1 hr 5 min"
+  const looksLikeDuration = /^(under\s+|about\s+|~)?\d+\s*(min|minute|hr|hour)/i;
+
+  if (looksLikeDuration.test(head)) {
+    return { duration: head, subtitle: tail || null };
+  }
+
+  return { duration: null, subtitle: raw };
+}

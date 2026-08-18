@@ -6,7 +6,14 @@ import Image from "next/image";
 type Profile = { full_name?: string | null; is_staff?: boolean } | null;
 
 type Props = {
-  profile: Profile;
+  profile?: Profile | null;
+  /**
+   * The certification pages came over from the CVF portal during the merge
+   * still passing a `framer` row rather than a profile. Rather than rewrite
+   * five pages, the header accepts either and normalises — one name and one
+   * admin flag is all it ever needed from them.
+   */
+  framer?: { name?: string; is_admin?: boolean } | null;
   onSignOut: () => void;
   title: string;
   subtitle?: string;
@@ -29,6 +36,8 @@ type Props = {
    * Hidden for church clients, who have no login over there.
    */
   certificationAccess?: boolean;
+  /** CVF pages pass this; the merged header shows no separate mark. */
+  badge?: boolean;
 };
 
 /**
@@ -42,6 +51,7 @@ const CVF_URL =
 
 export default function PortalHeader({
   profile,
+  framer,
   onSignOut,
   title,
   subtitle,
@@ -51,6 +61,9 @@ export default function PortalHeader({
   showTitleBlock = true,
   certificationAccess = false,
 }: Props) {
+  // One shape from here down, whichever prop the caller used.
+  const person = profile ?? (framer ? { full_name: framer.name ?? null, is_staff: !!framer.is_admin } : null);
+
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Escape closes it, matching every other dismissible surface in the portal.
@@ -111,7 +124,7 @@ export default function PortalHeader({
             >
               Help
             </a>
-            {profile?.is_staff && (
+            {person?.is_staff && (
               <a
                 href="/admin"
                 className="text-xs font-bold uppercase tracking-wider text-runfree-pink transition hover:text-white"
@@ -119,8 +132,8 @@ export default function PortalHeader({
                 Admin
               </a>
             )}
-            {profile?.full_name && (
-              <span className="font-medium text-white/60">{profile.full_name}</span>
+            {person?.full_name && (
+              <span className="font-medium text-white/60">{person?.full_name}</span>
             )}
             <button
               onClick={onSignOut}
@@ -194,7 +207,7 @@ export default function PortalHeader({
               Help
             </a>
 
-            {profile?.is_staff && (
+            {person?.is_staff && (
               <a
                 href="/admin"
                 onClick={() => setMenuOpen(false)}

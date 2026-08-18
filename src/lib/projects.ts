@@ -27,6 +27,38 @@ export type VisionStackLayer = {
   icon_path: string | null;
 };
 
+/**
+ * What a prepare card offers, not what it may contain — see migration 022.
+ * A card of the wrong kind shows the wrong inputs; it never hides a row.
+ */
+export type PrepGroupKind = "dates" | "checklist" | "reading" | "files" | "notes";
+
+export type PrepGroup = {
+  id: string;
+  section: string;
+  key: string;
+  title: string;
+  description: string | null;
+  kind: PrepGroupKind;
+  position: number;
+};
+
+export type PrepItem = {
+  id: string;
+  project_id: string;
+  group_id: string;
+  title: string;
+  notes: string | null;
+  due_on: string | null;
+  external_url: string | null;
+  file_path: string | null;
+  file_name: string | null;
+  file_mime: string | null;
+  file_size: number | null;
+  is_done: boolean;
+  position: number;
+};
+
 export type ProjectDetail = {
   id: string;
   name: string;
@@ -54,6 +86,10 @@ export type ProjectDetail = {
   deliverables: DeliverableRow[];
   resources: TemplateResourceRow[];
   stackLayers: VisionStackLayer[];
+  /** The prepare buckets this template declares, in render order. */
+  prepGroups: PrepGroup[];
+  /** This project's own prepare rows, across every group. */
+  prepItems: PrepItem[];
 };
 
 /**
@@ -77,8 +113,16 @@ export async function getProjectDetail(
   if (projectErr) throw projectErr;
   if (!project) return null;
 
-  const [membersRes, sessionsRes, deliverablesRes, resourcesRes, layersRes, notesRes] =
-    await Promise.all([
+  const [
+    membersRes,
+    sessionsRes,
+    deliverablesRes,
+    resourcesRes,
+    layersRes,
+    notesRes,
+    prepGroupsRes,
+    prepItemsRes,
+  ] = await Promise.all([
     client
       .from("project_members")
       .select("profile_id, role, org_role, is_lead, profiles(full_name, email, is_staff, avatar_path)")
@@ -107,6 +151,18 @@ export async function getProjectDetail(
       : Promise.resolve({ data: [], error: null }),
     client.from("vision_stack_layers").select("*").order("position", { ascending: true }),
     client.from("section_notes").select("section, body").eq("project_id", projectId),
+    project.template_id
+      ? client
+          .from("template_prep_groups")
+          .select("*")
+          .eq("template_id", project.template_id)
+          .order("position", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    client
+      .from("prep_items")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("position", { ascending: true }),
   ]);
 
   if (membersRes.error) throw membersRes.error;
@@ -115,6 +171,8 @@ export async function getProjectDetail(
   if (resourcesRes.error) throw resourcesRes.error;
   if (layersRes.error) throw layersRes.error;
   if (notesRes.error) throw notesRes.error;
+  if (prepGroupsRes.error) throw prepGroupsRes.error;
+  if (prepItemsRes.error) throw prepItemsRes.error;
 
   const t = project.templates as unknown as
     | {
@@ -175,6 +233,8 @@ export async function getProjectDetail(
     deliverables: deliverablesRes.data ?? [],
     resources: (resourcesRes.data as TemplateResourceRow[]) ?? [],
     stackLayers: (layersRes.data as VisionStackLayer[]) ?? [],
+    prepGroups: (prepGroupsRes.data as PrepGroup[]) ?? [],
+    prepItems: (prepItemsRes.data as PrepItem[]) ?? [],
   };
 }
 
@@ -348,6 +408,7 @@ export async function createProject(
   if (input.templateId) {
     await stampTemplateMembers(accessToken, project.id, input.templateId);
     await stampTemplateDeliverables(accessToken, project.id, input.templateId);
+    await stampTemplatePrepItems(accessToken, project.id, input.templateId);
   }
 
   return { id: project.id };
@@ -582,6 +643,128 @@ export async function updateSession(
     .single();
   if (error) throw error;
   return data;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Preparation items                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Add a row to one prepare card. Position is `max + 1` within the group
+ * rather than `length`, for the reason migration 016 spells out for sessions:
+ * after a delete, `length` collides with a position still in use and the two
+ * rows then sort by whichever the database happens to return first.
+ */
+export async function createPrepItem(
+  accessToken: string,
+  projectId: string,
+  groupId: string,
+  input: {
+    title: string;
+    notes?: string | null;
+    due_on?: string | null;
+    external_url?: string | null;
+    file_path?: string | null;
+    file_name?: string | null;
+    file_mime?: string | null;
+    file_size?: number | null;
+  },
+  siblings: { position: number }[] = []
+) {
+  const client = createUserClient(accessToken);
+  const position = siblings.reduce((max, s) => Math.max(max, s.position), -1) + 1;
+  const { data, error } = await client
+    .from("prep_items")
+    .insert({ ...input, project_id: projectId, group_id: groupId, position })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Patch one field or several. Every prepare card edits through here — a date
+ * card writes `due_on`, a checklist writes `is_done`, a notes card writes
+ * `notes` — so there is one write path to reason about instead of five.
+ */
+export async function updatePrepItem(
+  accessToken: string,
+  itemId: string,
+  patch: {
+    title?: string;
+    notes?: string | null;
+    due_on?: string | null;
+    external_url?: string | null;
+    file_path?: string | null;
+    file_name?: string | null;
+    file_mime?: string | null;
+    file_size?: number | null;
+    is_done?: boolean;
+  }
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("prep_items").update(patch).eq("id", itemId);
+  if (error) throw error;
+}
+
+export async function deletePrepItem(accessToken: string, itemId: string) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("prep_items").delete().eq("id", itemId);
+  if (error) throw error;
+}
+
+export async function reorderPrepItems(accessToken: string, orderedIds: string[]) {
+  const client = createUserClient(accessToken);
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      client.from("prep_items").update({ position: index }).eq("id", id)
+    )
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
+}
+
+/**
+ * Copy a template's default prepare rows onto a new project, the same way
+ * stampTemplateDeliverables and stampTemplateMembers do. Without this a new
+ * Pivvot engagement would open with the pre-reading card empty, and someone
+ * would have to retype Will's three books for every church.
+ */
+export async function stampTemplatePrepItems(
+  accessToken: string,
+  projectId: string,
+  templateId: string
+) {
+  const client = createUserClient(accessToken);
+
+  const { data: groups, error: groupsErr } = await client
+    .from("template_prep_groups")
+    .select("id")
+    .eq("template_id", templateId);
+  if (groupsErr) throw groupsErr;
+  if (!groups || groups.length === 0) return;
+
+  const { data: defaults, error: defaultsErr } = await client
+    .from("template_prep_items")
+    .select("group_id, title, notes, external_url, position")
+    .in(
+      "group_id",
+      groups.map((g) => g.id)
+    );
+  if (defaultsErr) throw defaultsErr;
+  if (!defaults || defaults.length === 0) return;
+
+  const { error } = await client.from("prep_items").insert(
+    defaults.map((d) => ({
+      project_id: projectId,
+      group_id: d.group_id,
+      title: d.title,
+      notes: d.notes,
+      external_url: d.external_url,
+      position: d.position,
+    }))
+  );
+  if (error) throw error;
 }
 
 export async function createDeliverable(

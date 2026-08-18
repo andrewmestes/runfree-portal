@@ -8,8 +8,10 @@ import { getCurrentProfile, logout } from "@/lib/auth";
 import {
   createDeliverable,
   availableSections,
+  createPrepItem,
   createSession,
   deleteDeliverable,
+  deletePrepItem,
   deleteSession,
   getProjectDetail,
   membersToCsv,
@@ -23,13 +25,22 @@ import {
   updateAvatar,
   updateMemberDetails,
   updateMemberRole,
+  updatePrepItem,
   updateProject,
   updateSession,
+  type PrepGroup,
+  type PrepGroupKind,
+  type PrepItem,
   type ProjectDetail,
   type ProjectMember,
   type ProjectRole,
 } from "@/lib/projects";
-import { getSignedImageUrls, uploadDeliverableImage, uploadProjectLogo } from "@/lib/storage";
+import {
+  getSignedImageUrls,
+  uploadDeliverableImage,
+  uploadPrepFile,
+  uploadProjectLogo,
+} from "@/lib/storage";
 import { extractLoomId } from "@/lib/loom";
 import { MODULE_META, moduleLabel, moduleOrder } from "@/lib/modules";
 import ModuleNav, { type NavModule } from "@/components/ModuleNav";
@@ -273,6 +284,7 @@ export default function ProjectDetailPage() {
       ...(result.logoPath ? [result.logoPath] : []),
       ...result.members.map((m) => m.avatarPath).filter((p): p is string => !!p),
       ...result.deliverables.map((d) => d.image_path).filter((p): p is string => !!p),
+      ...result.prepItems.map((p) => p.file_path).filter((p): p is string => !!p),
     ];
     setImageUrls(await getSignedImageUrls(accessToken, paths));
   }
@@ -306,8 +318,40 @@ export default function ProjectDetailPage() {
   const canEdit = myRole === "editor" || myRole === "admin";
   const canManage = myRole === "admin" || profile.is_owner;
 
-  const prepResources = detail.resources.filter((r) => r.section === PREP_SECTION);
+  // Which sections belong to the prepare block is a property of the template,
+  // not a constant. Pivvot calls it "CHURCH PREPARATION"; Younique's prework
+  // sits under "Recommended Prework", which is not a module and not the
+  // process overview. Deriving it from the groups the template declares means
+  // a third template names its own prepare section and lands in the right
+  // place without another branch here.
+  const moduleSections = new Set(modules.map((m) => m.section));
+  const prepSections = new Set<string>([
+    PREP_SECTION,
+    ...detail.prepGroups.map((g) => g.section).filter((s) => !moduleSections.has(s)),
+  ]);
+
+  const prepResources = detail.resources.filter(
+    (r) => prepSections.has(r.section) && r.section !== OVERVIEW_SECTION
+  );
   const overviewResources = detail.resources.filter((r) => r.section === OVERVIEW_SECTION);
+
+  // A group attached to one of the six modules renders inside that module's
+  // panel; everything else belongs to the prepare block. Guest Perspective
+  // Evaluation sits under PROCESS OVERVIEW, which has no panel of its own —
+  // its resources already render here, and its card belongs with them.
+  //
+  // Sorted so the template's own prepare section stays contiguous. Ordering
+  // by position alone interleaves the two sections — Key Dates(1), Guest
+  // Perspective(1), Preparation Checklist(2) — which reads as a shuffled
+  // deck rather than one list with an appendix.
+  const prepareGroups = detail.prepGroups
+    .filter((g) => !moduleSections.has(g.section))
+    .sort(
+      (a, b) =>
+        Number(a.section === OVERVIEW_SECTION) - Number(b.section === OVERVIEW_SECTION) ||
+        a.section.localeCompare(b.section) ||
+        a.position - b.position
+    );
   const stackItems = detail.deliverables.filter((d) => d.kind === "vision_stack");
   const stackReady = stackItems.filter((d) => d.published_at).length;
 
@@ -322,7 +366,11 @@ export default function ProjectDetailPage() {
   // null so it drops the stage line and the icon, and moduleLabel() passes an
   // unprefixed heading straight through — so they get the same treatment,
   // just without the six-tool rail above them.
-  const claimed = new Set<string>([...modules.map((m) => m.section), PREP_SECTION, OVERVIEW_SECTION]);
+  const claimed = new Set<string>([
+    ...modules.map((m) => m.section),
+    ...prepSections,
+    OVERVIEW_SECTION,
+  ]);
   const orphanSections = [
     ...new Set([
       // team_bio rows are rendered by TeamSection whatever section they're in.
@@ -376,7 +424,13 @@ export default function ProjectDetailPage() {
         )}
 
         <QuickTiles
-          prepCount={prepResources.length}
+          prepCount={
+            prepResources.length +
+            overviewResources.length +
+            detail.prepItems.filter((i) =>
+              prepareGroups.some((g) => g.id === i.group_id)
+            ).length
+          }
           sessionCount={detail.sessions.length}
           teamCount={detail.members.length}
         />
@@ -386,6 +440,13 @@ export default function ProjectDetailPage() {
           prep={prepResources}
           overview={overviewResources}
           thumbs={thumbs}
+          prepGroups={prepareGroups}
+          prepItems={detail.prepItems}
+          projectId={projectId}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          fileUrls={imageUrls}
+          onChanged={refresh}
         />
 
         {modules.length > 0 && (
@@ -936,7 +997,7 @@ function QuickTiles({
   teamCount: number;
 }) {
   const tiles = [
-    { href: "#prepare", label: "Prepare", detail: `${prepCount} to read and watch` },
+    { href: "#prepare", label: "Prepare", detail: `${prepCount} to do and review` },
     { href: "#sessions", label: "Session recordings", detail: sessionCount === 1 ? "1 recorded" : `${sessionCount} recorded` },
     { href: "#team", label: "Your team", detail: `${teamCount} ${teamCount === 1 ? "person" : "people"}` },
   ];
@@ -1013,6 +1074,7 @@ function ModulePanel({
   const resources = detail.resources.filter((r) => r.section === section);
   const videos = resources.filter((r) => r.kind === "video" && r.external_url);
   const exercises = resources.filter((r) => r.kind === "exercise" || r.kind === "link");
+  const sectionGroups = detail.prepGroups.filter((g) => g.section === section);
 
   // Handouts come from Drive, keyed by module number — not from
   // template_resources, whose handout rows are just titles with nowhere to
@@ -1139,6 +1201,21 @@ function ModulePanel({
               ))}
             </ul>
           </Block>
+        )}
+
+        {/* A module can carry its own prepare cards. Guest Perspective
+            Evaluation is the one that does today — Andrew wanted it to hold
+            "notes + PDF upload", which is a prep group, not a resource pill. */}
+        {sectionGroups.length > 0 && (
+          <PrepCards
+            groups={sectionGroups}
+            items={detail.prepItems}
+            projectId={detail.id}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            fileUrls={imageUrls}
+            onChanged={onChanged}
+          />
         )}
 
         <SectionNote
@@ -1731,18 +1808,576 @@ function ImageGallery({
 /* Prepare                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* Preparation cards                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The editable half of the prepare block. Andrew: "I want to be able to add
+ * task cards or something like that. For things like key dates, it is
+ * something that I can go in and edit as the team and I nail down upcoming
+ * meetings, and that would get updated easily."
+ *
+ * One card per group, one row per item, and the row's shape follows the
+ * group's `kind` (see migration 022). Cards render even when empty — an empty
+ * "Key Dates" card invites a first date, whereas a card that appears only
+ * once it has content is a card nobody discovers.
+ */
+function PrepCards({
+  groups,
+  items,
+  projectId,
+  canEdit,
+  accessToken,
+  fileUrls,
+  onChanged,
+}: {
+  groups: PrepGroup[];
+  items: PrepItem[];
+  projectId: string;
+  canEdit: boolean;
+  accessToken: string | null;
+  fileUrls: Record<string, string>;
+  onChanged: () => void;
+}) {
+  if (groups.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      {groups.map((g) => (
+        <PrepCard
+          key={g.id}
+          group={g}
+          items={items.filter((i) => i.group_id === g.id)}
+          projectId={projectId}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          fileUrls={fileUrls}
+          onChanged={onChanged}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PrepCard({
+  group,
+  items,
+  projectId,
+  canEdit,
+  accessToken,
+  fileUrls,
+  onChanged,
+}: {
+  group: PrepGroup;
+  items: PrepItem[];
+  projectId: string;
+  canEdit: boolean;
+  accessToken: string | null;
+  fileUrls: Record<string, string>;
+  onChanged: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+
+  // Dates read as a calendar, not as an entry log: soonest first, with
+  // undated rows last rather than heading the list with blanks.
+  const ordered =
+    group.kind === "dates"
+      ? [...items].sort((a, b) => {
+          if (a.due_on && b.due_on) return a.due_on.localeCompare(b.due_on);
+          if (a.due_on) return -1;
+          if (b.due_on) return 1;
+          return a.position - b.position;
+        })
+      : items;
+
+  const done = items.filter((i) => i.is_done).length;
+
+  return (
+    <section className="flex flex-col rounded-2xl bg-white p-5 ring-1 ring-gray-200/80 transition hover:ring-gray-300 sm:p-6">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="text-base font-semibold tracking-tight text-runfree-ink">
+            {group.title}
+          </h4>
+          {group.description && (
+            <p className="mt-1 text-xs leading-relaxed text-gray-500">{group.description}</p>
+          )}
+        </div>
+        {group.kind === "checklist" && items.length > 0 && (
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
+              done === items.length
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            {done}/{items.length}
+          </span>
+        )}
+      </header>
+
+      <div className="mt-4 flex-1">
+        {ordered.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">
+            {canEdit ? "Nothing here yet — add the first one." : "Nothing here yet."}
+          </p>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {ordered.map((item) => (
+              <PrepRow
+                key={item.id}
+                item={item}
+                group={group}
+                projectId={projectId}
+                canEdit={canEdit}
+                accessToken={accessToken}
+                fileUrl={item.file_path ? fileUrls[item.file_path] : undefined}
+                onChanged={onChanged}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {canEdit && (
+        <div className="mt-4">
+          {adding ? (
+            <PrepItemForm
+              group={group}
+              projectId={projectId}
+              siblings={items}
+              accessToken={accessToken}
+              onDone={() => {
+                setAdding(false);
+                onChanged();
+              }}
+              onCancel={() => setAdding(false)}
+            />
+          ) : (
+            <button
+              onClick={() => setAdding(true)}
+              className="w-full rounded-xl border border-dashed border-gray-300 py-2.5 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
+            >
+              + Add {prepNoun(group.kind)}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function prepNoun(kind: PrepGroupKind): string {
+  switch (kind) {
+    case "dates":
+      return "a date";
+    case "reading":
+      return "a book or link";
+    case "files":
+      return "a document";
+    case "notes":
+      return "a note";
+    default:
+      return "an item";
+  }
+}
+
+function PrepRow({
+  item,
+  group,
+  projectId,
+  canEdit,
+  accessToken,
+  fileUrl,
+  onChanged,
+}: {
+  item: PrepItem;
+  group: PrepGroup;
+  projectId: string;
+  canEdit: boolean;
+  accessToken: string | null;
+  fileUrl?: string;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function toggle() {
+    if (!accessToken || busy) return;
+    setBusy(true);
+    try {
+      await updatePrepItem(accessToken, item.id, { is_done: !item.is_done });
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!accessToken) return;
+    if (!confirm(`Remove "${item.title}"?`)) return;
+    setBusy(true);
+    try {
+      await deletePrepItem(accessToken, item.id);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <li className="py-3">
+        <PrepItemForm
+          group={group}
+          projectId={projectId}
+          existing={item}
+          accessToken={accessToken}
+          onDone={() => {
+            setEditing(false);
+            onChanged();
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      </li>
+    );
+  }
+
+  const href = safeExternalUrl(item.external_url);
+
+  return (
+    <li className="group/row flex items-start gap-3 py-3">
+      {group.kind === "checklist" && (
+        <button
+          onClick={toggle}
+          disabled={!canEdit || busy}
+          aria-label={item.is_done ? `Mark "${item.title}" not done` : `Mark "${item.title}" done`}
+          className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${
+            item.is_done
+              ? "border-emerald-500 bg-emerald-500 text-white"
+              : "border-gray-300 bg-white hover:border-runfree-magenta"
+          } ${canEdit ? "" : "cursor-default opacity-70"}`}
+        >
+          {item.is_done && (
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+              <path
+                fillRule="evenodd"
+                d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.8 3.8 6.8-6.8a1 1 0 0 1 1.4 0Z"
+                clipRule="evenodd"
+              />
+            </svg>
+          )}
+        </button>
+      )}
+
+      {group.kind === "dates" && <DateTile date={item.due_on} />}
+
+      <div className="min-w-0 flex-1">
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-medium text-runfree-ink underline-offset-2 hover:text-runfree-magentaDeep hover:underline"
+          >
+            {item.title}
+            <span aria-hidden className="ml-1 text-gray-400">
+              ↗
+            </span>
+          </a>
+        ) : (
+          <p
+            className={`text-sm font-medium ${
+              item.is_done ? "text-gray-400 line-through" : "text-runfree-ink"
+            }`}
+          >
+            {item.title}
+          </p>
+        )}
+
+        {item.notes && (
+          <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-gray-500">
+            {item.notes}
+          </p>
+        )}
+
+        {group.kind === "checklist" && item.due_on && (
+          <p className="mt-1 text-[11px] font-medium text-gray-400">
+            Due {formatSessionDate(item.due_on)}
+          </p>
+        )}
+
+        {item.file_path && (
+          <a
+            href={fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`mt-2 inline-flex items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-magentaDeep ${
+              fileUrl ? "" : "pointer-events-none opacity-50"
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="h-3.5 w-3.5"
+            >
+              <path d="M14 3v5h5" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5Z"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span className="max-w-[14rem] truncate">{item.file_name || "Document"}</span>
+            {prettySize(item.file_size) && (
+              <span className="text-gray-400">{prettySize(item.file_size)}</span>
+            )}
+          </a>
+        )}
+      </div>
+
+      {canEdit && (
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover/row:opacity-100 focus-within:opacity-100 max-sm:opacity-100">
+          <button
+            onClick={() => setEditing(true)}
+            className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-400 hover:bg-gray-50 hover:text-runfree-ink"
+          >
+            Edit
+          </button>
+          <button
+            onClick={remove}
+            disabled={busy}
+            className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+          >
+            Remove
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** A little calendar chip, so a list of dates scans as dates. */
+function DateTile({ date }: { date: string | null }) {
+  if (!date) {
+    return (
+      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-dashed border-gray-300 text-[10px] font-semibold uppercase text-gray-400">
+        TBD
+      </div>
+    );
+  }
+  const [y, m, d] = date.split("-").map(Number);
+  const parsed = y && m && d ? new Date(y, m - 1, d) : null;
+  const past = parsed ? parsed.getTime() < new Date().setHours(0, 0, 0, 0) : false;
+
+  return (
+    <div
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-center leading-none ${
+        past ? "bg-gray-100 text-gray-400" : "bg-runfree-grad-deep text-white"
+      }`}
+    >
+      <div>
+        <div className="text-[9px] font-bold uppercase tracking-wider opacity-80">
+          {parsed?.toLocaleDateString(undefined, { month: "short" })}
+        </div>
+        <div className="text-sm font-bold tabular-nums">{d}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Add and edit share one form: the fields a row needs are decided by the
+ * group's kind, and duplicating that decision across two components is how
+ * the two drift apart.
+ */
+function PrepItemForm({
+  group,
+  projectId,
+  existing,
+  siblings = [],
+  accessToken,
+  onDone,
+  onCancel,
+}: {
+  group: PrepGroup;
+  projectId: string;
+  existing?: PrepItem;
+  siblings?: PrepItem[];
+  accessToken: string | null;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState(existing?.title ?? "");
+  const [notes, setNotes] = useState(existing?.notes ?? "");
+  const [dueOn, setDueOn] = useState(existing?.due_on ?? "");
+  const [url, setUrl] = useState(existing?.external_url ?? "");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const wantsDate = group.kind === "dates" || group.kind === "checklist";
+  const wantsUrl = group.kind === "reading";
+  const wantsFile = group.kind === "files" || group.kind === "notes";
+  const wantsLongNotes = group.kind === "notes";
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken || !title.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      let uploaded: Awaited<ReturnType<typeof uploadPrepFile>> | null = null;
+      if (file) {
+        if (file.size > MAX_IMAGE_BYTES) {
+          setError(`That file is over ${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)}MB.`);
+          setBusy(false);
+          return;
+        }
+        uploaded = await uploadPrepFile(accessToken, projectId, file);
+      }
+
+      const payload = {
+        title: title.trim(),
+        notes: notes.trim() || null,
+        due_on: wantsDate && dueOn ? dueOn : null,
+        external_url: wantsUrl && url.trim() ? url.trim() : null,
+        ...(uploaded
+          ? {
+              file_path: uploaded.path,
+              file_name: uploaded.name,
+              file_mime: uploaded.mime,
+              file_size: uploaded.size,
+            }
+          : {}),
+      };
+
+      if (existing) {
+        await updatePrepItem(accessToken, existing.id, payload);
+      } else {
+        await createPrepItem(accessToken, projectId, group.id, payload, siblings);
+      }
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save that.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field =
+    "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
+
+  return (
+    <form onSubmit={submit} className="space-y-2 rounded-xl bg-gray-50/80 p-3">
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder={
+          group.kind === "dates"
+            ? "What happens that day?"
+            : group.kind === "reading"
+              ? "Title"
+              : "What needs doing?"
+        }
+        className={field}
+      />
+
+      {wantsDate && (
+        <input
+          type="date"
+          value={dueOn}
+          onChange={(e) => setDueOn(e.target.value)}
+          className={field}
+          aria-label={group.kind === "dates" ? "Date" : "Due date"}
+        />
+      )}
+
+      {wantsUrl && (
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://…"
+          className={field}
+        />
+      )}
+
+      <textarea
+        rows={wantsLongNotes ? 5 : 2}
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder={wantsLongNotes ? "Notes" : "Notes (optional)"}
+        className={field}
+      />
+
+      {wantsFile && (
+        <div>
+          <input
+            type="file"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="w-full text-xs text-gray-500 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-runfree-ink file:ring-1 file:ring-gray-300"
+          />
+          {existing?.file_name && !file && (
+            <p className="mt-1 text-[11px] text-gray-400">
+              Currently: {existing.file_name}. Choosing a new file replaces it.
+            </p>
+          )}
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      <div className="flex gap-2 pt-0.5">
+        <button
+          type="submit"
+          disabled={busy || !title.trim()}
+          className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? "Saving…" : existing ? "Save" : "Add"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg px-3 py-2 text-xs font-medium text-gray-500 hover:text-runfree-ink"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function PrepareSection({
   id,
   prep,
   overview,
   thumbs,
+  prepGroups,
+  prepItems,
+  projectId,
+  canEdit,
+  accessToken,
+  fileUrls,
+  onChanged,
 }: {
   id: string;
   prep: ProjectDetail["resources"];
   overview: ProjectDetail["resources"];
   thumbs: Record<string, string>;
+  prepGroups: PrepGroup[];
+  prepItems: PrepItem[];
+  projectId: string;
+  canEdit: boolean;
+  accessToken: string | null;
+  fileUrls: Record<string, string>;
+  onChanged: () => void;
 }) {
-  if (prep.length === 0 && overview.length === 0) return null;
+  if (prep.length === 0 && overview.length === 0 && prepGroups.length === 0) return null;
 
   const videos = [...prep, ...overview].filter((r) => r.kind === "video" && r.external_url);
   const reading = [...prep, ...overview].filter((r) => r.kind !== "video");
@@ -1751,11 +2386,37 @@ function PrepareSection({
     <section id={id} className="mt-20 scroll-mt-8">
       <SectionHeading eyebrow="Before you begin" title="Prepare your team" />
 
+      {/* The editable work leads. The orientation videos below it are context;
+          these cards are what the team actually has to act on. */}
+      {prepGroups.length > 0 && (
+        <div className="mt-8">
+          <PrepCards
+            groups={prepGroups}
+            items={prepItems}
+            projectId={projectId}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            fileUrls={fileUrls}
+            onChanged={onChanged}
+          />
+        </div>
+      )}
+
       {videos.length > 0 && (
-        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {videos.map((v) => (
-            <VideoCard key={v.id} title={v.title} url={v.external_url!} />
-          ))}
+        <div className="mt-8">
+          <h4 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+            Orientation
+          </h4>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {videos.map((v) => (
+              <VideoCard
+                key={v.id}
+                title={v.title}
+                url={v.external_url!}
+                thumbnail={thumbs[v.external_url!]}
+              />
+            ))}
+          </div>
         </div>
       )}
 

@@ -492,6 +492,140 @@ export type Database = {
           },
         ];
       };
+      /** The prepare buckets a template declares — see migration 022. */
+      template_prep_groups: {
+        Row: {
+          id: string;
+          template_id: string;
+          /** Which part of the project page this card renders in. */
+          section: string;
+          key: string;
+          title: string;
+          description: string | null;
+          kind: "dates" | "checklist" | "reading" | "files" | "notes";
+          position: number;
+        };
+        Insert: {
+          id?: string;
+          template_id: string;
+          section: string;
+          key: string;
+          title: string;
+          description?: string | null;
+          kind: "dates" | "checklist" | "reading" | "files" | "notes";
+          position?: number;
+        };
+        Update: {
+          section?: string;
+          title?: string;
+          description?: string | null;
+          kind?: "dates" | "checklist" | "reading" | "files" | "notes";
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "template_prep_groups_template_id_fkey";
+            columns: ["template_id"];
+            referencedRelation: "templates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      /** Default rows stamped into each new project of that template. */
+      template_prep_items: {
+        Row: {
+          id: string;
+          group_id: string;
+          title: string;
+          notes: string | null;
+          external_url: string | null;
+          position: number;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          title: string;
+          notes?: string | null;
+          external_url?: string | null;
+          position?: number;
+        };
+        Update: {
+          title?: string;
+          notes?: string | null;
+          external_url?: string | null;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "template_prep_items_group_id_fkey";
+            columns: ["group_id"];
+            referencedRelation: "template_prep_groups";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      /** The per-project, editable preparation rows. */
+      prep_items: {
+        Row: {
+          id: string;
+          project_id: string;
+          group_id: string;
+          title: string;
+          notes: string | null;
+          due_on: string | null;
+          external_url: string | null;
+          /** Storage path in the deliverable-images bucket, {project_id}/prep-*.ext */
+          file_path: string | null;
+          file_name: string | null;
+          file_mime: string | null;
+          file_size: number | null;
+          is_done: boolean;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          group_id: string;
+          title: string;
+          notes?: string | null;
+          due_on?: string | null;
+          external_url?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_mime?: string | null;
+          file_size?: number | null;
+          is_done?: boolean;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          title?: string;
+          notes?: string | null;
+          due_on?: string | null;
+          external_url?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_mime?: string | null;
+          file_size?: number | null;
+          is_done?: boolean;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "prep_items_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "prep_items_group_id_fkey";
+            columns: ["group_id"];
+            referencedRelation: "template_prep_groups";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       vision_stack_layers: {
         Row: {
           slug: string;

@@ -87,6 +87,38 @@ export async function uploadDeliverableFile(
   };
 }
 
+/**
+ * Upload a document against a preparation item — an Insights Discovery
+ * profile, a guest perspective write-up.
+ *
+ * Same bucket, same RLS, same reasoning as uploadDeliverableFile: the path's
+ * first segment is the project id, which is what
+ * `007_deliverable_image_storage.sql` reads to decide who may write. The
+ * `prep-` prefix is for humans reading a bucket listing and nothing else.
+ */
+export async function uploadPrepFile(
+  accessToken: string,
+  projectId: string,
+  file: File
+): Promise<{ path: string; name: string; mime: string; size: number }> {
+  const client = createUserClient(accessToken);
+  const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+  const path = `${projectId}/prep-${crypto.randomUUID()}.${ext}`;
+
+  const { error } = await client.storage.from(BUCKET).upload(path, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+  if (error) throw error;
+
+  return {
+    path,
+    name: file.name,
+    mime: file.type || "application/octet-stream",
+    size: file.size,
+  };
+}
+
 export async function replaceDeliverableImage(
   accessToken: string,
   oldPath: string | null,

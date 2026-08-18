@@ -68,6 +68,44 @@ Both `sessions` and `deliverables` gate on `published_at`: null = draft,
 visible only to `editor`/`admin`/owner. This is the same pattern as CVF's
 `is_published` flag, extended to two tables instead of one.
 
+## Preparation cards: three tables, and which one you mean matters
+
+Migration 022 replaced the inert "Key Dates / Preparation Checklist / Team
+Pre-Reading / Team Optional Pre-Work" pills with editable cards. Those pills
+were `template_resources` rows carrying a title and nothing else — the Asana
+bodies never came across in the export this project was seeded from, so
+there was no content to render even before the wrong-table problem.
+
+- **`template_prep_groups`** — the buckets. Template-scoped, owner-write,
+  rendered *even when empty* so every project shows the same scaffolding.
+  `kind` (`dates` | `checklist` | `reading` | `files` | `notes`) decides
+  which inputs the card offers and nothing else — it is not a filter and
+  not a permission.
+- **`template_prep_items`** — defaults stamped into a new project, same
+  pattern as `template_deliverables` (015) and `template_members` (019).
+  Call `stampTemplatePrepItems` *after* the creator's membership row exists,
+  for the same RLS-sequencing reason those two have.
+- **`prep_items`** — the real, per-project, editable rows. This is almost
+  always the one you want.
+
+A group carries a **`section`**, which is the part of the project page it
+renders in. That is why Guest Perspective Evaluation ("notes + PDF upload")
+is a group under `PROCESS OVERVIEW` rather than a special case in the page
+component. It is also why the prepare block does **not** hardcode
+`CHURCH PREPARATION`: Younique's prework sits under `Recommended Prework`,
+and `page.tsx` derives the prepare sections from the groups the template
+declares. Hardcoding that constant again would make Younique's prep
+disappear into the orphan-section catch-all.
+
+`prep_items` has **no `published_at`**, unlike `sessions` and
+`deliverables`. Preparation work is instructions to the client, and
+instructions the client cannot read are not instructions.
+
+Prep documents live in the `deliverable-images` bucket at
+`{project_id}/prep-{uuid}.ext`, so they inherit the storage RLS proven in
+007 with no new bucket and no new policies. See the next section for why the
+bucket's name is narrower than what it holds.
+
 ## Deliverable images: private Storage bucket, signed URLs only
 
 `deliverable-images` is **not public** — a public bucket would let anyone

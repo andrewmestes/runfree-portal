@@ -480,6 +480,113 @@ async function main() {
         sameProjectDownloadErr?.message
       );
     }
+
+    // -----------------------------------------------------------------
+    // 17. Preparation cards (migration 022). The group is template-scoped
+    // and follows template_resources' visibility; the items are
+    // project-scoped, readable by anyone who can see the project — there is
+    // no draft state here — and writable only by editors and admins.
+    // -----------------------------------------------------------------
+    {
+      const { data: group, error: seedGroupErr } = await supabaseAdmin
+        .from("template_prep_groups")
+        .insert({
+          template_id: sharedTemplateId!,
+          section: "CHURCH PREPARATION",
+          key: `rls-test-${RUN}`,
+          title: `RLS Test Group ${RUN}`,
+          kind: "checklist",
+        })
+        .select()
+        .single();
+      if (seedGroupErr || !group) throw new Error(`seed prep group failed: ${seedGroupErr?.message}`);
+
+      const asViewer = createUserClient(viewerA.accessToken);
+      const asOutsider = createUserClient(viewerB.accessToken);
+      const asAdmin = createUserClient(adminA.accessToken);
+
+      const { data: viewerGroups } = await asViewer
+        .from("template_prep_groups")
+        .select("*")
+        .eq("id", group.id);
+      record(
+        "17a. project member can read their template's prep groups",
+        viewerGroups?.length === 1,
+        `got ${viewerGroups?.length}`
+      );
+
+      const { data: outsiderGroups } = await asOutsider
+        .from("template_prep_groups")
+        .select("*")
+        .eq("id", group.id);
+      record(
+        "17b. non-member cannot read another template's prep groups",
+        (outsiderGroups?.length ?? -1) === 0,
+        `got ${outsiderGroups?.length}`
+      );
+
+      const { error: viewerInsertErr } = await asViewer.from("prep_items").insert({
+        project_id: projectA.id,
+        group_id: group.id,
+        title: "viewer should not be able to add this",
+      });
+      record(
+        "17c. viewer cannot add a prep item",
+        !!viewerInsertErr,
+        viewerInsertErr ? "correctly rejected" : "insert unexpectedly succeeded"
+      );
+
+      const { data: item, error: adminInsertErr } = await asAdmin
+        .from("prep_items")
+        .insert({
+          project_id: projectA.id,
+          group_id: group.id,
+          title: `RLS Test Item ${RUN}`,
+        })
+        .select()
+        .single();
+      record("17d. admin can add a prep item", !adminInsertErr, adminInsertErr?.message);
+
+      if (item) {
+        const { data: viewerItems } = await asViewer
+          .from("prep_items")
+          .select("*")
+          .eq("id", item.id);
+        record(
+          "17e. viewer can read the prep item (no draft state on prep work)",
+          viewerItems?.length === 1,
+          `got ${viewerItems?.length}`
+        );
+
+        const { data: outsiderItems } = await asOutsider
+          .from("prep_items")
+          .select("*")
+          .eq("id", item.id);
+        record(
+          "17f. non-member cannot read another project's prep items",
+          (outsiderItems?.length ?? -1) === 0,
+          `got ${outsiderItems?.length}`
+        );
+
+        // A viewer ticking a checkbox is the most likely accidental write in
+        // this whole feature, so it gets its own check rather than being
+        // assumed from 17c.
+        const { error: viewerToggleErr } = await asViewer
+          .from("prep_items")
+          .update({ is_done: true })
+          .eq("id", item.id);
+        const { data: afterToggle } = await asAdmin
+          .from("prep_items")
+          .select("is_done")
+          .eq("id", item.id)
+          .single();
+        record(
+          "17g. viewer cannot tick a prep item done",
+          !!viewerToggleErr || afterToggle?.is_done === false,
+          viewerToggleErr ? "correctly rejected" : `is_done=${afterToggle?.is_done}`
+        );
+      }
+    }
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

@@ -240,7 +240,12 @@ export default function HomePage() {
         </div>
 
         {projects.length === 0 ? (
-          <EmptyState isStaff={profile?.is_staff ?? false} />
+          <EmptyState
+            isStaff={profile?.is_staff ?? false}
+            certificationAccess={
+              (profile?.certification_access ?? false) || (profile?.is_staff ?? false)
+            }
+          />
         ) : layout === "list" ? (
           <ul className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {projects.map((project, i) => (
@@ -263,17 +268,51 @@ export default function HomePage() {
   );
 }
 
-function EmptyState({ isStaff }: { isStaff: boolean }) {
+/**
+ * Projects lead, always — Andrew: "if they have both kinds of access, let's
+ * land on the projects page first." But a certified framer with no project
+ * yet would otherwise land on a dead end, so the certification library is
+ * offered here rather than left to be discovered in the nav.
+ */
+function EmptyState({
+  isStaff,
+  certificationAccess,
+}: {
+  isStaff: boolean;
+  certificationAccess: boolean;
+}) {
   return (
-    <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-16 text-center">
-      <p className="font-display text-lg font-semibold text-runfree-ink">
-        No projects yet
-      </p>
+    <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
+      <p className="font-display text-lg font-semibold text-runfree-ink">No projects yet</p>
       <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-gray-600">
         {isStaff
-          ? "Nothing here yet — projects you create or are added to will show up in this list."
-          : "Nothing here yet. Once you're added to a project, it'll show up here."}
+          ? "Projects you create or are added to will show up in this list."
+          : "Once you're added to a project, it'll show up here."}
       </p>
+
+      {certificationAccess && (
+        <>
+          <p className="mx-auto mt-8 max-w-sm text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+            Meanwhile, your certification library
+          </p>
+          <div className="mx-auto mt-4 grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { href: "/resources", label: "Handouts" },
+              { href: "/videos", label: "Videos" },
+              { href: "/books", label: "Books" },
+              { href: "/guide", label: "Facilitator's Guide" },
+            ].map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                className="flex min-h-[64px] items-center justify-center rounded-xl bg-runfree-indigo/50 px-3 text-sm font-semibold text-runfree-navy transition hover:bg-runfree-indigo"
+              >
+                {l.label}
+              </a>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

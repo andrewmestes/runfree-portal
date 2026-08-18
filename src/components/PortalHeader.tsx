@@ -40,14 +40,19 @@ type Props = {
   badge?: boolean;
 };
 
+
 /**
- * Where the certification portal lives. Env var so this follows the domain
- * cutover to certified.runfree.co without a code change; the fallback is the
- * URL that works today.
+ * The certification surface, now in this app. Andrew, on where someone with
+ * both kinds of access should land: "let's land on the projects page first."
+ * So projects stay the root and these sit alongside it, rather than the old
+ * arrangement where certification was a separate deployment behind a ↗.
  */
-const CVF_URL =
-  process.env.NEXT_PUBLIC_CVF_PORTAL_URL ||
-  "https://certified-vision-framers-portal-pearl.vercel.app";
+const CERT_LINKS: { href: string; label: string; title?: string }[] = [
+  { href: "/resources", label: "Handouts" },
+  { href: "/videos", label: "Videos" },
+  { href: "/books", label: "Books" },
+  { href: "/guide", label: "Guide", title: "Digital Facilitator's Guide" },
+];
 
 export default function PortalHeader({
   profile,
@@ -106,18 +111,19 @@ export default function PortalHeader({
                 {backLabel || "Back"}
               </a>
             )}
-            {certificationAccess && (
-              <a
-                href={CVF_URL}
-                className="group inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider text-white/70 ring-1 ring-white/20 transition hover:text-white hover:ring-white/40"
-                title="Switch to the Certified Vision Framers portal"
-              >
-                Certification
-                <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
-                  ↗
-                </span>
-              </a>
-            )}
+            {/* The certification content lives in this app now, so these are
+                real links rather than a jump to another deployment. */}
+            {certificationAccess &&
+              CERT_LINKS.map((l) => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  title={l.title}
+                  className="text-xs font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
+                >
+                  {l.label}
+                </a>
+              ))}
             <a
               href="/help"
               className="text-xs font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
@@ -188,16 +194,17 @@ export default function PortalHeader({
 
             <div className="my-2 border-t border-white/10" />
 
-            {certificationAccess && (
-              <a
-                href={CVF_URL}
-                onClick={() => setMenuOpen(false)}
-                className="flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"
-              >
-                Certification portal
-                <span aria-hidden>↗</span>
-              </a>
-            )}
+            {certificationAccess &&
+              CERT_LINKS.map((l) => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex min-h-[44px] items-center rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"
+                >
+                  {l.label}
+                </a>
+              ))}
 
             <a
               href="/help"

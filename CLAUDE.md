@@ -166,3 +166,13 @@ It is not a mock. Run it after any migration:
 capability, add a check here before trusting it — the RETURNING-clause bug in
 `can_see_project()` (`003`/`004_*.sql`) was found exactly this way, by testing
 against the live database instead of reasoning about the policy on paper.
+
+## Never run `next build` while `next dev` is running
+
+Both write to `.next/`. A production build replaces the dev server's chunk
+manifest underneath it, and every subsequent request 500s with
+`Cannot find module './vendor-chunks/@supabase.js'` — which looks like a
+dependency problem and is really a clobbered build directory. It has happened
+twice in this repo.
+
+If it does happen: stop the dev server, `rm -rf .next`, start it again.

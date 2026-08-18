@@ -114,6 +114,21 @@ export default function ProjectDetailPage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+
+  // Two ways to read the same engagement. "Dynamic" is the full scrolling
+  // page; "Condensed" folds every part down to one index screen. Andrew wants
+  // both live so the team and a client can be shown the same project in two
+  // styles and asked which one they prefer. Persisted per browser so a
+  // reviewer's choice survives a reload mid-comparison.
+  const [view, setView] = useState<"dynamic" | "condensed">("dynamic");
+  useEffect(() => {
+    const saved = window.localStorage.getItem("rf-project-view");
+    if (saved === "condensed" || saved === "dynamic") setView(saved);
+  }, []);
+  const chooseView = useCallback((next: "dynamic" | "condensed") => {
+    setView(next);
+    window.localStorage.setItem("rf-project-view", next);
+  }, []);
   const [status, setStatus] = useState<"checking" | "ready" | "not_found" | "error">("checking");
   const [activeModule, setActiveModule] = useState<string>("");
   const [handouts, setHandouts] = useState<HandoutLibrary | null>(null);
@@ -411,6 +426,28 @@ export default function ProjectDetailPage() {
           onChanged={refresh}
         />
 
+        <ViewToggle view={view} onChange={chooseView} />
+
+        {view === "condensed" ? (
+          <CondensedBoard
+            detail={detail}
+            projectId={projectId}
+            modules={modules}
+            prepareGroups={prepareGroups}
+            prepResources={prepResources}
+            overviewResources={overviewResources}
+            orphanSections={orphanSections}
+            imageUrls={imageUrls}
+            thumbs={thumbs}
+            handouts={handouts}
+            onOpenHandout={openHandout}
+            canEdit={canEdit}
+            canManage={canManage}
+            accessToken={accessToken}
+            onChanged={refresh}
+          />
+        ) : (
+          <>
         {/* Only Pivvot produces a Vision Stack. Younique and Meta Performance
             have deliverables but not this four-layer artefact, and showing an
             empty one on those was claiming a thing that does not exist. */}
@@ -515,9 +552,297 @@ export default function ProjectDetailPage() {
           projectId={projectId}
           onChanged={refresh}
         />
+          </>
+        )}
       </main>
 
       <PortalFooter />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* View modes                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Dynamic vs Condensed, for A/B testing with the team and with clients.
+ *
+ * Dynamic is the full page: hero, Vision Stack card, module rail, every
+ * section open and scrolling. It shows the weight of the engagement.
+ *
+ * Condensed is the same content folded to one index screen — every part a
+ * closed row with a count, opened only when wanted. It answers "what is in
+ * here and where am I" in a single glance, which is what a busy pastor
+ * checking on their phone between meetings actually needs.
+ *
+ * Neither is a subset of the other in what it CAN show; the difference is
+ * what is open by default.
+ */
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: "dynamic" | "condensed";
+  onChange: (v: "dynamic" | "condensed") => void;
+}) {
+  const opts: { key: "dynamic" | "condensed"; label: string; hint: string }[] = [
+    { key: "dynamic", label: "Dynamic", hint: "Everything open" },
+    { key: "condensed", label: "Condensed", hint: "One index screen" },
+  ];
+  return (
+    <div className="mt-6 flex justify-end">
+      <div
+        role="radiogroup"
+        aria-label="How to view this project"
+        className="inline-flex rounded-xl bg-white p-1 ring-1 ring-gray-200"
+      >
+        {opts.map((o) => (
+          <button
+            key={o.key}
+            role="radio"
+            aria-checked={view === o.key}
+            title={o.hint}
+            onClick={() => onChange(o.key)}
+            className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+              view === o.key
+                ? "bg-runfree-grad-deep text-white"
+                : "text-gray-500 hover:text-runfree-ink"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** One closed row that opens in place. The whole condensed view is these. */
+function Fold({
+  title,
+  meta,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  meta?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
+      >
+        <span
+          aria-hidden
+          className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`}
+        >
+          ▸
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-runfree-ink">
+          {title}
+        </span>
+        {meta && (
+          <span className="shrink-0 text-[11px] font-medium tabular-nums text-gray-400">
+            {meta}
+          </span>
+        )}
+      </button>
+      {open && <div className="border-t border-gray-100 px-5 py-5">{children}</div>}
+    </section>
+  );
+}
+
+function CondensedBoard({
+  detail,
+  projectId,
+  modules,
+  prepareGroups,
+  prepResources,
+  overviewResources,
+  orphanSections,
+  imageUrls,
+  thumbs,
+  handouts,
+  onOpenHandout,
+  canEdit,
+  canManage,
+  accessToken,
+  onChanged,
+}: {
+  detail: ProjectDetail;
+  projectId: string;
+  modules: NavModule[];
+  prepareGroups: PrepGroup[];
+  prepResources: ProjectDetail["resources"];
+  overviewResources: ProjectDetail["resources"];
+  orphanSections: string[];
+  imageUrls: Record<string, string>;
+  thumbs: Record<string, string>;
+  handouts: HandoutLibrary | null;
+  onOpenHandout: (fileId: string, title: string) => void;
+  canEdit: boolean;
+  canManage: boolean;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const stackItems = detail.deliverables.filter((d) => d.kind === "vision_stack");
+  const stackReady = stackItems.filter((d) => d.published_at).length;
+  const prepCount = detail.prepItems.filter((i) =>
+    prepareGroups.some((g) => g.id === i.group_id)
+  ).length;
+
+  const nextDate = detail.prepItems
+    .filter((i) => i.due_on)
+    .map((i) => i.due_on!)
+    .sort()
+    .find((d) => d >= new Date().toISOString().slice(0, 10));
+
+  return (
+    <div className="mt-4 space-y-3">
+      {/* One status line instead of a hero: where this engagement stands. */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl bg-runfree-grad-deep px-5 py-4 text-white">
+        <span className="text-sm font-semibold">
+          {stackReady} of {stackItems.length} deliverables finished
+        </span>
+        <span className="text-xs text-white/70">
+          {detail.sessions.length} session{detail.sessions.length === 1 ? "" : "s"} recorded
+        </span>
+        <span className="text-xs text-white/70">{detail.members.length} people</span>
+        {nextDate && (
+          <span className="ml-auto text-xs font-medium">
+            Next: {formatSessionDate(nextDate)}
+          </span>
+        )}
+      </div>
+
+      {detail.template?.hasVisionStack && (
+        <Fold title="Vision Stack" meta={`${stackReady}/${stackItems.length}`}>
+          <div className="space-y-2">
+            {detail.stackLayers.map((layer) => {
+              const items = stackItems.filter((d) => d.stack_layer === layer.slug);
+              const done = items.filter((d) => d.published_at).length;
+              return (
+                <div
+                  key={layer.slug}
+                  className="flex items-center gap-3 rounded-xl bg-gray-50 px-3.5 py-2.5"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-runfree-ink">
+                    {layer.name}
+                  </span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-gray-500">
+                    {done}/{items.length}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <a
+            href={`/projects/${projectId}/vision-stack`}
+            className="mt-3 inline-block text-xs font-semibold text-runfree-magentaDeep hover:underline"
+          >
+            Open the full Vision Stack →
+          </a>
+        </Fold>
+      )}
+
+      <Fold title="Prepare your team" meta={`${prepCount} item${prepCount === 1 ? "" : "s"}`}>
+        <PrepareSection
+          id="prepare-condensed"
+          prep={prepResources}
+          overview={overviewResources}
+          thumbs={thumbs}
+          prepGroups={prepareGroups}
+          prepItems={detail.prepItems}
+          projectId={projectId}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          fileUrls={imageUrls}
+          onChanged={onChanged}
+          handouts={handouts}
+          onOpenHandout={onOpenHandout}
+          showTitle={false}
+        />
+      </Fold>
+
+      {modules.map((m) => {
+        const done = detail.deliverables.filter(
+          (d) => d.section === m.section && d.kind === "vision_stack" && d.published_at
+        ).length;
+        const total = detail.deliverables.filter(
+          (d) => d.section === m.section && d.kind === "vision_stack"
+        ).length;
+        return (
+          <Fold
+            key={m.section}
+            title={`${moduleOrder(m.section) ?? ""}. ${moduleLabel(m.section)}`.replace(/^\. /, "")}
+            meta={total > 0 ? `${done}/${total}` : undefined}
+          >
+            <ModulePanel
+              section={m.section}
+              detail={detail}
+              imageUrls={imageUrls}
+              canEdit={canEdit}
+              accessToken={accessToken}
+              onChanged={onChanged}
+              handouts={handouts}
+              onOpenHandout={onOpenHandout}
+              thumbs={thumbs}
+              bare
+            />
+          </Fold>
+        );
+      })}
+
+      {orphanSections.map((section) => (
+        <Fold key={section} title={moduleLabel(section)}>
+          <ModulePanel
+            section={section}
+            detail={detail}
+            imageUrls={imageUrls}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            onChanged={onChanged}
+            handouts={handouts}
+            onOpenHandout={onOpenHandout}
+            thumbs={thumbs}
+            bare
+          />
+        </Fold>
+      ))}
+
+      <Fold title="Session recordings" meta={`${detail.sessions.length}`}>
+        <SessionsSection
+          id="sessions-condensed"
+          sessions={detail.sessions}
+          detail={detail}
+          imageUrls={imageUrls}
+          moduleOptions={availableSections(detail)}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          projectId={projectId}
+          onChanged={onChanged}
+          bare
+        />
+      </Fold>
+
+      <Fold title="Your team" meta={`${detail.members.length}`}>
+        <TeamSection
+          id="team-condensed"
+          detail={detail}
+          imageUrls={imageUrls}
+          canManage={canManage}
+          accessToken={accessToken}
+          projectId={projectId}
+          onChanged={onChanged}
+          bare
+        />
+      </Fold>
     </div>
   );
 }
@@ -1052,6 +1377,7 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
  */
 function ModulePanel({
   section,
+  bare = false,
   detail,
   imageUrls,
   canEdit,
@@ -1062,6 +1388,8 @@ function ModulePanel({
   thumbs,
 }: {
   section: string;
+  /** Inside a Condensed fold: no card, no gradient rule, no title block. */
+  bare?: boolean;
   detail: ProjectDetail;
   imageUrls: Record<string, string>;
   canEdit: boolean;
@@ -1115,15 +1443,23 @@ function ModulePanel({
   if (!hasAnything && !canEdit) return null;
 
   return (
-    <div className="animate-fade mt-2 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
-      <div className="h-1 bg-runfree-grad" />
-      <div className="space-y-10 p-6 sm:p-9">
-        <div>
-          <h3 className="font-display text-2xl font-extrabold tracking-tight text-runfree-ink">
-            {moduleLabel(section)}
-          </h3>
-          {meta && <p className="mt-1 text-sm text-gray-500">{meta.stage}</p>}
-        </div>
+    <div
+      className={
+        bare
+          ? ""
+          : "animate-fade mt-2 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200"
+      }
+    >
+      {!bare && <div className="h-1 bg-runfree-grad" />}
+      <div className={bare ? "space-y-8" : "space-y-10 p-6 sm:p-9"}>
+        {!bare && (
+          <div>
+            <h3 className="font-display text-2xl font-extrabold tracking-tight text-runfree-ink">
+              {moduleLabel(section)}
+            </h3>
+            {meta && <p className="mt-1 text-sm text-gray-500">{meta.stage}</p>}
+          </div>
+        )}
 
         {(primaryHandout || otherHandouts.length > 0) && (
           <Block title="Handouts">
@@ -2485,6 +2821,7 @@ function PrepareSection({
   onChanged,
   handouts,
   onOpenHandout,
+  showTitle = true,
 }: {
   id: string;
   prep: ProjectDetail["resources"];
@@ -2499,6 +2836,8 @@ function PrepareSection({
   onChanged: () => void;
   handouts: HandoutLibrary | null;
   onOpenHandout: (fileId: string, title: string) => void;
+  /** False inside a Condensed fold, which supplies its own heading. */
+  showTitle?: boolean;
 }) {
   const extras = handouts?.extras ?? [];
   if (prep.length === 0 && overview.length === 0 && prepGroups.length === 0 && extras.length === 0)
@@ -2508,8 +2847,8 @@ function PrepareSection({
   const reading = [...prep, ...overview].filter((r) => r.kind !== "video");
 
   return (
-    <section id={id} className="mt-20 scroll-mt-8">
-      <SectionHeading eyebrow="Before you begin" title="Prepare your team" />
+    <section id={id} className={showTitle ? "mt-20 scroll-mt-8" : "scroll-mt-8"}>
+      {showTitle && <SectionHeading eyebrow="Before you begin" title="Prepare your team" />}
 
       {/* The editable work leads. The orientation videos below it are context;
           these cards are what the team actually has to act on. */}
@@ -2594,6 +2933,7 @@ function PrepareSection({
 
 function SessionsSection({
   id,
+  bare = false,
   sessions,
   detail,
   imageUrls,
@@ -2604,6 +2944,8 @@ function SessionsSection({
   onChanged,
 }: {
   id: string;
+  /** Inside a Condensed fold the heading and margin come from the fold. */
+  bare?: boolean;
   sessions: ProjectDetail["sessions"];
   detail: ProjectDetail;
   imageUrls: Record<string, string>;
@@ -2642,7 +2984,7 @@ function SessionsSection({
 
   return (
     <section id={id} className="mt-20 scroll-mt-8">
-      <SectionHeading eyebrow="Every time we met" title="Session recordings" />
+      {!bare && <SectionHeading eyebrow="Every time we met" title="Session recordings" />}
 
       <div className="mx-auto mt-8 max-w-3xl space-y-3">
         {sessions.length === 0 && (
@@ -3093,6 +3435,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function TeamSection({
   id,
+  bare = false,
   detail,
   imageUrls,
   canManage,
@@ -3101,6 +3444,8 @@ function TeamSection({
   onChanged,
 }: {
   id: string;
+  /** Inside a Condensed fold the heading comes from the fold. */
+  bare?: boolean;
   detail: ProjectDetail;
   imageUrls: Record<string, string>;
   canManage: boolean;
@@ -3130,7 +3475,7 @@ function TeamSection({
 
   return (
     <section id={id} className="mt-20 scroll-mt-8">
-      <SectionHeading eyebrow="Who you're working with" title="Your team" />
+      {!bare && <SectionHeading eyebrow="Who you're working with" title="Your team" />}
 
       {/* RunFree side — real people, from project_members. The static
           template "team_bio" rows are gone (migration 019): they duplicated

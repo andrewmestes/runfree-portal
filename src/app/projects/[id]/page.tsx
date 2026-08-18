@@ -445,7 +445,29 @@ export default function ProjectDetailPage() {
           onChanged={refresh}
         />
 
-        <ViewToggle view={view} onChange={chooseView} />
+        <ProjectToolbar
+          view={view}
+          onChangeView={chooseView}
+          items={
+            view === "condensed"
+              ? []
+              : [
+                  (detail.template?.isGroup ?? true)
+                    ? { href: "#church-team", label: "Church team" }
+                    : null,
+                  dateGroups.length > 0 ? { href: "#dates", label: "Key dates" } : null,
+                  prepareGroups.length > 0 || prepResources.length > 0
+                    ? { href: "#prepare", label: "Preparation work" }
+                    : null,
+                  modules.length > 0 ? { href: "#process", label: "The process" } : null,
+                  detail.template?.hasVisionStack || deliverableGroups.length > 0
+                    ? { href: "#deliverables", label: "Deliverables" }
+                    : null,
+                  { href: "#sessions", label: "Session recordings" },
+                  { href: "#team", label: "Your team" },
+                ].filter((x): x is { href: string; label: string } => x !== null)
+          }
+        />
 
         {view === "condensed" ? (
           <CondensedBoard
@@ -467,23 +489,6 @@ export default function ProjectDetailPage() {
           />
         ) : (
           <>
-        <JumpNav
-          items={[
-            (detail.template?.isGroup ?? true)
-              ? { href: "#church-team", label: "Church team" }
-              : null,
-            dateGroups.length > 0 ? { href: "#dates", label: "Key dates" } : null,
-            prepareGroups.length > 0 || prepResources.length > 0
-              ? { href: "#prepare", label: "Preparation work" }
-              : null,
-            modules.length > 0 ? { href: "#process", label: "The process" } : null,
-            detail.template?.hasVisionStack || deliverableGroups.length > 0
-              ? { href: "#deliverables", label: "Deliverables" }
-              : null,
-            { href: "#sessions", label: "Session recordings" },
-            { href: "#team", label: "Your team" },
-          ].filter((x): x is { href: string; label: string } => x !== null)}
-        />
 
         {(detail.template?.isGroup ?? true) && (
           <ChurchTeamInfo
@@ -642,44 +647,10 @@ export default function ProjectDetailPage() {
         )}
       </main>
 
+      <BackToTop />
+
       <PortalFooter />
     </div>
-  );
-}
-
-/**
- * The column headers, as a jump bar.
- *
- * Andrew: "at the top, under the church name and info, I want a kind of
- * header that I can click and it takes me to the elements I'm searching for.
- * Right now I have to scroll a bit to find any given thing."
- *
- * These are the Asana columns a client already knows, in the order this page
- * uses them. Sticky, so it stays reachable once you have scrolled past it —
- * the whole point is not having to scroll back up to move somewhere else.
- * Entries whose section is empty for this template are dropped rather than
- * pointing at nothing.
- */
-function JumpNav({ items }: { items: { href: string; label: string }[] }) {
-  if (items.length === 0) return null;
-  return (
-    <nav
-      aria-label="Jump to a section"
-      className="sticky top-0 z-20 -mx-4 mt-6 border-b border-gray-200/80 bg-gray-50/95 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6"
-    >
-      <ul className="flex gap-1 overflow-x-auto">
-        {items.map((it) => (
-          <li key={it.href}>
-            <a
-              href={it.href}
-              className="inline-block whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-500 transition hover:bg-white hover:text-runfree-magentaDeep"
-            >
-              {it.label}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </nav>
   );
 }
 
@@ -752,14 +723,52 @@ function ChurchTeamInfo({
         <button
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
+          className="flex w-full items-center gap-3.5 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
         >
-          <span aria-hidden className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`}>
-            ▸
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-runfree-indigo text-runfree-navy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-4.5 w-4.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 19v-1.5a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3V19" />
+              <circle cx="10" cy="8" r="3" />
+              <path d="M20 19v-1.5a3 3 0 0 0-2.25-2.9M15.5 5.2a3 3 0 0 1 0 5.6" />
+            </svg>
           </span>
-          <span className="flex-1 text-sm font-semibold text-runfree-ink">Church team info</span>
-          <span className="shrink-0 text-[11px] font-medium tabular-nums text-gray-400">
-            {contacts.length} {contacts.length === 1 ? "person" : "people"}
+
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-runfree-ink">Church team info</span>
+            <span className="block text-xs text-gray-500">
+              {contacts.length === 0
+                ? "Names and titles — no portal access"
+                : contacts
+                    .slice(0, 3)
+                    .map((c) => c.full_name.split(" ")[0])
+                    .join(", ") + (contacts.length > 3 ? ` and ${contacts.length - 3} more` : "")}
+            </span>
+          </span>
+
+          {contacts.length > 0 && (
+            <span aria-hidden className="hidden shrink-0 -space-x-2 sm:flex">
+              {contacts.slice(0, 5).map((c) => (
+                <span
+                  key={c.id}
+                  className="grid h-7 w-7 place-items-center rounded-full bg-white text-[10px] font-bold text-runfree-navy ring-2 ring-white"
+                  style={{ backgroundColor: "#EEF0FB" }}
+                >
+                  {c.full_name
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((w) => w[0])
+                    .join("")
+                    .toUpperCase()}
+                </span>
+              ))}
+            </span>
+          )}
+
+          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
+            {contacts.length}
+          </span>
+          <span className="text-gray-400">
+            <Chevron open={open} />
           </span>
         </button>
 
@@ -769,6 +778,12 @@ function ChurchTeamInfo({
               Names and contact details only. Nobody here has portal access until they are
               added under <a href="#team" className="font-medium text-runfree-magentaDeep hover:underline">Your team</a>.
             </p>
+
+            {contacts.length === 0 && (
+              <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">
+                No one on the roster yet.
+              </p>
+            )}
 
             {contacts.length > 0 && (
               <ul className="divide-y divide-gray-100">
@@ -909,6 +924,199 @@ function ProjectSettings({
   );
 }
 
+/**
+ * One bar carrying both controls, sticky under the hero.
+ *
+ * These were two separate rows — a floating Dynamic/Condensed pill above a
+ * line of bare text links — with dead space between them and neither looking
+ * like it belonged to the page. Andrew: "at the top, under the church name
+ * and info, I want a kind of header that I can click and it takes me to the
+ * elements I'm searching for."
+ *
+ * The links track which section you are actually looking at, so the bar
+ * doubles as a position indicator rather than only a set of jumps.
+ */
+function ProjectToolbar({
+  items,
+  view,
+  onChangeView,
+}: {
+  items: { href: string; label: string }[];
+  view: "dynamic" | "condensed";
+  onChangeView: (v: "dynamic" | "condensed") => void;
+}) {
+  const [active, setActive] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (items.length === 0) return;
+    const ids = items.map((i) => i.href.slice(1));
+    const seen = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) seen.set(e.target.id, e.intersectionRatio);
+        // The section occupying the most of the viewport wins, so a short
+        // section sandwiched between two long ones still gets its turn.
+        let best: string | null = null;
+        let bestRatio = 0;
+        for (const [id, ratio] of seen) {
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            best = id;
+          }
+        }
+        if (bestRatio > 0) setActive(best);
+      },
+      { rootMargin: "-88px 0px -55% 0px", threshold: [0, 0.25, 0.5, 1] }
+    );
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [items]);
+
+  return (
+    <div className="sticky top-0 z-30 -mx-4 mt-6 border-b border-gray-200/70 bg-gray-50/85 backdrop-blur-md sm:-mx-6 lg:-mx-8">
+      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
+        {items.length > 0 && (
+          <nav aria-label="Jump to a section" className="min-w-0 flex-1">
+            <ul className="-mx-1 flex gap-0.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {items.map((it) => {
+                const on = active === it.href.slice(1);
+                return (
+                  <li key={it.href}>
+                    <a
+                      href={it.href}
+                      aria-current={on ? "true" : undefined}
+                      className={`inline-block whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
+                        on
+                          ? "bg-runfree-pink text-runfree-magentaDeep"
+                          : "text-gray-500 hover:bg-white hover:text-runfree-ink"
+                      }`}
+                    >
+                      {it.label}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        )}
+
+        <div className={`shrink-0 ${items.length === 0 ? "ml-auto" : ""}`}>
+          <div
+            role="radiogroup"
+            aria-label="How to view this project"
+            className="inline-flex rounded-full bg-white p-0.5 shadow-sm ring-1 ring-gray-200"
+          >
+            {(
+              [
+                { key: "dynamic", label: "Dynamic", hint: "Everything open" },
+                { key: "condensed", label: "Condensed", hint: "One index screen" },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.key}
+                role="radio"
+                aria-checked={view === o.key}
+                title={o.hint}
+                onClick={() => onChangeView(o.key)}
+                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition ${
+                  view === o.key
+                    ? "bg-runfree-grad-deep text-white shadow-sm"
+                    : "text-gray-500 hover:text-runfree-ink"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The numbered sheets, folded behind one row. */
+function SheetDropdown({
+  label,
+  sheets,
+  onOpen,
+}: {
+  label: string;
+  sheets: HandoutFile[];
+  onOpen: (fileId: string, title: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3 overflow-hidden rounded-2xl ring-1 ring-gray-200">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 bg-white px-4 py-3 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
+      >
+        <span className="text-gray-400">
+          <Chevron open={open} />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-runfree-ink">
+          {label}
+        </span>
+        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
+          {sheets.length}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-gray-100 bg-white px-4 pb-4">
+          <SheetWalkthrough sheets={sheets} onOpen={onOpen} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Appears once you are far enough down to want it. */
+function BackToTop() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 700);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <button
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      aria-label="Back to top"
+      className={`fixed bottom-6 right-6 z-40 grid h-11 w-11 place-items-center rounded-full bg-runfree-grad-deep text-white shadow-lg transition-all duration-200 hover:opacity-90 ${
+        show ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"
+      }`}
+    >
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+        <path d="M10 15.5V5M5 9.5 10 4.5l5 5" />
+      </svg>
+    </button>
+  );
+}
+
+/** A real chevron, not a text triangle. */
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? "rotate-90" : ""}`}
+    >
+      <path d="M7.5 4.5 13 10l-5.5 5.5" />
+    </svg>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* View modes                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -991,11 +1199,8 @@ function Fold({
           aria-expanded={open}
           className="flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
         >
-          <span
-            aria-hidden
-            className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`}
-          >
-            ▸
+          <span className="text-gray-400">
+            <Chevron open={open} />
           </span>
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-runfree-ink">
             {title}
@@ -1856,7 +2061,17 @@ function ModulePanel({
               </button>
             )}
 
-            {otherHandouts.length > 0 && <SheetWalkthrough sheets={otherHandouts} onOpen={onOpenHandout} />}
+            {otherHandouts.length > 0 && (
+              /* Andrew asked for this last round and I shipped the list
+                 always-open: "put 'Funnel Fusion handouts combined' as the
+                 primary file. Underneath that, 'Individual handouts' as a
+                 dropdown." */
+              <SheetDropdown
+                label={`${moduleLabel(section)} individual handouts`}
+                sheets={otherHandouts}
+                onOpen={onOpenHandout}
+              />
+            )}
           </Block>
         )}
 
@@ -3009,9 +3224,15 @@ function PrepItemForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const wantsDate = group.kind === "dates" || group.kind === "checklist";
-  const wantsUrl = group.kind === "reading";
-  const wantsFile = group.kind === "files" || group.kind === "notes";
+  // Andrew: "all of the different add options — add a note, add an item, add
+  // a document — are all designated per individual section. I would like to
+  // be able to add any one of those things in any section."
+  //
+  // So every field is offered everywhere. `kind` still decides how a saved
+  // row RENDERS (a date tile, a checkbox, a link, a document) — it no longer
+  // decides what you are allowed to put in one. A book with a due date and a
+  // PDF attached is a legitimate thing to want, and there is no reason the
+  // card it sits in should forbid it.
   const wantsLongNotes = group.kind === "notes";
 
   async function submit(e: React.FormEvent) {
@@ -3033,8 +3254,8 @@ function PrepItemForm({
       const payload = {
         title: title.trim(),
         notes: notes.trim() || null,
-        due_on: wantsDate && dueOn ? dueOn : null,
-        external_url: wantsUrl && url.trim() ? url.trim() : null,
+        due_on: dueOn || null,
+        external_url: url.trim() || null,
         ...(uploaded
           ? {
               file_path: uploaded.path,
@@ -3077,7 +3298,7 @@ function PrepItemForm({
         className={field}
       />
 
-      {wantsDate && (
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <input
           type="date"
           value={dueOn}
@@ -3085,17 +3306,14 @@ function PrepItemForm({
           className={field}
           aria-label={group.kind === "dates" ? "Date" : "Due date"}
         />
-      )}
-
-      {wantsUrl && (
         <input
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://…"
+          placeholder="Link (optional)"
           className={field}
         />
-      )}
+      </div>
 
       <textarea
         rows={wantsLongNotes ? 5 : 2}
@@ -3105,8 +3323,7 @@ function PrepItemForm({
         className={field}
       />
 
-      {wantsFile && (
-        <div>
+      <div>
           <input
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -3117,8 +3334,7 @@ function PrepItemForm({
               Currently: {existing.file_name}. Choosing a new file replaces it.
             </p>
           )}
-        </div>
-      )}
+      </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 

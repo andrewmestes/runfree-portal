@@ -56,6 +56,12 @@ export type PrepItem = {
   file_mime: string | null;
   file_size: number | null;
   is_done: boolean;
+  /** Multi-day key dates: an onsite weekend is one row with a span. */
+  end_on: string | null;
+  /** Zoom/Meet link for a virtual session. */
+  meeting_url: string | null;
+  /** Hidden from viewers; editors and admins still see it (migration 030). */
+  is_private: boolean;
   position: number;
 };
 
@@ -850,6 +856,9 @@ export async function createPrepItem(
     file_name?: string | null;
     file_mime?: string | null;
     file_size?: number | null;
+    end_on?: string | null;
+    meeting_url?: string | null;
+    is_private?: boolean;
   },
   siblings: { position: number }[] = []
 ) {
@@ -876,6 +885,9 @@ export async function updatePrepItem(
     title?: string;
     notes?: string | null;
     due_on?: string | null;
+    end_on?: string | null;
+    meeting_url?: string | null;
+    is_private?: boolean;
     external_url?: string | null;
     file_path?: string | null;
     file_name?: string | null;

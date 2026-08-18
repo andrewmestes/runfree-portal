@@ -3673,6 +3673,30 @@ function PrepRow({
           </p>
         )}
 
+        {group.kind === "dates" && item.end_on && item.end_on !== item.due_on && (
+          <p className="mt-1 text-[11px] font-medium text-gray-400">
+            through {formatSessionDate(item.end_on)}
+          </p>
+        )}
+
+        <span className="mt-1.5 flex flex-wrap items-center gap-2">
+          {safeExternalUrl(item.meeting_url) && (
+            <a
+              href={safeExternalUrl(item.meeting_url)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[28px] items-center rounded-lg bg-runfree-grad-deep px-2.5 text-[11px] font-semibold text-white transition hover:opacity-90"
+            >
+              Join
+            </a>
+          )}
+          {item.is_private && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+              Private
+            </span>
+          )}
+        </span>
+
         {item.file_path && (
           <a
             href={fileUrl}
@@ -3785,6 +3809,9 @@ function PrepItemForm({
   const [title, setTitle] = useState(existing?.title ?? "");
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [dueOn, setDueOn] = useState(existing?.due_on ?? "");
+  const [endOn, setEndOn] = useState(existing?.end_on ?? "");
+  const [meetingUrl, setMeetingUrl] = useState(existing?.meeting_url ?? "");
+  const [isPrivate, setIsPrivate] = useState(existing?.is_private ?? false);
   const [url, setUrl] = useState(existing?.external_url ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -3821,6 +3848,9 @@ function PrepItemForm({
         title: title.trim(),
         notes: notes.trim() || null,
         due_on: dueOn || null,
+        end_on: endOn || null,
+        meeting_url: meetingUrl.trim() || null,
+        is_private: isPrivate,
         external_url: url.trim() || null,
         ...(uploaded
           ? {
@@ -3872,6 +3902,17 @@ function PrepItemForm({
           className={field}
           aria-label={group.kind === "dates" ? "Date" : "Due date"}
         />
+        {/* An onsite weekend is one row with a span, not three rows.
+            Andrew: "we need to be able to track that there are multiple
+            dates there." */}
+        <input
+          type="date"
+          value={endOn}
+          onChange={(e) => setEndOn(e.target.value)}
+          className={field}
+          aria-label="End date, for something spanning days"
+          title="End date, if it runs over more than one day"
+        />
         <input
           type="url"
           value={url}
@@ -3879,7 +3920,24 @@ function PrepItemForm({
           placeholder="Link (optional)"
           className={field}
         />
+        <input
+          type="url"
+          value={meetingUrl}
+          onChange={(e) => setMeetingUrl(e.target.value)}
+          placeholder="Zoom / Meet link (optional)"
+          className={field}
+        />
       </div>
+
+      <label className="flex items-center gap-2 text-xs text-gray-600">
+        <input
+          type="checkbox"
+          checked={isPrivate}
+          onChange={(e) => setIsPrivate(e.target.checked)}
+          className="h-4 w-4"
+        />
+        Keep this private — RunFree and project admins only, hidden from the church team
+      </label>
 
       <textarea
         rows={wantsLongNotes ? 5 : 2}

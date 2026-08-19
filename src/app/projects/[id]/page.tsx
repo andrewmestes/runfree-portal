@@ -186,15 +186,6 @@ export default function ProjectDetailPage() {
   // both live so the team and a client can be shown the same project in two
   // styles and asked which one they prefer. Persisted per browser so a
   // reviewer's choice survives a reload mid-comparison.
-  const [view, setView] = useState<"dynamic" | "condensed">("dynamic");
-  useEffect(() => {
-    const saved = window.localStorage.getItem("rf-project-view");
-    if (saved === "condensed" || saved === "dynamic") setView(saved);
-  }, []);
-  const chooseView = useCallback((next: "dynamic" | "condensed") => {
-    setView(next);
-    window.localStorage.setItem("rf-project-view", next);
-  }, []);
   /**
    * Which panel is showing. Kept in the URL (?panel=prepare) so a coach can
    * send someone straight to a section — "open this and look at Preparation"
@@ -514,17 +505,23 @@ export default function ProjectDetailPage() {
     prepareGroups.some((g) => g.id === i.group_id)
   ).length;
 
+  // Title Case throughout — "The process" next to "Key dates" read as an
+  // unfinished sentence rather than a set of labels.
+  //
+  // There is no Access tab. Who can get in is a property of the project, not
+  // a section of it, so it lives in the header beside the logo and the
+  // website — and it was landing one click from the Team tab, which shows
+  // the church's people and looked like the same thing.
   const panelItems = [
     { key: "overview", label: "Overview", count: null },
-    { key: "team", label: "Team", count: detail.members.length + detail.contacts.length },
-    dateGroups.length > 0 ? { key: "dates", label: "Key dates", count: datesCount } : null,
+    { key: "team", label: "Team", count: detail.contacts.length + detail.members.length },
+    dateGroups.length > 0 ? { key: "dates", label: "Key Dates", count: datesCount } : null,
     prepareGroups.length > 0 || prepResources.length > 0
       ? { key: "prepare", label: "Preparation", count: prepareCount }
       : null,
-    modules.length > 0 ? { key: "process", label: "The process", count: modules.length } : null,
-    { key: "sessions", label: "Sessions", count: detail.sessions.length },
+    modules.length > 0 ? { key: "process", label: "The Process", count: modules.length } : null,
+    { key: "sessions", label: "Session Recordings", count: detail.sessions.length },
     hasDeliverables ? { key: "deliverables", label: "Deliverables", count: null } : null,
-    canManage ? { key: "access", label: "Access", count: null } : null,
   ].filter((x): x is { key: string; label: string; count: number | null } => x !== null);
 
   // A link to a panel this project doesn't have (a Younique project has no
@@ -597,40 +594,19 @@ export default function ProjectDetailPage() {
           onChanged={refresh}
         />
 
-        <ProjectToolbar
-          view={view}
-          onChangeView={chooseView}
-          active={activePanel}
-          onSelect={goPanel}
-          items={panelItems}
-        />
+        <ProjectToolbar active={activePanel} onSelect={goPanel} items={panelItems} />
 
-        {view === "condensed" ? (
-          <CondensedBoard
-            detail={detail}
-            projectId={projectId}
-            modules={modules}
-            prepareGroups={prepareGroups}
-            dateGroups={dateGroups}
-            deliverableGroups={deliverableGroups}
-            teamGroups={teamGroups}
-            prepResources={prepResources}
-            overviewResources={overviewResources}
-            orphanSections={orphanSections}
-            imageUrls={imageUrls}
-            thumbs={thumbs}
-            handouts={handouts}
-            onOpenHandout={openHandout}
-            canEdit={canEdit}
-            canManage={canManage}
-            accessToken={accessToken}
-            onChanged={refresh}
-          />
-        ) : (
-          /* One panel at a time. `key` on the wrapper restarts the fade on
-             every swap, so the change is legible rather than an instant
-             content replacement that looks like a glitch. */
-          <div key={activePanel} className="animate-fade mt-10">
+        {/* One panel at a time. `key` on the wrapper restarts the fade on
+            every swap, so the change is legible rather than an instant
+            content replacement that looks like a glitch.
+
+            The Dynamic/Condensed toggle is gone. It existed to make one very
+            long page scannable, which is the problem panels solve — and
+            keeping a mode that collapsed every tab back into a single scroll
+            fought the navigation rather than complementing it. Andrew: "I'm
+            wondering if we need that at all anymore... I don't like the way
+            that that currently looks." */}
+        <div key={activePanel} className="animate-fade mt-10">
             {activePanel === "overview" && (
               <OverviewPanel
                 detail={detail}
@@ -812,9 +788,8 @@ export default function ProjectDetailPage() {
                   onChanged={refresh}
                 />
               </>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
       <BackToTop />
@@ -1125,21 +1100,21 @@ function ProjectToolbar({
   items,
   active,
   onSelect,
-  view,
-  onChangeView,
 }: {
   items: { key: string; label: string; count?: number | null }[];
   active: string;
   onSelect: (key: string) => void;
-  view: "dynamic" | "condensed";
-  onChangeView: (v: "dynamic" | "condensed") => void;
 }) {
   return (
-    <div className="sticky top-0 z-30 -mx-4 mt-6 border-b border-gray-200/70 bg-gray-50/85 backdrop-blur-md sm:-mx-6 lg:-mx-8">
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
-        {items.length > 0 && view === "dynamic" && (
-          <nav aria-label="Project sections" className="min-w-0 flex-1">
-            <ul className="-mx-1 flex gap-0.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="sticky top-0 z-30 -mx-4 mt-6 border-b border-gray-200/70 bg-gray-50/90 backdrop-blur-md sm:-mx-6 lg:-mx-8">
+      <div className="mx-auto max-w-6xl px-4 py-2.5 sm:px-6 lg:px-8">
+        {items.length > 0 && (
+          <nav aria-label="Project sections">
+            {/* Bigger, and the selected tab wears the brand gradient rather
+                than a pale tint. Andrew: "the tabs themselves could be a
+                little bit more prominent and colorful." These are the primary
+                navigation of the whole page now, so they are sized like it. */}
+            <ul className="-mx-1 flex gap-1 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {items.map((it) => {
                 const on = active === it.key;
                 return (
@@ -1147,17 +1122,17 @@ function ProjectToolbar({
                     <button
                       onClick={() => onSelect(it.key)}
                       aria-current={on ? "true" : undefined}
-                      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition max-sm:min-h-[40px] ${
+                      className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition duration-200 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[42px] ${
                         on
-                          ? "bg-runfree-pink text-runfree-magentaDeep"
-                          : "text-gray-500 hover:bg-white hover:text-runfree-ink"
+                          ? "bg-runfree-grad text-white shadow-sm"
+                          : "text-gray-600 hover:bg-white hover:text-runfree-ink hover:shadow-sm"
                       }`}
                     >
                       {it.label}
                       {it.count != null && it.count > 0 && (
                         <span
-                          className={`text-[11px] font-bold tabular-nums ${
-                            on ? "text-runfree-magenta/70" : "text-gray-400"
+                          className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
+                            on ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
                           }`}
                         >
                           {it.count}
@@ -1170,37 +1145,7 @@ function ProjectToolbar({
             </ul>
           </nav>
         )}
-        {view === "condensed" && <div className="min-w-0 flex-1" />}
 
-        <div className={`shrink-0 ${items.length === 0 ? "ml-auto" : ""}`}>
-          <div
-            role="radiogroup"
-            aria-label="How to view this project"
-            className="inline-flex rounded-full bg-white p-0.5 shadow-sm ring-1 ring-gray-200"
-          >
-            {(
-              [
-                { key: "dynamic", label: "Dynamic", hint: "Everything open" },
-                { key: "condensed", label: "Condensed", hint: "One index screen" },
-              ] as const
-            ).map((o) => (
-              <button
-                key={o.key}
-                role="radio"
-                aria-checked={view === o.key}
-                title={o.hint}
-                onClick={() => onChangeView(o.key)}
-                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition max-sm:min-h-[40px] ${
-                  view === o.key
-                    ? "bg-runfree-grad-deep text-white shadow-sm"
-                    : "text-gray-500 hover:text-runfree-ink"
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -1757,349 +1702,6 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* View modes                                                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Dynamic vs Condensed, for A/B testing with the team and with clients.
- *
- * Dynamic is the full page: hero, Vision Stack card, module rail, every
- * section open and scrolling. It shows the weight of the engagement.
- *
- * Condensed is the same content folded to one index screen — every part a
- * closed row with a count, opened only when wanted. It answers "what is in
- * here and where am I" in a single glance, which is what a busy pastor
- * checking on their phone between meetings actually needs.
- *
- * Neither is a subset of the other in what it CAN show; the difference is
- * what is open by default.
- */
-function ViewToggle({
-  view,
-  onChange,
-}: {
-  view: "dynamic" | "condensed";
-  onChange: (v: "dynamic" | "condensed") => void;
-}) {
-  const opts: { key: "dynamic" | "condensed"; label: string; hint: string }[] = [
-    { key: "dynamic", label: "Dynamic", hint: "Everything open" },
-    { key: "condensed", label: "Condensed", hint: "One index screen" },
-  ];
-  return (
-    <div className="mt-6 flex justify-end">
-      <div
-        role="radiogroup"
-        aria-label="How to view this project"
-        className="inline-flex rounded-xl bg-white p-1 ring-1 ring-gray-200"
-      >
-        {opts.map((o) => (
-          <button
-            key={o.key}
-            role="radio"
-            aria-checked={view === o.key}
-            title={o.hint}
-            onClick={() => onChange(o.key)}
-            className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
-              view === o.key
-                ? "bg-runfree-grad-deep text-white"
-                : "text-gray-500 hover:text-runfree-ink"
-            }`}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** One closed row that opens in place. The whole condensed view is these. */
-function Fold({
-  title,
-  meta,
-  accent = "bg-gray-300",
-  defaultOpen = false,
-  children,
-}: {
-  title: string;
-  meta?: string;
-  /** A colour rail so the condensed list reads as parts, not a grey ladder. */
-  accent?: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <section className="flex overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
-      <span aria-hidden className={`w-1.5 shrink-0 ${accent}`} />
-      <div className="min-w-0 flex-1">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
-        >
-          <span className="text-gray-400">
-            <Chevron open={open} />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-runfree-ink">
-            {title}
-          </span>
-          {meta && (
-            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
-              {meta}
-            </span>
-          )}
-        </button>
-        {open && <div className="border-t border-gray-100 px-5 py-5">{children}</div>}
-      </div>
-    </section>
-  );
-}
-
-/** One accent per module, so the six tools stay visually distinct. */
-const MODULE_ACCENTS = [
-  "bg-runfree-magenta",
-  "bg-orange-400",
-  "bg-amber-400",
-  "bg-emerald-400",
-  "bg-sky-400",
-  "bg-indigo-400",
-];
-
-function CondensedBoard({
-  detail,
-  projectId,
-  modules,
-  prepareGroups,
-  dateGroups,
-  deliverableGroups,
-  teamGroups,
-  prepResources,
-  overviewResources,
-  orphanSections,
-  imageUrls,
-  thumbs,
-  handouts,
-  onOpenHandout,
-  canEdit,
-  canManage,
-  accessToken,
-  onChanged,
-}: {
-  detail: ProjectDetail;
-  projectId: string;
-  modules: NavModule[];
-  prepareGroups: PrepGroup[];
-  dateGroups: PrepGroup[];
-  deliverableGroups: PrepGroup[];
-  teamGroups: PrepGroup[];
-  prepResources: ProjectDetail["resources"];
-  overviewResources: ProjectDetail["resources"];
-  orphanSections: string[];
-  imageUrls: Record<string, string>;
-  thumbs: Record<string, string>;
-  handouts: HandoutLibrary | null;
-  onOpenHandout: (fileId: string, title: string) => void;
-  canEdit: boolean;
-  canManage: boolean;
-  accessToken: string | null;
-  onChanged: () => void;
-}) {
-  const stackItems = detail.deliverables.filter((d) => d.kind === "vision_stack");
-  const stackReady = stackItems.filter((d) => d.published_at).length;
-  const prepCount = detail.prepItems.filter((i) =>
-    prepareGroups.some((g) => g.id === i.group_id)
-  ).length;
-
-  // Compared against the LOCAL date. toISOString() reports UTC, so after 8pm
-  // Eastern it returned tomorrow and a session scheduled for today dropped
-  // out of "Next" on the evening it mattered most.
-  const nextDate = detail.prepItems
-    .filter((i) => i.due_on)
-    .map((i) => i.due_on!)
-    .sort()
-    .find((d) => (parseLocalDate(d)?.getTime() ?? 0) >= startOfToday());
-
-  return (
-    <div className="mt-4 space-y-3">
-      {/* One status line instead of a hero: where this engagement stands. */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl bg-runfree-grad-deep px-5 py-4 text-white">
-        <span className="text-sm font-semibold">
-          {stackReady} of {stackItems.length} deliverables finished
-        </span>
-        <span className="text-xs text-white/70">
-          {detail.sessions.length} session{detail.sessions.length === 1 ? "" : "s"} recorded
-        </span>
-        <span className="text-xs text-white/70">{detail.members.length} people</span>
-        {nextDate && (
-          <span className="ml-auto text-xs font-medium">
-            Next: {formatSessionDate(nextDate)}
-          </span>
-        )}
-      </div>
-
-      {detail.template?.hasVisionStack && (
-        <Fold title="Vision Stack" accent="bg-runfree-magentaDeep" meta={`${stackReady}/${stackItems.length}`}>
-          <div className="space-y-2">
-            {detail.stackLayers.map((layer) => {
-              const items = stackItems.filter((d) => d.stack_layer === layer.slug);
-              const done = items.filter((d) => d.published_at).length;
-              return (
-                <div
-                  key={layer.slug}
-                  className="flex items-center gap-3 rounded-xl bg-gray-50 px-3.5 py-2.5"
-                >
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-runfree-ink">
-                    {layer.name}
-                  </span>
-                  <span className="shrink-0 text-[11px] tabular-nums text-gray-500">
-                    {done}/{items.length}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <a
-            href={`/projects/${projectId}/vision-stack`}
-            className="mt-3 inline-block text-xs font-semibold text-runfree-magentaDeep hover:underline"
-          >
-            Open the full Vision Stack →
-          </a>
-        </Fold>
-      )}
-
-      {dateGroups.length > 0 && (
-        <Fold
-          title="Key dates"
-          accent="bg-amber-400"
-          meta={`${detail.prepItems.filter((i) => dateGroups.some((g) => g.id === i.group_id)).length}`}
-        >
-          <PrepCards
-            groups={dateGroups}
-            items={detail.prepItems}
-            projectId={projectId}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            fileUrls={imageUrls}
-            onChanged={onChanged}
-          />
-        </Fold>
-      )}
-
-      <Fold title="Prepare your team" accent="bg-runfree-magenta" meta={`${prepCount} item${prepCount === 1 ? "" : "s"}`}>
-        <PrepareSection
-          id="prepare-condensed"
-          prep={prepResources}
-          overview={overviewResources}
-          thumbs={thumbs}
-          prepGroups={prepareGroups}
-          prepItems={detail.prepItems}
-          projectId={projectId}
-          canEdit={canEdit}
-          accessToken={accessToken}
-          fileUrls={imageUrls}
-          onChanged={onChanged}
-          handouts={handouts}
-          onOpenHandout={onOpenHandout}
-          showTitle={false}
-        />
-      </Fold>
-
-      {modules.map((m) => {
-        const done = detail.deliverables.filter(
-          (d) => d.section === m.section && d.kind === "vision_stack" && d.published_at
-        ).length;
-        const total = detail.deliverables.filter(
-          (d) => d.section === m.section && d.kind === "vision_stack"
-        ).length;
-        return (
-          <Fold
-            key={m.section}
-            title={`${moduleOrder(m.section) ?? ""}. ${moduleLabel(m.section)}`.replace(/^\. /, "")}
-            accent={MODULE_ACCENTS[(moduleOrder(m.section) ?? 1) - 1] ?? "bg-gray-300"}
-            meta={total > 0 ? `${done}/${total}` : undefined}
-          >
-            <ModulePanel
-              section={m.section}
-              detail={detail}
-              imageUrls={imageUrls}
-              canEdit={canEdit}
-              accessToken={accessToken}
-              onChanged={onChanged}
-              handouts={handouts}
-              onOpenHandout={onOpenHandout}
-              thumbs={thumbs}
-              bare
-            />
-          </Fold>
-        );
-      })}
-
-      {orphanSections.map((section) => (
-        <Fold key={section} title={moduleLabel(section)}>
-          <ModulePanel
-            section={section}
-            detail={detail}
-            imageUrls={imageUrls}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            onChanged={onChanged}
-            handouts={handouts}
-            onOpenHandout={onOpenHandout}
-            thumbs={thumbs}
-            bare
-          />
-        </Fold>
-      ))}
-
-      {deliverableGroups.length > 0 && (
-        <Fold title="Deliverables" accent="bg-runfree-magentaDeep">
-          <PrepCards
-            groups={deliverableGroups}
-            items={detail.prepItems}
-            projectId={projectId}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            fileUrls={imageUrls}
-            onChanged={onChanged}
-          />
-        </Fold>
-      )}
-
-      <Fold title="Session recordings" accent="bg-sky-500" meta={`${detail.sessions.length}`}>
-        <SessionsSection
-          id="sessions-condensed"
-          sessions={detail.sessions}
-          detail={detail}
-          imageUrls={imageUrls}
-          thumbs={thumbs}
-          moduleOptions={availableSections(detail)}
-          canEdit={canEdit}
-          accessToken={accessToken}
-          projectId={projectId}
-          onChanged={onChanged}
-          bare
-        />
-      </Fold>
-
-      <Fold title="Your team" accent="bg-emerald-500" meta={`${detail.members.length}`}>
-        <TeamSection
-          id="team-condensed"
-          teamGroups={teamGroups}
-          canEdit={canEdit}
-          detail={detail}
-          imageUrls={imageUrls}
-          canManage={canManage}
-          accessToken={accessToken}
-          projectId={projectId}
-          onChanged={onChanged}
-          bare
-        />
-      </Fold>
-    </div>
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /* Hero                                                                        */
@@ -2411,7 +2013,7 @@ function PrioritiesBanner({
               Coming up
             </p>
             <h2 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-runfree-ink">
-              What we're working on right now
+              What&rsquo;s Important Now
             </h2>
           </div>
           {canEdit && !editing && (
@@ -2703,6 +2305,50 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
  * disclosure arrow.
  */
 /**
+ * One tint per doorway, drawn from the brand family rather than from a
+ * generic rainbow — magenta and orange are the gradient's own ends, indigo
+ * and navy the grounds it sits on. Written as whole class strings because
+ * Tailwind scans source text and never sees a name built by interpolation.
+ */
+const DOORWAY_TINT: Record<string, { card: string; bar: string; arrow: string }> = {
+  team: {
+    card: "bg-runfree-pink/40 ring-runfree-magenta/20 hover:ring-runfree-magenta/50",
+    bar: "bg-runfree-magenta",
+    arrow: "text-runfree-magentaDeep",
+  },
+  dates: {
+    card: "bg-orange-50 ring-orange-200/70 hover:ring-orange-300",
+    bar: "bg-runfree-orange",
+    arrow: "text-orange-600",
+  },
+  prepare: {
+    card: "bg-runfree-indigo/60 ring-runfree-navy/15 hover:ring-runfree-navy/35",
+    bar: "bg-runfree-navy",
+    arrow: "text-runfree-navy",
+  },
+  process: {
+    card: "bg-white ring-gray-200 hover:ring-runfree-magenta/40",
+    bar: "bg-runfree-grad",
+    arrow: "text-runfree-magentaDeep",
+  },
+  sessions: {
+    card: "bg-emerald-50 ring-emerald-200/70 hover:ring-emerald-300",
+    bar: "bg-emerald-500",
+    arrow: "text-emerald-700",
+  },
+  deliverables: {
+    card: "bg-runfree-navy/[0.06] ring-runfree-navy/20 hover:ring-runfree-navy/40",
+    bar: "bg-runfree-grad-deep",
+    arrow: "text-runfree-navy",
+  },
+  default: {
+    card: "bg-white ring-gray-200 hover:ring-runfree-magenta/30",
+    bar: "bg-gray-200",
+    arrow: "text-gray-400",
+  },
+};
+
+/**
  * The landing panel — the first thing anyone sees, and the only screen
  * written for someone who has never heard of a Vision Frame.
  *
@@ -2731,23 +2377,19 @@ function OverviewPanel({
   nextDate: PrepItem | null;
   currentModule: string | null;
 }) {
-  const held = detail.sessions.filter((s) => s.held_on).length;
   const moduleNo = currentModule ? moduleOrder(currentModule) : null;
   const meta = moduleNo ? MODULE_META[moduleNo] : null;
 
+  // No "sessions so far". It counted `sessions` rows, which only exist where
+  // someone logged a recording — Christ Chapel had met in person twice more
+  // than the number claimed. A count that is wrong whenever a coach doesn't
+  // upload is worse than no count, and nothing here needs it.
   const stats: { label: string; value: string; sub?: string }[] = [];
   if (currentModule) {
     stats.push({
       label: "Where you are",
       value: moduleLabel(currentModule),
       sub: meta?.stage,
-    });
-  }
-  if (held > 0) {
-    stats.push({
-      label: "Sessions so far",
-      value: String(held),
-      sub: held === 1 ? "recorded" : "recorded",
     });
   }
   if (nextDate?.due_on) {
@@ -2763,7 +2405,11 @@ function OverviewPanel({
       {stats.length > 0 && (
         <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
           <div className="h-1 bg-runfree-grad" />
-          <dl className="grid gap-6 p-6 sm:grid-cols-3 sm:p-8">
+          <dl
+            className={`grid gap-6 p-6 sm:p-8 ${
+              stats.length > 1 ? "sm:grid-cols-2" : ""
+            }`}
+          >
             {stats.map((s) => (
               <div key={s.label}>
                 <dt className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
@@ -2783,25 +2429,34 @@ function OverviewPanel({
         <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
           What&rsquo;s in here
         </h3>
+        {/* Andrew: "the cards underneath what's in here could be a little
+            more colorful." Each doorway carries its own tint from the brand
+            family, so the grid reads as six distinct places rather than six
+            identical white rectangles — and the colour is a second cue for
+            "these are different destinations", not decoration. */}
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {doorways.map((d) => (
-            <button
-              key={d.key}
-              onClick={() => onGo(d.key)}
-              className="group flex flex-col items-start rounded-2xl bg-white p-5 text-left shadow-sm ring-1 ring-gray-200 outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-runfree-magenta/30 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
-            >
-              <span className="font-display text-base font-extrabold tracking-tight text-runfree-ink">
-                {d.label}
-              </span>
-              <span className="mt-1 text-[13px] leading-snug text-gray-500">{d.blurb}</span>
-              <span
-                aria-hidden
-                className="mt-3 text-gray-300 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-runfree-magenta"
+          {doorways.map((d) => {
+            const tint = DOORWAY_TINT[d.key] ?? DOORWAY_TINT.default;
+            return (
+              <button
+                key={d.key}
+                onClick={() => onGo(d.key)}
+                className={`group relative flex flex-col items-start overflow-hidden rounded-2xl p-5 text-left shadow-sm ring-1 outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-runfree-magenta ${tint.card}`}
               >
-                →
-              </span>
-            </button>
-          ))}
+                <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${tint.bar}`} />
+                <span className="font-display text-base font-extrabold tracking-tight text-runfree-ink">
+                  {d.label}
+                </span>
+                <span className="mt-1 text-[13px] leading-snug text-gray-600">{d.blurb}</span>
+                <span
+                  aria-hidden
+                  className={`mt-3 transition-transform duration-200 group-hover:translate-x-1 ${tint.arrow}`}
+                >
+                  →
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

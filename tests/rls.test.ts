@@ -903,6 +903,48 @@ async function main() {
       await supabaseAdmin.from("certified_framers").delete().eq("email", email);
     }
 
+
+    // -----------------------------------------------------------------
+    // 22. An admin cannot promote themselves to owner (035).
+    //
+    // 032 split am_owner() from am_admin() so admins would be powerful but
+    // not omniscient, and cleared is_owner on the three new admins. But the
+    // same migration widened manage_profiles to am_admin(), and RLS has no
+    // column-level check — so the policy that lets an admin change someone's
+    // ROLE also let them change is_owner, restoring the bypass in one line
+    // from the browser console.
+    // -----------------------------------------------------------------
+    {
+      const siteAdmin2 = await createTestUser("owner-guard", {});
+      cleanupUserIds.push(siteAdmin2.id);
+      await supabaseAdmin.from("profiles").update({ account_role: "admin" }).eq("id", siteAdmin2.id);
+
+      const asAdmin2 = createUserClient(siteAdmin2.accessToken);
+
+      const { error: selfPromote } = await asAdmin2
+        .from("profiles")
+        .update({ is_owner: true })
+        .eq("id", siteAdmin2.id);
+      const { data: after } = await supabaseAdmin
+        .from("profiles")
+        .select("is_owner")
+        .eq("id", siteAdmin2.id)
+        .single();
+      record(
+        "22a. an admin cannot grant themselves is_owner",
+        !!selfPromote || after?.is_owner === false,
+        selfPromote ? "correctly rejected" : `is_owner=${after?.is_owner}`
+      );
+
+      // The legitimate power still works: changing someone else's role.
+      const { error: roleErr } = await asAdmin2
+        .from("profiles")
+        .update({ account_role: "framer" })
+        .eq("id", viewerA.id);
+      record("22b. an admin can still change an account role", !roleErr, roleErr?.message);
+      await supabaseAdmin.from("profiles").update({ account_role: "client" }).eq("id", viewerA.id);
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

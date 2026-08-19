@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, logout } from "@/lib/auth";
+import { getCurrentFramer, hasCertificationAccess, logout } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
@@ -97,7 +97,7 @@ export default function ResourcesPage() {
       }
 
       const current = (await getCurrentFramer()) as Framer | null;
-      if (!current) {
+      if (!(await hasCertificationAccess())) {
         setStatus("denied");
         return;
       }
@@ -248,6 +248,8 @@ export default function ResourcesPage() {
             // CLOUD" string) rather than an id, because the project side has
             // no ids for its sections. The library's module id serves.
             section: m.id,
+            // Without this the button is captioned with the raw Drive id.
+            label: m.name,
             id: m.id,
             name: m.name,
             order: m.order,

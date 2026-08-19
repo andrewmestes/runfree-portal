@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, logout } from "@/lib/auth";
+import { getCurrentFramer, hasCertificationAccess, logout } from "@/lib/auth";
 import { parseVideoUrl, splitVideoMeta } from "@/lib/video";
 import { isProcessModule, stripModuleNumber } from "@/lib/modules";
 import PortalHeader from "@/components/PortalHeader";
@@ -70,7 +70,7 @@ export default function VideosPage() {
       }
 
       const current = (await getCurrentFramer()) as Framer | null;
-      if (!current) {
+      if (!(await hasCertificationAccess())) {
         setStatus("denied");
         return;
       }

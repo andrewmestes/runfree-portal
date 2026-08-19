@@ -183,3 +183,30 @@ export async function isPortalAdmin(): Promise<boolean> {
   const framer = (await getCurrentFramer()) as { is_admin?: boolean } | null;
   return Boolean(framer?.is_admin);
 }
+
+/**
+ * May this person see the certification library?
+ *
+ * The merge rewrote the SERVER gate (requireCertificationAccess) to accept an
+ * account_role of admin / runfree_team / framer / framer_subscribed, or the
+ * legacy certified_framers row. The five certification PAGES kept the old
+ * client-side test — "is there a roster row?" — so a RunFree admin with no
+ * row was shown the nav links by the header and then bounced to / on arrival.
+ * Same question, same answer, one place.
+ */
+export async function hasCertificationAccess(): Promise<boolean> {
+  const profile = (await getCurrentProfile()) as
+    | { account_role?: string; is_owner?: boolean; certification_access?: boolean }
+    | null;
+
+  if (profile?.is_owner) return true;
+  if (
+    profile?.account_role &&
+    ["admin", "runfree_team", "framer", "framer_subscribed"].includes(profile.account_role)
+  ) {
+    return true;
+  }
+  if (profile?.certification_access) return true;
+
+  return Boolean(await getCurrentFramer());
+}

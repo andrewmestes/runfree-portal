@@ -109,6 +109,26 @@ function formatSessionDate(held: string | null): string {
   });
 }
 
+/**
+ * Every storage path a project page needs signed, in one place.
+ *
+ * load() and refresh() each built this list by hand and they drifted:
+ * load() left out prep-item files, so a PDF uploaded to Previous Vision
+ * Equity or Team Building Profiles rendered as a dead chip on first load and
+ * only came alive after some other action happened to call refresh().
+ * Neither signed deliverable FILES at all, which left the Asana-imported
+ * PDFs unopenable in the same way.
+ */
+function signablePaths(detail: ProjectDetail): string[] {
+  return [
+    ...(detail.logoPath ? [detail.logoPath] : []),
+    ...detail.members.map((m) => m.avatarPath),
+    ...detail.deliverables.map((d) => d.image_path),
+    ...detail.deliverables.map((d) => d.file_path),
+    ...detail.prepItems.map((p) => p.file_path),
+  ].filter((p): p is string => !!p);
+}
+
 function prettySize(bytes: number | null): string | null {
   if (!bytes) return null;
   const mb = bytes / 1024 / 1024;
@@ -171,12 +191,7 @@ export default function ProjectDetailPage() {
       setStatus("ready");
 
       // Logo and every session image in a single signing request.
-      const paths = [
-        ...(result.logoPath ? [result.logoPath] : []),
-        ...result.members.map((m) => m.avatarPath).filter((p): p is string => !!p),
-        ...result.deliverables.map((d) => d.image_path).filter((p): p is string => !!p),
-      ];
-      setImageUrls(await getSignedImageUrls(session.access_token, paths));
+      setImageUrls(await getSignedImageUrls(session.access_token, signablePaths(result)));
 
       // Real Loom stills, resolved server-side. Fired after the render like
       // the handouts: a video card is usable without its picture, and waiting
@@ -305,13 +320,7 @@ export default function ProjectDetailPage() {
     const result = await getProjectDetail(accessToken, projectId);
     if (!result) return;
     setDetail(result);
-    const paths = [
-      ...(result.logoPath ? [result.logoPath] : []),
-      ...result.members.map((m) => m.avatarPath).filter((p): p is string => !!p),
-      ...result.deliverables.map((d) => d.image_path).filter((p): p is string => !!p),
-      ...result.prepItems.map((p) => p.file_path).filter((p): p is string => !!p),
-    ];
-    setImageUrls(await getSignedImageUrls(accessToken, paths));
+    setImageUrls(await getSignedImageUrls(accessToken, signablePaths(result)));
   }
 
   if (status === "checking") return <PageLoader label="Loading your project…" />;
@@ -482,6 +491,9 @@ export default function ProjectDetailPage() {
             projectId={projectId}
             modules={modules}
             prepareGroups={prepareGroups}
+            dateGroups={dateGroups}
+            deliverableGroups={deliverableGroups}
+            teamGroups={teamGroups}
             prepResources={prepResources}
             overviewResources={overviewResources}
             orphanSections={orphanSections}
@@ -920,7 +932,7 @@ function ProjectSettings({
           <button
             onClick={toggleArchive}
             disabled={busy}
-            className="rounded-lg bg-white px-3.5 py-2 text-xs font-semibold text-runfree-ink ring-1 ring-gray-300 transition hover:ring-runfree-magenta/50 disabled:opacity-50"
+            className="rounded-lg bg-white px-3.5 py-2 text-xs font-semibold text-runfree-ink ring-1 ring-gray-300 transition hover:ring-runfree-magenta/50 disabled:opacity-50 max-sm:min-h-[40px]"
           >
             {archived ? "Restore this project" : "Archive this project"}
           </button>
@@ -932,7 +944,7 @@ function ProjectSettings({
           <button
             onClick={destroy}
             disabled={busy}
-            className="ml-auto rounded-lg px-3.5 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+            className="ml-auto rounded-lg px-3.5 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50 max-sm:min-h-[40px]"
           >
             Delete permanently
           </button>
@@ -1006,7 +1018,7 @@ function ProjectToolbar({
                     <a
                       href={it.href}
                       aria-current={on ? "true" : undefined}
-                      className={`inline-block whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
+                      className={`inline-flex items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition max-sm:min-h-[40px] ${
                         on
                           ? "bg-runfree-pink text-runfree-magentaDeep"
                           : "text-gray-500 hover:bg-white hover:text-runfree-ink"
@@ -1039,7 +1051,7 @@ function ProjectToolbar({
                 aria-checked={view === o.key}
                 title={o.hint}
                 onClick={() => onChangeView(o.key)}
-                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition ${
+                className={`rounded-full px-3 py-1.5 text-[13px] font-semibold transition max-sm:min-h-[40px] ${
                   view === o.key
                     ? "bg-runfree-grad-deep text-white shadow-sm"
                     : "text-gray-500 hover:text-runfree-ink"
@@ -1155,7 +1167,7 @@ function TaskList({
             onClick={() => toggle(t)}
             disabled={!accessToken || busyId === t.id}
             aria-label={t.is_done ? `Mark "${t.title}" not done` : `Mark "${t.title}" done`}
-            className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${
+            className={`relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition before:absolute before:-inset-2 before:content-[''] ${
               t.is_done
                 ? "border-emerald-500 bg-emerald-500 text-white"
                 : "border-gray-300 bg-white hover:border-runfree-magenta"
@@ -1721,6 +1733,9 @@ function CondensedBoard({
   projectId,
   modules,
   prepareGroups,
+  dateGroups,
+  deliverableGroups,
+  teamGroups,
   prepResources,
   overviewResources,
   orphanSections,
@@ -1737,6 +1752,9 @@ function CondensedBoard({
   projectId: string;
   modules: NavModule[];
   prepareGroups: PrepGroup[];
+  dateGroups: PrepGroup[];
+  deliverableGroups: PrepGroup[];
+  teamGroups: PrepGroup[];
   prepResources: ProjectDetail["resources"];
   overviewResources: ProjectDetail["resources"];
   orphanSections: string[];
@@ -1809,6 +1827,24 @@ function CondensedBoard({
         </Fold>
       )}
 
+      {dateGroups.length > 0 && (
+        <Fold
+          title="Key dates"
+          accent="bg-amber-400"
+          meta={`${detail.prepItems.filter((i) => dateGroups.some((g) => g.id === i.group_id)).length}`}
+        >
+          <PrepCards
+            groups={dateGroups}
+            items={detail.prepItems}
+            projectId={projectId}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            fileUrls={imageUrls}
+            onChanged={onChanged}
+          />
+        </Fold>
+      )}
+
       <Fold title="Prepare your team" accent="bg-runfree-magenta" meta={`${prepCount} item${prepCount === 1 ? "" : "s"}`}>
         <PrepareSection
           id="prepare-condensed"
@@ -1875,6 +1911,20 @@ function CondensedBoard({
         </Fold>
       ))}
 
+      {deliverableGroups.length > 0 && (
+        <Fold title="Deliverables" accent="bg-runfree-magentaDeep">
+          <PrepCards
+            groups={deliverableGroups}
+            items={detail.prepItems}
+            projectId={projectId}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            fileUrls={imageUrls}
+            onChanged={onChanged}
+          />
+        </Fold>
+      )}
+
       <Fold title="Session recordings" accent="bg-sky-500" meta={`${detail.sessions.length}`}>
         <SessionsSection
           id="sessions-condensed"
@@ -1894,6 +1944,8 @@ function CondensedBoard({
       <Fold title="Your team" accent="bg-emerald-500" meta={`${detail.members.length}`}>
         <TeamSection
           id="team-condensed"
+          teamGroups={teamGroups}
+          canEdit={canEdit}
           detail={detail}
           imageUrls={imageUrls}
           canManage={canManage}
@@ -2800,7 +2852,7 @@ function SectionNote({
         {canEdit && !editing && (
           <button
             onClick={() => setEditing(true)}
-            className="text-xs font-medium text-runfree-magentaDeep hover:underline"
+            className="inline-flex items-center text-xs font-medium text-runfree-magentaDeep hover:underline max-sm:min-h-[40px]"
           >
             {initial ? "Edit" : "Add"}
           </button>
@@ -3295,7 +3347,11 @@ function ImageGallery({
 
                  They sit at 60% opacity rather than hidden-until-hover,
                  because hover does not exist on touch either. */
-              <div className="absolute inset-x-1 bottom-1 flex items-center justify-between gap-1 opacity-60 transition group-hover:opacity-100 focus-within:opacity-100">
+              /* Pinned to the TOP of the tile. At the bottom it sat directly
+                 on the "Name this photo…" input and swallowed every click, so
+                 the caption could never be typed on a tile a coach could edit
+                 — the one place it exists. */
+              <div className="absolute inset-x-1 top-1 flex items-center justify-between gap-1 opacity-60 transition group-hover:opacity-100 focus-within:opacity-100">
                 <div className="flex gap-1">
                   <IconButton
                     label={`Move photo ${index + 1} earlier`}
@@ -3316,6 +3372,11 @@ function ImageGallery({
                   label={`Remove photo ${index + 1}`}
                   onClick={async () => {
                     if (!accessToken) return;
+                    // Every other destructive action in this file confirms.
+                    // This one did not, and on a phone the ✕ sits a thumb's
+                    // width from the reorder arrows on a ~164px tile.
+                    if (!confirm(`Remove ${d.caption ? `"${d.caption}"` : "this photo"}? This cannot be undone.`))
+                      return;
                     // The storage object is deliberately left in place — the
                     // row is what makes it visible, and orphaned bytes are
                     // cheaper than a failed delete that removes the image
@@ -3626,7 +3687,7 @@ function PrepRow({
           onClick={toggle}
           disabled={!canEdit || busy}
           aria-label={item.is_done ? `Mark "${item.title}" not done` : `Mark "${item.title}" done`}
-          className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${
+          className={`relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition before:absolute before:-inset-2 before:content-[''] ${
             item.is_done
               ? "border-emerald-500 bg-emerald-500 text-white"
               : "border-gray-300 bg-white hover:border-runfree-magenta"
@@ -4733,6 +4794,24 @@ function TeamSection({
     <section id={id} className="mt-20 scroll-mt-20">
       {!bare && <SectionHeading eyebrow="Who you're working with" title="Your team" />}
 
+      {/* Insights profiles and other team-coaching uploads. This was
+          computed, passed in and destructured — and never rendered, so Meta
+          Performance's "Assessments and Profiles" card existed only in the
+          database. */}
+      {teamGroups.length > 0 && (
+        <div className="mt-8">
+          <PrepCards
+            groups={teamGroups}
+            items={detail.prepItems}
+            projectId={projectId}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            fileUrls={imageUrls}
+            onChanged={onChanged}
+          />
+        </div>
+      )}
+
       {/* RunFree side — real people, from project_members. The static
           template "team_bio" rows are gone (migration 019): they duplicated
           anyone who was also a member, and a string in a resources table has
@@ -4765,7 +4844,7 @@ function TeamSection({
                   await setLeadNavigator(accessToken, projectId, m.profileId);
                   onChanged();
                 }}
-                className="mt-1.5 w-full rounded-lg px-2 py-1 text-xs font-medium text-gray-400 transition hover:bg-runfree-pink hover:text-runfree-magentaDeep"
+                className="mt-1.5 w-full rounded-lg px-2 py-1 text-xs font-medium text-gray-400 transition hover:bg-runfree-pink hover:text-runfree-magentaDeep max-sm:min-h-[40px]"
               >
                 Make lead navigator
               </button>

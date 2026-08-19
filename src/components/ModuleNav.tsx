@@ -6,6 +6,15 @@ import { MODULE_META, moduleLabel } from "@/lib/modules";
 export type NavModule = {
   /** The raw section string, e.g. "Mod #2 CROWD CLOUD". Used as the key. */
   section: string;
+  /**
+   * What to show, when `section` is not a readable name.
+   *
+   * The certification handouts page keys its modules by Google Drive folder
+   * id, so deriving the label from `section` there rendered a row of buttons
+   * captioned "1nT5EtZoyLb9F5FU8KyZDuGXpEveJnomu". The project page has no
+   * ids for its sections and passes none of these, so it keeps deriving.
+   */
+  label?: string;
   order: number;
   count: number;
 };
@@ -64,7 +73,7 @@ export default function ModuleNav({
         <ul className="relative flex flex-wrap items-start justify-center gap-x-1 gap-y-8 sm:flex-nowrap sm:gap-x-2">
           {process.map((m) => {
             const isActive = active === m.section;
-            const words = moduleLabel(m.section).split(/\s+/);
+            const words = (m.label ?? moduleLabel(m.section)).split(/\s+/);
 
             return (
               <li key={m.section} className="flex-1">

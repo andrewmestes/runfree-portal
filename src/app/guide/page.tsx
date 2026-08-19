@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, logout } from "@/lib/auth";
+import { getCurrentFramer, hasCertificationAccess, logout } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
@@ -57,7 +57,7 @@ export default function GuidePage() {
       }
 
       const current = (await getCurrentFramer()) as Framer | null;
-      if (!current) {
+      if (!(await hasCertificationAccess())) {
         setStatus("denied");
         return;
       }

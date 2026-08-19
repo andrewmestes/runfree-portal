@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, logout, updatePassword } from "@/lib/auth";
+import { getCurrentFramer, hasCertificationAccess, logout, updatePassword } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import AccessError from "@/components/AccessError";
 import { Field, FormError, FormNotice } from "@/components/AuthShell";
@@ -50,7 +50,7 @@ export default function AccountPage() {
       setIsPasswordUser(providers.includes("email") || providers.length === 0);
 
       const current = (await getCurrentFramer()) as Framer | null;
-      if (!current) {
+      if (!(await hasCertificationAccess())) {
         router.replace("/");
         return;
       }

@@ -324,6 +324,30 @@ export function membersToCsv(members: ProjectMember[]): string {
 }
 
 /**
+ * The church roster as CSV — the same intent as membersToCsv, but for the
+ * people who have no portal account.
+ *
+ * This is the list a coach actually wants to mail: the whole team, not the
+ * subset who happen to have logged in. The export button used to hang off
+ * the members list and disappeared with it when Team was reorganised, so it
+ * moved here, onto the roster it was always really about.
+ *
+ * Same two escaping concerns as membersToCsv — see that function.
+ */
+export function contactsToCsv(contacts: ChurchContact[]): string {
+  const escape = (v: string | null) => {
+    const raw = v ?? "";
+    const neutralised = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+    return `"${neutralised.replace(/"/g, '""')}"`;
+  };
+  const rows = [
+    ["Name", "Email", "Role at church"],
+    ...contacts.map((c) => [c.full_name, c.email, c.title]),
+  ];
+  return rows.map((r) => r.map((c) => escape(c as string | null)).join(",")).join("\r\n");
+}
+
+/**
  * An href we're willing to put in the DOM. Returns null for anything that
  * isn't plain http(s) — notably `javascript:` and `data:`, which would
  * otherwise execute when a client clicked a church's "website".

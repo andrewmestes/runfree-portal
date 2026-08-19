@@ -19,7 +19,7 @@ import {
   deletePrepItem,
   deleteSession,
   getProjectDetail,
-  membersToCsv,
+  contactsToCsv,
   removeMember,
   reorderDeliverables,
   safeExternalUrl,
@@ -496,7 +496,6 @@ export default function ProjectDetailPage() {
    * routinely run part of the process, so any total there reads as a target
    * that a deliberately partial engagement has failed to hit.
    */
-  const hasChurchTeam = detail.template?.isGroup ?? true;
   const hasDeliverables = (detail.template?.hasVisionStack ?? false) || deliverableGroups.length > 0;
   const datesCount = detail.prepItems.filter((i) =>
     dateGroups.some((g) => g.id === i.group_id)
@@ -617,30 +616,21 @@ export default function ProjectDetailPage() {
               />
             )}
 
+            {/* TeamSection renders the church roster itself now, so there is
+                no second ChurchTeamInfo here — that pairing was what put
+                "Church team 0" directly above a list of eight people. */}
             {activePanel === "team" && (
-              <>
-                <TeamSection
-                  id="team"
-                  detail={detail}
-                  imageUrls={imageUrls}
-                  canManage={canManage}
-                  canEdit={canEdit}
-                  teamGroups={teamGroups}
-                  accessToken={accessToken}
-                  projectId={projectId}
-                  onChanged={refresh}
-                />
-                {hasChurchTeam && (
-                  <ChurchTeamInfo
-                    id="church-team"
-                    contacts={detail.contacts}
-                    projectId={projectId}
-                    canEdit={canEdit}
-                    accessToken={accessToken}
-                    onChanged={refresh}
-                  />
-                )}
-              </>
+              <TeamSection
+                id="team"
+                detail={detail}
+                imageUrls={imageUrls}
+                canManage={canManage}
+                canEdit={canEdit}
+                teamGroups={teamGroups}
+                accessToken={accessToken}
+                projectId={projectId}
+                onChanged={refresh}
+              />
             )}
 
             {activePanel === "dates" && dateGroups.length > 0 && (
@@ -772,22 +762,17 @@ export default function ProjectDetailPage() {
               </section>
             )}
 
-            {activePanel === "access" && canManage && (
-              <>
-                <ProjectAccess
-                  id="access"
-                  detail={detail}
-                  projectId={projectId}
-                  accessToken={accessToken}
-                  onChanged={refresh}
-                />
-                <ProjectSettings
-                  detail={detail}
-                  projectId={projectId}
-                  accessToken={accessToken}
-                  onChanged={refresh}
-                />
-              </>
+            {/* Archive and delete follow the roster rather than getting a
+                tab of their own: they are the rarest thing an admin does,
+                and Team is where the project's people already live. Access
+                itself moved to the dialog in the header. */}
+            {activePanel === "team" && canManage && (
+              <ProjectSettings
+                detail={detail}
+                projectId={projectId}
+                accessToken={accessToken}
+                onChanged={refresh}
+              />
           )}
         </div>
       </main>
@@ -826,7 +811,6 @@ function ChurchTeamInfo({
   accessToken: string | null;
   onChanged: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -857,6 +841,18 @@ function ChurchTeamInfo({
     onChanged();
   }
 
+  function downloadCsv() {
+    const blob = new Blob([contactsToCsv(contacts)], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "church-team.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   if (contacts.length === 0 && !canEdit) return null;
 
   const field =
@@ -865,11 +861,11 @@ function ChurchTeamInfo({
   return (
     <section id={id} className="mt-8 scroll-mt-20">
       <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="flex w-full items-center gap-3.5 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
-        >
+        {/* Not collapsible. Andrew: "I don't think that needs to be
+            collapsible. Let's just go ahead and... when they click on the
+            team tab, it just shows everybody in the team." Behind a fold it
+            was one more click on a tab that exists to show these people. */}
+        <div className="flex w-full items-center gap-3.5 border-b border-gray-100 px-5 py-4">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-runfree-indigo text-runfree-navy">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-[18px] w-[18px]" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 19v-1.5a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3V19" />
@@ -879,49 +875,35 @@ function ChurchTeamInfo({
           </span>
 
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-runfree-ink">Church team info</span>
+            <span className="block font-display text-base font-bold text-runfree-ink">
+              Church Team
+            </span>
             <span className="block text-xs text-gray-500">
-              {contacts.length === 0
-                ? "Names and titles — no portal access"
-                : contacts
-                    .slice(0, 3)
-                    .map((c) => c.full_name.split(" ")[0])
-                    .join(", ") + (contacts.length > 3 ? ` and ${contacts.length - 3} more` : "")}
+              Names and titles. Portal access is granted separately.
             </span>
           </span>
 
-          {contacts.length > 0 && (
-            <span aria-hidden className="hidden shrink-0 -space-x-2 sm:flex">
-              {contacts.slice(0, 5).map((c) => (
-                <span
-                  key={c.id}
-                  className="grid h-7 w-7 place-items-center rounded-full bg-white text-[10px] font-bold text-runfree-navy ring-2 ring-white"
-                  style={{ backgroundColor: "#EEF0FB" }}
-                >
-                  {c.full_name
-                    .split(/\s+/)
-                    .slice(0, 2)
-                    .map((w) => w[0])
-                    .join("")
-                    .toUpperCase()}
-                </span>
-              ))}
-            </span>
-          )}
 
+          {contacts.length > 0 && (
+            <button
+              onClick={downloadCsv}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-ink hover:ring-runfree-magenta/40"
+            >
+              Export CSV
+            </button>
+          )}
           <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
             {contacts.length}
           </span>
-          <span className="text-gray-400">
-            <Chevron open={open} />
-          </span>
-        </button>
+        </div>
 
-        {open && (
-          <div className="border-t border-gray-100 px-5 py-4">
+        <div className="px-5 py-4">
+            {/* "#team" used to jump down the long page. There is no such
+                anchor now — access moved into the header, next to the logo. */}
             <p className="mb-3 text-xs text-gray-500">
-              Names and contact details only. Nobody here has portal access until they are
-              added under <a href="#team" className="font-medium text-runfree-magentaDeep hover:underline">Your team</a>.
+              Names and contact details only. Nobody here has portal access until they are added
+              through <strong className="font-semibold text-gray-600">Manage access</strong> at the
+              top of this project.
             </p>
 
             {contacts.length === 0 && (
@@ -989,9 +971,85 @@ function ChurchTeamInfo({
               </div>
             )}
           </div>
-        )}
       </div>
     </section>
+  );
+}
+
+/**
+ * A dialog that keeps you where you were.
+ *
+ * Andrew, on access: "that would be a good spot for information on access,
+ * making it nice and small, when you click on it, it opens up into a little
+ * light box or small thing that doesn't take you away from the page."
+ *
+ * Escape closes it, the backdrop closes it, and focus moves into the panel
+ * on open so a keyboard user is not left behind on the button. Body scroll
+ * is locked while it is up — a dialog that scrolls the page underneath it
+ * reads as broken on a phone.
+ */
+function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panel.current?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-runfree-ink/50 p-4 backdrop-blur-sm sm:p-8"
+      onClick={onClose}
+    >
+      <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        className="animate-rise my-auto w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl outline-none"
+      >
+        <div className="h-1 bg-runfree-grad" />
+        <div className="flex items-start gap-3 border-b border-gray-100 px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-lg font-extrabold tracking-tight text-runfree-ink">
+              {title}
+            </h2>
+            {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 outline-none transition hover:bg-gray-100 hover:text-runfree-ink focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </button>
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -1456,14 +1514,17 @@ function ProjectAccess({
   projectId,
   accessToken,
   onChanged,
+  embedded = false,
 }: {
   id: string;
   detail: ProjectDetail;
   projectId: string;
   accessToken: string | null;
   onChanged: () => void;
+  /** Inside the header's Manage access dialog: no card, no fold, no heading. */
+  embedded?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(embedded);
   const [adding, setAdding] = useState(false);
   const [email, setEmail] = useState("");
   const [orgRole, setOrgRole] = useState("");
@@ -1512,8 +1573,13 @@ function ProjectAccess({
     "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
 
   return (
-    <section id={id} className="mt-8 scroll-mt-24">
-      <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
+    <section id={id} className={embedded ? "" : "mt-8 scroll-mt-24"}>
+      <div
+        className={
+          embedded ? "" : "overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80"
+        }
+      >
+        {!embedded && (
         <button
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
@@ -1538,9 +1604,10 @@ function ProjectAccess({
             <Chevron open={open} />
           </span>
         </button>
+        )}
 
         {open && (
-          <div className="border-t border-gray-100 px-4 py-4 sm:px-5">
+          <div className={embedded ? "" : "border-t border-gray-100 px-4 py-4 sm:px-5"}>
             <ul className="divide-y divide-gray-100">
               {members.map((m) => (
                 <li key={m.profileId} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
@@ -1728,6 +1795,7 @@ function ChurchHero({
   const logoInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showAccess, setShowAccess] = useState(false);
   const [form, setForm] = useState({
     location: detail.location ?? "",
     website_url: detail.websiteUrl ?? "",
@@ -1865,13 +1933,50 @@ function ChurchHero({
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">{detail.about}</p>
             )}
 
+            {/* Access lives up here with the logo, the website and the lead
+                navigator, because who can get in is a top-level fact about
+                the project rather than a section of it. It opens a dialog so
+                a coach checking who has access does not lose the panel they
+                were reading. */}
             {canManage && !editing && (
-              <button
-                onClick={() => setEditing(true)}
-                className="mt-3 text-xs font-medium text-runfree-magentaDeep outline-none hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-xs font-medium text-runfree-magentaDeep outline-none hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+                >
+                  Edit details
+                </button>
+                <button
+                  onClick={() => setShowAccess(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-runfree-ink shadow-sm ring-1 ring-gray-200 outline-none transition hover:ring-runfree-magenta/40 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-runfree-magentaDeep">
+                    <rect x="4" y="10" width="16" height="10" rx="2" />
+                    <path d="M8 10V7a4 4 0 1 1 8 0v3" />
+                  </svg>
+                  Manage access
+                  <span className="rounded-full bg-gray-100 px-1.5 text-[10px] font-bold tabular-nums text-gray-600">
+                    {detail.members.length}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {showAccess && (
+              <Modal
+                title="Project access"
+                subtitle="Who can sign in, and what they can do once they are here."
+                onClose={() => setShowAccess(false)}
               >
-                Edit details
-              </button>
+                <ProjectAccess
+                  id="access"
+                  embedded
+                  detail={detail}
+                  projectId={detail.id}
+                  accessToken={accessToken}
+                  onChanged={onChanged}
+                />
+              </Modal>
             )}
 
             {canManage && editing && (
@@ -4714,8 +4819,6 @@ function TeamSection({
   projectId: string;
   onChanged: () => void;
 }) {
-  const [managing, setManaging] = useState(false);
-
   // Lead navigator first, then Will, then Brooke, then anyone else.
   // Andrew: "make sure that Will Mancini comes before Brooke Domek, but the
   // lead navigator is always first."
@@ -4728,50 +4831,33 @@ function TeamSection({
       const bi = RUNFREE_ORDER.indexOf(b.email.toLowerCase());
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
     });
-  const church = detail.members.filter((m) => !m.isStaff);
   // Templates default to group; only an explicitly 1:1 vertical opts out.
   const isGroup = detail.template?.isGroup ?? true;
 
-  function downloadCsv() {
-    const csv = membersToCsv(church.length > 0 ? church : detail.members);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${detail.name.replace(/[^\w\- ]+/g, "")} — team.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <section id={id} className="mt-20 scroll-mt-20">
-      {!bare && <SectionHeading eyebrow="Who you're working with" title="Your team" />}
+      {!bare && <SectionHeading eyebrow="Who you're working with" title="Your Team" />}
 
-      {/* Insights profiles and other team-coaching uploads. This was
-          computed, passed in and destructured — and never rendered, so Meta
-          Performance's "Assessments and Profiles" card existed only in the
-          database. */}
-      {teamGroups.length > 0 && (
-        <div className="mt-8">
-          <PrepCards
-            groups={teamGroups}
-            items={detail.prepItems}
-            projectId={projectId}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            fileUrls={imageUrls}
-            onChanged={onChanged}
-          />
-        </div>
+      {/* The church's own people lead. Andrew: "Let's lead with their actual
+          church team. And then below it shows the run free team." A church
+          opening this tab is looking for themselves first. */}
+      {isGroup && (
+        <ChurchTeamInfo
+          id="church-team"
+          contacts={detail.contacts}
+          projectId={projectId}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          onChanged={onChanged}
+        />
       )}
 
       {/* RunFree side — real people, from project_members. The static
           template "team_bio" rows are gone (migration 019): they duplicated
           anyone who was also a member, and a string in a resources table has
           no face, no address and nothing to click. */}
-      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <h3 className="mt-12 font-display text-base font-bold text-runfree-ink">Your RunFree Team</h3>
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {runfree.map((m) => (
           <div key={m.profileId}>
             <PersonCard
@@ -4815,63 +4901,27 @@ function TeamSection({
         )}
       </div>
 
-      {/* The client's own team — only where there is one. A Younique or
-          coaching engagement is with a person, so offering to manage "Church
-          team — 0 people" there solves a problem that does not exist. */}
-      {isGroup && (
-      <div className="mt-10 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4">
-          <h3 className="font-display text-base font-bold text-runfree-ink">
-            Church team
-            <span className="ml-2 text-sm font-normal text-gray-400">{church.length}</span>
-          </h3>
-          <div className="flex items-center gap-2">
-            {church.length > 0 && (
-              <button
-                onClick={downloadCsv}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-ink hover:ring-runfree-magenta/40"
-              >
-                Export CSV
-              </button>
-            )}
-            {canManage && (
-              <button
-                onClick={() => setManaging((v) => !v)}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink"
-              >
-                {managing ? "Done" : "Manage"}
-              </button>
-            )}
-          </div>
-        </div>
+      {/* Team Building Profiles and other team-coaching uploads, last.
+          Andrew: "under your team. Let's drop team building profiles. A
+          little lower."
 
-        {church.length === 0 ? (
-          <p className="px-6 py-10 text-center text-sm text-gray-400">
-            Nobody from the church has been added yet.
-          </p>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {church.map((m) => (
-              <MemberRow
-                key={m.profileId}
-                member={m}
-                managing={managing && canManage}
-                accessToken={accessToken}
-                projectId={projectId}
-                onChanged={onChanged}
-              />
-            ))}
-          </ul>
-        )}
-
-        {canManage && managing && (
-          <AddMemberForm
-            accessToken={accessToken}
+          What used to sit here — a second "Church team" listing the church
+          members who hold portal access — is gone. It counted a different
+          thing from the roster above while wearing almost the same name, so
+          the tab showed "Church team 0" directly above eight people. Granting
+          access lives in one place now: Manage access, in the header. */}
+      {teamGroups.length > 0 && (
+        <div className="mt-12">
+          <PrepCards
+            groups={teamGroups}
+            items={detail.prepItems}
             projectId={projectId}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            fileUrls={imageUrls}
             onChanged={onChanged}
           />
-        )}
-      </div>
+        </div>
       )}
     </section>
   );

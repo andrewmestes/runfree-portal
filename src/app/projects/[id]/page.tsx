@@ -69,6 +69,13 @@ type Profile = {
   certification_access: boolean;
 };
 
+/**
+ * The one Drive handout that belongs to the Preparation panel rather than
+ * the process. Matched loosely because the file is named by hand in Drive
+ * and has appeared as both "Preparation Checklist" and "Prep Checklist".
+ */
+const PREP_HANDOUT = /prep(aration)?\s*checklist/i;
+
 const PREP_SECTION = "CHURCH PREPARATION";
 const OVERVIEW_SECTION = "PROCESS OVERVIEW";
 
@@ -108,6 +115,34 @@ function formatSessionDate(held: string | null): string {
     month: "long",
     year: "numeric",
   });
+}
+
+/** Today at midnight, local time — the cutoff "upcoming" is measured against. */
+function startOfToday(): number {
+  return new Date().setHours(0, 0, 0, 0);
+}
+
+/**
+ * A stored date ("2026-08-24") as a local Date.
+ *
+ * `new Date("2026-08-24")` parses as midnight UTC, which is the previous
+ * evening anywhere west of Greenwich — so after 8pm Eastern a session
+ * scheduled for today sorted as already past and vanished from "Next". These
+ * dates carry no time zone because they are calendar dates, not instants;
+ * splitting the parts and handing them to the local constructor is what
+ * treats them that way.
+ */
+function parseLocalDate(iso: string | null): Date | null {
+  if (!iso) return null;
+  const [y, m, d] = iso.split("-").map(Number);
+  return y && m && d ? new Date(y, m - 1, d) : null;
+}
+
+/** "24 August" — the short form used where the year is obvious from context. */
+function formatPrepDate(iso: string | null): string {
+  const parsed = parseLocalDate(iso);
+  if (!parsed) return "Date not set";
+  return parsed.toLocaleDateString(undefined, { day: "numeric", month: "long" });
 }
 
 /**
@@ -160,6 +195,35 @@ export default function ProjectDetailPage() {
     setView(next);
     window.localStorage.setItem("rf-project-view", next);
   }, []);
+  /**
+   * Which panel is showing. Kept in the URL (?panel=prepare) so a coach can
+   * send someone straight to a section — "open this and look at Preparation"
+   * used to mean "scroll down to roughly the middle".
+   *
+   * Read from the URL on mount rather than held in state alone, so a shared
+   * link, a refresh, and the browser Back button all land in the same place.
+   */
+  const [panel, setPanel] = useState<string>("overview");
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("panel");
+    if (fromUrl) setPanel(fromUrl);
+    const onPop = () => {
+      setPanel(new URLSearchParams(window.location.search).get("panel") || "overview");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const goPanel = useCallback((next: string) => {
+    setPanel(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("panel", next);
+    window.history.pushState(null, "", url);
+    // A panel swap replaces the whole screen; landing halfway down the new
+    // one because the old one was scrolled is disorienting.
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
   const [status, setStatus] = useState<"checking" | "ready" | "not_found" | "error">("checking");
   const [activeModule, setActiveModule] = useState<string>("");
   const [handouts, setHandouts] = useState<HandoutLibrary | null>(null);
@@ -431,6 +495,78 @@ export default function ProjectDetailPage() {
     ]),
   ].filter((s) => !claimed.has(s));
 
+  /**
+   * The panels, in the order Andrew asked for them: orientation first, then
+   * the people, then the work, and the Vision Stack last because it is the
+   * output rather than the way in.
+   *
+   * Counts ride along on the tabs because they are what makes the process
+   * legible to a first-time visitor. Deliverables carries none: coaches
+   * routinely run part of the process, so any total there reads as a target
+   * that a deliberately partial engagement has failed to hit.
+   */
+  const hasChurchTeam = detail.template?.isGroup ?? true;
+  const hasDeliverables = (detail.template?.hasVisionStack ?? false) || deliverableGroups.length > 0;
+  const datesCount = detail.prepItems.filter((i) =>
+    dateGroups.some((g) => g.id === i.group_id)
+  ).length;
+  const prepareCount = detail.prepItems.filter((i) =>
+    prepareGroups.some((g) => g.id === i.group_id)
+  ).length;
+
+  const panelItems = [
+    { key: "overview", label: "Overview", count: null },
+    { key: "team", label: "Team", count: detail.members.length + detail.contacts.length },
+    dateGroups.length > 0 ? { key: "dates", label: "Key dates", count: datesCount } : null,
+    prepareGroups.length > 0 || prepResources.length > 0
+      ? { key: "prepare", label: "Preparation", count: prepareCount }
+      : null,
+    modules.length > 0 ? { key: "process", label: "The process", count: modules.length } : null,
+    { key: "sessions", label: "Sessions", count: detail.sessions.length },
+    hasDeliverables ? { key: "deliverables", label: "Deliverables", count: null } : null,
+    canManage ? { key: "access", label: "Access", count: null } : null,
+  ].filter((x): x is { key: string; label: string; count: number | null } => x !== null);
+
+  // A link to a panel this project doesn't have (a Younique project has no
+  // module track) lands on the Overview rather than on a blank screen.
+  const activePanel = panelItems.some((p) => p.key === panel) ? panel : "overview";
+
+  const doorways = panelItems
+    .filter((p) => p.key !== "overview" && p.key !== "access")
+    .map((p) => ({
+      key: p.key,
+      label: p.label,
+      blurb:
+        p.key === "team"
+          ? `${detail.members.length} from RunFree${
+              detail.contacts.length > 0 ? ` · ${detail.contacts.length} from the church` : ""
+            }`
+          : p.key === "dates"
+            ? `${datesCount} on the calendar`
+            : p.key === "prepare"
+              ? `${prepareCount} to read and do before we begin`
+              : p.key === "process"
+                ? `${modules.length} tools, in the order we use them`
+                : p.key === "sessions"
+                  ? detail.sessions.length === 1
+                    ? "1 session recorded"
+                    : `${detail.sessions.length} sessions recorded`
+                  : "What your team builds together",
+    }));
+
+  // Where the team is: the module of the most recent session that has
+  // actually happened, falling back to whichever module is selected.
+  const lastHeld = [...detail.sessions]
+    .filter((s) => s.held_on)
+    .sort((a, b) => (a.held_on! < b.held_on! ? 1 : -1))[0];
+  const currentModule = lastHeld?.section ?? (modules.length > 0 ? activeModule : null);
+
+  const nextDateItem =
+    detail.prepItems
+      .filter((i) => i.due_on && dateGroups.some((g) => g.id === i.group_id))
+      .sort((a, b) => (a.due_on! < b.due_on! ? -1 : 1))
+      .find((i) => (parseLocalDate(i.due_on)?.getTime() ?? 0) >= startOfToday()) ?? null;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <PortalHeader
@@ -464,26 +600,9 @@ export default function ProjectDetailPage() {
         <ProjectToolbar
           view={view}
           onChangeView={chooseView}
-          items={
-            view === "condensed"
-              ? []
-              : [
-                  canManage ? { href: "#access", label: "Access" } : null,
-                  (detail.template?.isGroup ?? true)
-                    ? { href: "#church-team", label: "Church team" }
-                    : null,
-                  dateGroups.length > 0 ? { href: "#dates", label: "Key dates" } : null,
-                  prepareGroups.length > 0 || prepResources.length > 0
-                    ? { href: "#prepare", label: "Preparation work" }
-                    : null,
-                  modules.length > 0 ? { href: "#process", label: "The process" } : null,
-                  detail.template?.hasVisionStack || deliverableGroups.length > 0
-                    ? { href: "#deliverables", label: "Deliverables" }
-                    : null,
-                  { href: "#sessions", label: "Session recordings" },
-                  { href: "#team", label: "Your team" },
-                ].filter((x): x is { href: string; label: string } => x !== null)
-          }
+          active={activePanel}
+          onSelect={goPanel}
+          items={panelItems}
         />
 
         {view === "condensed" ? (
@@ -508,98 +627,90 @@ export default function ProjectDetailPage() {
             onChanged={refresh}
           />
         ) : (
-          <>
+          /* One panel at a time. `key` on the wrapper restarts the fade on
+             every swap, so the change is legible rather than an instant
+             content replacement that looks like a glitch. */
+          <div key={activePanel} className="animate-fade mt-10">
+            {activePanel === "overview" && (
+              <OverviewPanel
+                detail={detail}
+                doorways={doorways}
+                onGo={goPanel}
+                nextDate={nextDateItem}
+                currentModule={currentModule}
+              />
+            )}
 
-        {canManage && (
-          <ProjectAccess
-            id="access"
-            detail={detail}
-            projectId={projectId}
-            accessToken={accessToken}
-            onChanged={refresh}
-          />
-        )}
+            {activePanel === "team" && (
+              <>
+                <TeamSection
+                  id="team"
+                  detail={detail}
+                  imageUrls={imageUrls}
+                  canManage={canManage}
+                  canEdit={canEdit}
+                  teamGroups={teamGroups}
+                  accessToken={accessToken}
+                  projectId={projectId}
+                  onChanged={refresh}
+                />
+                {hasChurchTeam && (
+                  <ChurchTeamInfo
+                    id="church-team"
+                    contacts={detail.contacts}
+                    projectId={projectId}
+                    canEdit={canEdit}
+                    accessToken={accessToken}
+                    onChanged={refresh}
+                  />
+                )}
+              </>
+            )}
 
-        {(detail.template?.isGroup ?? true) && (
-          <ChurchTeamInfo
-            id="church-team"
-            contacts={detail.contacts}
-            projectId={projectId}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            onChanged={refresh}
-          />
-        )}
+            {activePanel === "dates" && dateGroups.length > 0 && (
+              <section id="dates">
+                <SectionHeading eyebrow="The calendar" title="Key dates" />
+                <div className="mt-8">
+                  <PrepCards
+                    groups={dateGroups}
+                    items={detail.prepItems}
+                    projectId={projectId}
+                    canEdit={canEdit}
+                    accessToken={accessToken}
+                    fileUrls={imageUrls}
+                    onChanged={refresh}
+                  />
+                </div>
+              </section>
+            )}
 
-        {dateGroups.length > 0 && (
-          <section id="dates" className="mt-14 scroll-mt-20">
-            <SectionHeading eyebrow="The calendar" title="Key dates" />
-            <div className="mt-8">
-              <PrepCards
-                groups={dateGroups}
-                items={detail.prepItems}
+            {activePanel === "prepare" && (
+              <PrepareSection
+                id="prepare"
+                prep={prepResources}
+                overview={overviewResources}
+                thumbs={thumbs}
+                prepGroups={prepareGroups}
+                prepItems={detail.prepItems}
                 projectId={projectId}
                 canEdit={canEdit}
                 accessToken={accessToken}
                 fileUrls={imageUrls}
                 onChanged={refresh}
+                handouts={handouts}
+                onOpenHandout={openHandout}
               />
-            </div>
-          </section>
-        )}
+            )}
 
-        <PrepareSection
-          id="prepare"
-          prep={prepResources}
-          overview={overviewResources}
-          thumbs={thumbs}
-          prepGroups={prepareGroups}
-          prepItems={detail.prepItems}
-          projectId={projectId}
-          canEdit={canEdit}
-          accessToken={accessToken}
-          fileUrls={imageUrls}
-          onChanged={refresh}
-          handouts={handouts}
-          onOpenHandout={openHandout}
-        />
-
-        {modules.length > 0 && (
-          <section id="process" className="mt-16 scroll-mt-20">
-            <SectionHeading eyebrow="The process" title="Pivvot Vision Framing Process" />
-            <div className="mt-10">
-              <ModuleNav modules={modules} active={activeModule} onSelect={setActiveModule} />
-            </div>
-            <ModulePanel
-              key={activeModule}
-              section={activeModule}
-              detail={detail}
-              imageUrls={imageUrls}
-              canEdit={canEdit}
-              accessToken={accessToken}
-              onChanged={refresh}
-              handouts={handouts}
-              onOpenHandout={openHandout}
-              thumbs={thumbs}
-            />
-
-            {/* Andrew: "the additional handouts should be part of the
-                process, not part of the preparation section." */}
-            <ExtraHandouts
-              extras={(handouts?.extras ?? []).filter((g) => !/field guide/i.test(g.name))}
-              onOpen={openHandout}
-            />
-          </section>
-        )}
-
-        {orphanSections.length > 0 && (
-          <section className="mt-16">
-            {modules.length > 0 && <SectionHeading eyebrow="Also in this engagement" title="Further materials" />}
-            <div className={modules.length > 0 ? "mt-8 space-y-6" : "space-y-6"}>
-              {orphanSections.map((section) => (
+            {activePanel === "process" && modules.length > 0 && (
+              <section id="process">
+                <SectionHeading eyebrow="The process" title="Pivvot Vision Framing Process" />
+                <div className="mt-10">
+                  <ModuleNav modules={modules} active={activeModule} onSelect={setActiveModule} />
+                </div>
                 <ModulePanel
-                  key={section}
-                  section={section}
+                  key={activeModule}
+                  section={activeModule}
                   detail={detail}
                   imageUrls={imageUrls}
                   canEdit={canEdit}
@@ -609,72 +720,100 @@ export default function ProjectDetailPage() {
                   onOpenHandout={openHandout}
                   thumbs={thumbs}
                 />
-              ))}
-            </div>
-          </section>
-        )}
 
-        {(detail.template?.hasVisionStack || deliverableGroups.length > 0) && (
-          <section id="deliverables" className="mt-16 scroll-mt-20">
-            <SectionHeading eyebrow="What we build" title="Deliverables" />
-            {detail.template?.hasVisionStack && (
-              <VisionStackCard
+                {/* Andrew: "the additional handouts should be part of the
+                    process, not part of the preparation section." The Field
+                    Guide joins them here — "I want 'the process' to look and
+                    feel more like the original for sure, with icons,
+                    handouts, field guide, and videos." */}
+                <ExtraHandouts
+                  extras={(handouts?.extras ?? []).filter((g) => !PREP_HANDOUT.test(g.name))}
+                  onOpen={openHandout}
+                />
+
+                {orphanSections.length > 0 && (
+                  <div className="mt-16">
+                    <SectionHeading eyebrow="Also in this engagement" title="Further materials" />
+                    <div className="mt-8 space-y-6">
+                      {orphanSections.map((section) => (
+                        <ModulePanel
+                          key={section}
+                          section={section}
+                          detail={detail}
+                          imageUrls={imageUrls}
+                          canEdit={canEdit}
+                          accessToken={accessToken}
+                          onChanged={refresh}
+                          handouts={handouts}
+                          onOpenHandout={openHandout}
+                          thumbs={thumbs}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {activePanel === "sessions" && (
+              <SessionsSection
+                id="sessions"
+                sessions={detail.sessions}
+                detail={detail}
+                imageUrls={imageUrls}
+                thumbs={thumbs}
+                moduleOptions={availableSections(detail)}
+                canEdit={canEdit}
+                accessToken={accessToken}
                 projectId={projectId}
-                total={stackItems.length}
-                ready={stackReady}
-                layers={detail.stackLayers}
+                onChanged={refresh}
               />
             )}
-            {deliverableGroups.length > 0 && (
-              <div className="mt-6">
-                <PrepCards
-                  groups={deliverableGroups}
-                  items={detail.prepItems}
+
+            {activePanel === "deliverables" && hasDeliverables && (
+              <section id="deliverables">
+                <SectionHeading eyebrow="What we build" title="Deliverables" />
+                {detail.template?.hasVisionStack && (
+                  <VisionStackCard
+                    projectId={projectId}
+                    ready={stackReady}
+                    layers={detail.stackLayers}
+                  />
+                )}
+                {deliverableGroups.length > 0 && (
+                  <div className="mt-6">
+                    <PrepCards
+                      groups={deliverableGroups}
+                      items={detail.prepItems}
+                      projectId={projectId}
+                      canEdit={canEdit}
+                      accessToken={accessToken}
+                      fileUrls={imageUrls}
+                      onChanged={refresh}
+                    />
+                  </div>
+                )}
+              </section>
+            )}
+
+            {activePanel === "access" && canManage && (
+              <>
+                <ProjectAccess
+                  id="access"
+                  detail={detail}
                   projectId={projectId}
-                  canEdit={canEdit}
                   accessToken={accessToken}
-                  fileUrls={imageUrls}
                   onChanged={refresh}
                 />
-              </div>
+                <ProjectSettings
+                  detail={detail}
+                  projectId={projectId}
+                  accessToken={accessToken}
+                  onChanged={refresh}
+                />
+              </>
             )}
-          </section>
-        )}
-
-        <SessionsSection
-          id="sessions"
-          sessions={detail.sessions}
-          detail={detail}
-          imageUrls={imageUrls}
-          thumbs={thumbs}
-          moduleOptions={availableSections(detail)}
-          canEdit={canEdit}
-          accessToken={accessToken}
-          projectId={projectId}
-          onChanged={refresh}
-        />
-
-        {canManage && (
-          <ProjectSettings
-            detail={detail}
-            projectId={projectId}
-            accessToken={accessToken}
-            onChanged={refresh}
-          />
-        )}
-
-        <TeamSection
-          id="team"
-          detail={detail}
-          imageUrls={imageUrls}
-          canManage={canManage}
-          canEdit={canEdit}
-          teamGroups={teamGroups}
-          accessToken={accessToken}
-          projectId={projectId}
-          onChanged={refresh}
-        />
-          </>
+          </div>
         )}
       </main>
 
@@ -757,7 +896,7 @@ function ChurchTeamInfo({
           className="flex w-full items-center gap-3.5 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
         >
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-runfree-indigo text-runfree-navy">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-4.5 w-4.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-[18px] w-[18px]" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 19v-1.5a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3V19" />
               <circle cx="10" cy="8" r="3" />
               <path d="M20 19v-1.5a3 3 0 0 0-2.25-2.9M15.5 5.2a3 3 0 0 1 0 5.6" />
@@ -967,72 +1106,71 @@ function ProjectSettings({
  * The links track which section you are actually looking at, so the bar
  * doubles as a position indicator rather than only a set of jumps.
  */
+/**
+ * The panel switcher.
+ *
+ * This used to be jump-links plus a scroll-spy down one very long page.
+ * Andrew: "instead of having a single long page, making the whole project
+ * more of a process overview that changes with every click, rather than
+ * scrolling with every click... it should be VERY easy for someone to
+ * navigate even if they have no idea what is all included in the project."
+ *
+ * So each item now swaps the panel rather than scrolling to it, and the
+ * selected panel lives in the URL — a coach can send a link that opens on
+ * Preparation instead of "scroll down to about halfway". The counts are the
+ * part that does the teaching: someone who has never heard of a Vision Stack
+ * still understands "6 dates" and "5 things to read".
+ */
 function ProjectToolbar({
   items,
+  active,
+  onSelect,
   view,
   onChangeView,
 }: {
-  items: { href: string; label: string }[];
+  items: { key: string; label: string; count?: number | null }[];
+  active: string;
+  onSelect: (key: string) => void;
   view: "dynamic" | "condensed";
   onChangeView: (v: "dynamic" | "condensed") => void;
 }) {
-  const [active, setActive] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (items.length === 0) return;
-    const ids = items.map((i) => i.href.slice(1));
-    const seen = new Map<string, number>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) seen.set(e.target.id, e.intersectionRatio);
-        // The section occupying the most of the viewport wins, so a short
-        // section sandwiched between two long ones still gets its turn.
-        let best: string | null = null;
-        let bestRatio = 0;
-        for (const [id, ratio] of seen) {
-          if (ratio > bestRatio) {
-            bestRatio = ratio;
-            best = id;
-          }
-        }
-        if (bestRatio > 0) setActive(best);
-      },
-      { rootMargin: "-88px 0px -55% 0px", threshold: [0, 0.25, 0.5, 1] }
-    );
-    for (const id of ids) {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    }
-    return () => observer.disconnect();
-  }, [items]);
-
   return (
     <div className="sticky top-0 z-30 -mx-4 mt-6 border-b border-gray-200/70 bg-gray-50/85 backdrop-blur-md sm:-mx-6 lg:-mx-8">
       <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
-        {items.length > 0 && (
-          <nav aria-label="Jump to a section" className="min-w-0 flex-1">
+        {items.length > 0 && view === "dynamic" && (
+          <nav aria-label="Project sections" className="min-w-0 flex-1">
             <ul className="-mx-1 flex gap-0.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {items.map((it) => {
-                const on = active === it.href.slice(1);
+                const on = active === it.key;
                 return (
-                  <li key={it.href}>
-                    <a
-                      href={it.href}
+                  <li key={it.key}>
+                    <button
+                      onClick={() => onSelect(it.key)}
                       aria-current={on ? "true" : undefined}
-                      className={`inline-flex items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition max-sm:min-h-[40px] ${
+                      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition max-sm:min-h-[40px] ${
                         on
                           ? "bg-runfree-pink text-runfree-magentaDeep"
                           : "text-gray-500 hover:bg-white hover:text-runfree-ink"
                       }`}
                     >
                       {it.label}
-                    </a>
+                      {it.count != null && it.count > 0 && (
+                        <span
+                          className={`text-[11px] font-bold tabular-nums ${
+                            on ? "text-runfree-magenta/70" : "text-gray-400"
+                          }`}
+                        >
+                          {it.count}
+                        </span>
+                      )}
+                    </button>
                   </li>
                 );
               })}
             </ul>
           </nav>
         )}
+        {view === "condensed" && <div className="min-w-0 flex-1" />}
 
         <div className={`shrink-0 ${items.length === 0 ? "ml-auto" : ""}`}>
           <div
@@ -1774,11 +1912,14 @@ function CondensedBoard({
     prepareGroups.some((g) => g.id === i.group_id)
   ).length;
 
+  // Compared against the LOCAL date. toISOString() reports UTC, so after 8pm
+  // Eastern it returned tomorrow and a session scheduled for today dropped
+  // out of "Next" on the evening it mattered most.
   const nextDate = detail.prepItems
     .filter((i) => i.due_on)
     .map((i) => i.due_on!)
     .sort()
-    .find((d) => d >= new Date().toISOString().slice(0, 10));
+    .find((d) => (parseLocalDate(d)?.getTime() ?? 0) >= startOfToday());
 
   return (
     <div className="mt-4 space-y-3">
@@ -2401,12 +2542,11 @@ function PrioritiesBanner({
  */
 function VisionStackCard({
   projectId,
-  total,
   ready,
   layers,
 }: {
   projectId: string;
-  total: number;
+  /** How many pieces are published. There is deliberately no total — see below. */
   ready: number;
   layers: ProjectDetail["stackLayers"];
 }) {
@@ -2428,13 +2568,20 @@ function VisionStackCard({
           <h2 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
             Everything your team has built
           </h2>
+          {/* No "{ready} of {total}". Andrew: "sometimes coaches don't finish
+              all 23 based on what they're delivering. sometimes we do
+              portions of the process, rather than the whole thing." A
+              denominator turns an engagement that was scoped to four
+              deliverables into one that reads as 19 short. What has been
+              finished is worth saying; what is missing is not. */}
           <p className="mt-3 max-w-lg text-sm leading-relaxed text-white/70">
-            Four layers, from the convictions underneath it all to the tools that put it to work.
-            {total > 0 && (
+            {layers.length} layers, from the convictions underneath it all to the tools that put it
+            to work.
+            {ready > 0 && (
               <>
                 {" "}
                 <span className="font-semibold text-white">
-                  {ready} of {total}
+                  {ready} {ready === 1 ? "piece" : "pieces"}
                 </span>{" "}
                 finished so far.
               </>
@@ -2456,14 +2603,32 @@ function VisionStackCard({
         {/* Equal width and right-aligned: the staggered indent made four
             different-length labels look like four different-size boxes. The
             stack now steps cleanly, which is what the printed graphic does. */}
-        <ul className="flex w-full shrink-0 flex-col-reverse gap-1.5 sm:w-64">
+        {/* Each layer wears the icon of the process tool that produces it
+            (migration 021), so the stack reads in the same visual language as
+            the module track rather than as four unlabelled boxes. The
+            Application Toolbox has no icon of its own yet and falls back to
+            its layer number. */}
+        <ul className="flex w-full shrink-0 flex-col-reverse gap-1.5 sm:w-72">
           {layers.map((layer, i) => (
             <li
               key={layer.slug}
-              className="rounded-lg bg-white/10 px-4 py-2.5 text-center text-xs font-semibold text-white/80 ring-1 ring-white/10 transition duration-300 group-hover:bg-white/15"
+              className="flex items-center gap-3 rounded-lg bg-white/10 px-3 py-2.5 text-left text-xs font-semibold text-white/80 ring-1 ring-white/10 transition duration-300 group-hover:bg-white/15"
               style={{ transitionDelay: `${i * 40}ms` }}
             >
-              {layer.name}
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-white/10">
+                {layer.icon_path ? (
+                  <Image
+                    src={layer.icon_path}
+                    alt=""
+                    width={28}
+                    height={28}
+                    className="h-7 w-7 object-contain"
+                  />
+                ) : (
+                  <span className="text-[11px] font-bold tabular-nums text-white/70">{i + 1}</span>
+                )}
+              </span>
+              <span className="min-w-0 flex-1">{layer.name}</span>
             </li>
           ))}
         </ul>
@@ -2537,6 +2702,112 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
  * panel's contents — no navigation, no page load, nothing collapsed behind a
  * disclosure arrow.
  */
+/**
+ * The landing panel — the first thing anyone sees, and the only screen
+ * written for someone who has never heard of a Vision Frame.
+ *
+ * It answers three questions and stops: where are we, what do we owe, and
+ * what is in here. The doorways carry counts rather than jargon, because
+ * "6 dates" teaches a first-time visitor more than "Horizon Storyline" does.
+ *
+ * What it deliberately does NOT show is a completion ratio. An earlier draft
+ * led with "0 of 23 deliverables" and Andrew: "leading with 23 deliverables
+ * feels overwhelming... sometimes coaches don't finish all 23 based on what
+ * they're delivering. sometimes we do portions of the process, rather than
+ * the whole thing." A denominator turns a deliberately partial engagement
+ * into a page that reads as 74% failed, so the count of what EXISTS is shown
+ * and the count of what is missing never is.
+ */
+function OverviewPanel({
+  detail,
+  doorways,
+  onGo,
+  nextDate,
+  currentModule,
+}: {
+  detail: ProjectDetail;
+  doorways: { key: string; label: string; blurb: string }[];
+  onGo: (key: string) => void;
+  nextDate: PrepItem | null;
+  currentModule: string | null;
+}) {
+  const held = detail.sessions.filter((s) => s.held_on).length;
+  const moduleNo = currentModule ? moduleOrder(currentModule) : null;
+  const meta = moduleNo ? MODULE_META[moduleNo] : null;
+
+  const stats: { label: string; value: string; sub?: string }[] = [];
+  if (currentModule) {
+    stats.push({
+      label: "Where you are",
+      value: moduleLabel(currentModule),
+      sub: meta?.stage,
+    });
+  }
+  if (held > 0) {
+    stats.push({
+      label: "Sessions so far",
+      value: String(held),
+      sub: held === 1 ? "recorded" : "recorded",
+    });
+  }
+  if (nextDate?.due_on) {
+    stats.push({
+      label: "Next together",
+      value: formatPrepDate(nextDate.due_on),
+      sub: nextDate.title,
+    });
+  }
+
+  return (
+    <div className="animate-fade">
+      {stats.length > 0 && (
+        <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
+          <div className="h-1 bg-runfree-grad" />
+          <dl className="grid gap-6 p-6 sm:grid-cols-3 sm:p-8">
+            {stats.map((s) => (
+              <div key={s.label}>
+                <dt className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
+                  {s.label}
+                </dt>
+                <dd className="mt-1.5 font-display text-xl font-extrabold tracking-tight sm:text-2xl">
+                  {s.value}
+                </dd>
+                {s.sub && <p className="mt-0.5 text-xs text-white/60">{s.sub}</p>}
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      <div className="mt-8">
+        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+          What&rsquo;s in here
+        </h3>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {doorways.map((d) => (
+            <button
+              key={d.key}
+              onClick={() => onGo(d.key)}
+              className="group flex flex-col items-start rounded-2xl bg-white p-5 text-left shadow-sm ring-1 ring-gray-200 outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-runfree-magenta/30 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+            >
+              <span className="font-display text-base font-extrabold tracking-tight text-runfree-ink">
+                {d.label}
+              </span>
+              <span className="mt-1 text-[13px] leading-snug text-gray-500">{d.blurb}</span>
+              <span
+                aria-hidden
+                className="mt-3 text-gray-300 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-runfree-magenta"
+              >
+                →
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModulePanel({
   section,
   bare = false,
@@ -3320,8 +3591,16 @@ function ImageGallery({
               )}
             </a>
 
+            {/* The title is the label on the chart, so it is set like one.
+                Andrew: "All the charts should be able to be uploaded and
+                viewed separately, with a clear title visible." It was 11px
+                grey and truncated, which read as a caption on a photo rather
+                than the name of a piece of work. Naming stays optional — "I'm
+                just curious if we could have the freedom to not name every
+                single piece" — so an untitled chart shows nothing to a
+                viewer rather than a placeholder. */}
             {(d.caption || canEdit) && (
-              <div className="border-t border-gray-100 px-2 py-1.5">
+              <div className="border-t border-gray-100 px-2.5 py-2">
                 {canEdit ? (
                   <input
                     defaultValue={d.caption ?? ""}
@@ -3330,11 +3609,17 @@ function ImageGallery({
                       await setDeliverableCaption(accessToken, d.id, e.target.value);
                       onChanged();
                     }}
-                    placeholder="Name this photo…"
-                    className="w-full bg-transparent text-[11px] text-runfree-ink outline-none placeholder:text-gray-300 focus:placeholder:text-gray-400"
+                    placeholder="Name this chart…"
+                    aria-label={`Name for chart ${index + 1}`}
+                    className="w-full bg-transparent text-[13px] font-semibold text-runfree-ink outline-none placeholder:font-normal placeholder:text-gray-400 focus:placeholder:text-gray-500"
                   />
                 ) : (
-                  <p className="truncate text-[11px] text-gray-600">{d.caption}</p>
+                  <p
+                    title={d.caption ?? undefined}
+                    className="truncate text-[13px] font-semibold text-runfree-ink"
+                  >
+                    {d.caption}
+                  </p>
                 )}
               </div>
             )}
@@ -4108,10 +4393,13 @@ function PrepareSection({
 
       {/* The editable work leads. The orientation videos below it are context;
           these cards are what the team actually has to act on. */}
-      {/* The Field Guide leads the preparation block: it is the one document
-          that describes the whole engagement. The rest of the extras moved to
-          the process section, where the module handouts are. */}
-      <ExtraHandouts extras={extras.filter((g) => /field guide/i.test(g.name))} onOpen={onOpenHandout} />
+      {/* The Preparation Checklist is the one handout that belongs to this
+          block — it is the list the team works through before session one.
+          The Field Guide moved to the process section with the rest of the
+          handouts, per Andrew: "I want 'the process' to look and feel more
+          like the original for sure, with icons, handouts, field guide, and
+          videos." */}
+      <ExtraHandouts extras={extras.filter((g) => PREP_HANDOUT.test(g.name))} onOpen={onOpenHandout} />
 
       {prepGroups.length > 0 && (
         <div className="mt-8">

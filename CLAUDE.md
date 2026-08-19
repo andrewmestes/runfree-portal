@@ -179,6 +179,31 @@ capability, add a check here before trusting it — the RETURNING-clause bug in
 `can_see_project()` (`003`/`004_*.sql`) was found exactly this way, by testing
 against the live database instead of reasoning about the policy on paper.
 
+## The project page is panels, not a long scroll
+
+`/projects/[id]` shows **one panel at a time**, selected by `?panel=<key>`
+(`overview` | `team` | `dates` | `prepare` | `process` | `sessions` |
+`deliverables` | `access`). Andrew: "it should be VERY easy for someone to
+navigate even if they have no idea what is all included in the project."
+
+Two consequences that are easy to get wrong:
+
+- **An unknown `?panel=` falls back to Overview**, and the fallback is
+  computed from `panelItems` — which is itself built from what the project
+  actually has. A Younique project has no module track, so `?panel=process`
+  lands on Overview rather than rendering an empty section. If you add a
+  panel, add it to `panelItems` or it will be unreachable *and* silently
+  redirect.
+- **Condensed view still renders everything at once** and deliberately keeps
+  its `{ready}/{total}` counters. Don't "fix" those to match the Overview:
+  Condensed is the coach's scan-everything mode, where a ratio is the point.
+
+The Overview deliberately shows **no completion ratio**. Andrew: "sometimes
+coaches don't finish all 23 based on what they're delivering. sometimes we do
+portions of the process." A denominator turns a deliberately partial
+engagement into one that reads as mostly failed. `VisionStackCard` takes
+`ready` and has no `total` prop for this reason — don't add one back.
+
 ## Never run `next build` while `next dev` is running
 
 Both write to `.next/`. A production build replaces the dev server's chunk

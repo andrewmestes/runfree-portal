@@ -523,6 +523,37 @@ async function main() {
         !sameProjectDownloadErr,
         sameProjectDownloadErr?.message
       );
+
+      // 16e/16f — private prep documents (migration 036). Marking a prep item
+      // private hid its ROW while leaving the FILE readable to every member;
+      // the rule keys on the second path segment, so what is being proved
+      // here is that the path convention and the policy still agree. If
+      // uploadPrepFile ever stops writing to {project}/private/, 16f is the
+      // check that fails instead of a confidential document quietly leaking.
+      const privatePath = `${projectA.id}/private/rls-test-${RUN}.txt`;
+      const { error: privateUploadErr } = await asAdmin.storage
+        .from(BUCKET)
+        .upload(privatePath, body, { upsert: true });
+      record(
+        "16e. admin can upload a private prep document",
+        !privateUploadErr,
+        privateUploadErr?.message
+      );
+      if (!privateUploadErr) cleanupStoragePaths.push(privatePath);
+
+      const { error: viewerPrivateErr } = await asViewer.storage.from(BUCKET).download(privatePath);
+      record(
+        "16f. a viewer on the project CANNOT read a private prep document",
+        !!viewerPrivateErr,
+        viewerPrivateErr ? "correctly rejected" : "private document was readable by a viewer"
+      );
+
+      const { error: adminPrivateErr } = await asAdmin.storage.from(BUCKET).download(privatePath);
+      record(
+        "16g. an admin can read a private prep document",
+        !adminPrivateErr,
+        adminPrivateErr?.message
+      );
     }
 
     // -----------------------------------------------------------------

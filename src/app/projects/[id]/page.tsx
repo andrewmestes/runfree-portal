@@ -1089,7 +1089,7 @@ function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-runfree-ink/50 p-4 backdrop-blur-sm sm:p-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-runfree-navyDeep/50 p-4 backdrop-blur-sm sm:p-8"
       onClick={onClose}
     >
       <div
@@ -1577,7 +1577,7 @@ function ProjectSidebar({
      * bottom. Only the middle scrolls now, which is also what lets the list
      * grow without the column growing with it.
      */
-    <aside className="flex shrink-0 flex-col bg-runfree-ink lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:overflow-hidden">
+    <aside className="flex shrink-0 flex-col bg-runfree-navyDeep lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:overflow-hidden">
       <div className="shrink-0 px-4 pt-4 sm:px-6 lg:px-3.5 lg:pt-5">
         <a
           href="/"

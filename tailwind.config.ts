@@ -14,6 +14,14 @@ export default {
           orangeLight: "#FF7C58",
           navy: "#1F378C",
           ink: "#2B2A55",
+          /**
+           * The dark blue inside the process icons — sampled from the artwork
+           * rather than guessed. Identical across modules 1, 3 and 4
+           * (#131D45), so it is the illustrations' own shadow tone, not a
+           * one-off. Used for the project sidebar, which is why that column
+           * reads as part of the same family as the icons beside it.
+           */
+          navyDeep: "#131D45",
           pink: "#FCE9F1", // soft tint
           indigo: "#E9EDF9", // soft tint
         },

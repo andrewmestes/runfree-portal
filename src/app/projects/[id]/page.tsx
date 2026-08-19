@@ -581,7 +581,7 @@ export default function ProjectDetailPage() {
       .find((i) => (parseLocalDate(i.due_on)?.getTime() ?? 0) >= startOfToday()) ?? null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50 lg:h-screen lg:overflow-hidden">
       <PortalHeader
         profile={profile}
         onSignOut={handleSignOut}
@@ -610,7 +610,7 @@ export default function ProjectDetailPage() {
           the header of the page." The column keeps the navigation; identity
           belongs across the top, where a client opens the page and sees
           themselves. */}
-      <div className="lg:flex lg:items-start">
+      <div className="lg:flex lg:min-h-0 lg:flex-1 lg:overflow-hidden">
         <ProjectSidebar
           items={panelItems}
           active={activePanel}
@@ -621,7 +621,7 @@ export default function ProjectDetailPage() {
           onSignOut={handleSignOut}
         />
 
-      <main className="min-w-0 flex-1 pb-16">
+      <main className="min-w-0 flex-1 pb-16 lg:overflow-y-auto">
         {/* Inside the content column, not above the whole shell — so the
             church's mark shares a left edge with everything under it.
             Andrew: "the church logo should probably be lined up with the
@@ -727,7 +727,7 @@ export default function ProjectDetailPage() {
             {activePanel === "process" && modules.length > 0 && (
               <section id="process">
 
-                <div className="mt-8">
+                <div className="mt-14">
                   <ModuleNav modules={modules} active={activeModule} onSelect={setActiveModule} />
                   {/* Pinned under the icons, unchanged by the selection. */}
                   <HandoutPills
@@ -827,6 +827,8 @@ export default function ProjectDetailPage() {
           )}
         </div>
         </div>
+
+        <PortalFooter />
       </main>
       </div>
 
@@ -839,8 +841,6 @@ export default function ProjectDetailPage() {
           onClose={() => setPreview(null)}
         />
       )}
-
-      <PortalFooter />
     </div>
   );
 }
@@ -1556,7 +1556,8 @@ function ProjectSidebar({
   profile: Profile;
   onSignOut: () => void;
 }) {
-  const [showAll, setShowAll] = useState(false);
+  const [showStarred, setShowStarred] = useState(true);
+  const [showAll, setShowAll] = useState(true);
 
   const others = projects.filter((p) => p.id !== currentProjectId);
   const starred = others.filter((p) => p.pinned);
@@ -1577,7 +1578,7 @@ function ProjectSidebar({
      * bottom. Only the middle scrolls now, which is also what lets the list
      * grow without the column growing with it.
      */
-    <aside className="flex shrink-0 flex-col bg-runfree-navyDeep lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:overflow-hidden">
+    <aside className="flex shrink-0 flex-col bg-runfree-navyDeep lg:h-full lg:w-64 lg:overflow-hidden">
       <div className="shrink-0 px-4 pt-4 sm:px-6 lg:px-3.5 lg:pt-5">
         <a
           href="/"
@@ -1593,34 +1594,47 @@ function ProjectSidebar({
         <ProjectToolbar items={items} active={active} onSelect={onSelect} />
 
         {starred.length > 0 && (
-          <div className="mt-6">
-            <p className="px-3.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
+          <div className="mt-8 border-t border-white/10 pt-5">
+            <button
+              onClick={() => setShowStarred((v) => !v)}
+              aria-expanded={showStarred}
+              className="flex w-full items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 outline-none transition hover:text-white/85 focus-visible:ring-2 focus-visible:ring-white/60"
+            >
+              <span
+                aria-hidden
+                className={`transition-transform duration-200 ${showStarred ? "rotate-90" : ""}`}
+              >
+                ›
+              </span>
               Starred
-            </p>
-            <ul className="mt-1.5 space-y-0.5">
-              {starred.map((p) => (
-                <li key={p.id}>
-                  <a href={`/projects/${p.id}`} className={projectLink}>
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 shrink-0 text-runfree-magenta" aria-hidden="true">
-                      <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
-                    </svg>
-                    <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
+              <span className="ml-auto tabular-nums text-white/30">{starred.length}</span>
+            </button>
+
+            {showStarred && (
+              <ul className="animate-fade mt-1 space-y-0.5">
+                {starred.map((p) => (
+                  <li key={p.id}>
+                    <a href={`/projects/${p.id}`} className={projectLink}>
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 shrink-0 text-runfree-magenta" aria-hidden="true">
+                        <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
+                      </svg>
+                      <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
-        {/* Everything else, alphabetical and folded away. Someone running a
-            dozen engagements should be able to reach any of them without the
-            list dominating the column. */}
+        {/* Every other project, alphabetical. Open by default — Andrew wants
+            to see them all from inside a project, not go hunting. */}
         {rest.length > 0 && (
-          <div className="mt-5">
+          <div className="mt-6">
             <button
               onClick={() => setShowAll((v) => !v)}
               aria-expanded={showAll}
-              className="flex w-full items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40 outline-none transition hover:text-white/80 focus-visible:ring-2 focus-visible:ring-white/60"
+              className="flex w-full items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 outline-none transition hover:text-white/85 focus-visible:ring-2 focus-visible:ring-white/60"
             >
               <span
                 aria-hidden
@@ -3950,6 +3964,7 @@ function PrepCards({
   fileUrls,
   onChanged,
   asRows = false,
+  stacked = false,
 }: {
   groups: PrepGroup[];
   items: PrepItem[];
@@ -3960,6 +3975,8 @@ function PrepCards({
   onChanged: () => void;
   /** Stacked collapsible rows instead of a card grid. See below. */
   asRows?: boolean;
+  /** Full-width cards, one per row, for content of very uneven length. */
+  stacked?: boolean;
 }) {
   if (groups.length === 0) return null;
 
@@ -3989,6 +4006,26 @@ function PrepCards({
             fileUrls={fileUrls}
             onChanged={onChanged}
             asRow
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Full width, one per row, where the groups differ wildly in length.
+  if (stacked) {
+    return (
+      <div className="space-y-5">
+        {groups.map((g) => (
+          <PrepCard
+            key={g.id}
+            group={g}
+            items={items.filter((i) => i.group_id === g.id)}
+            projectId={projectId}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            fileUrls={fileUrls}
+            onChanged={onChanged}
           />
         ))}
       </div>
@@ -4783,6 +4820,7 @@ function PrepareSection({
           accessToken={accessToken}
           fileUrls={fileUrls}
           onChanged={onChanged}
+          stacked
         />
       )}
 

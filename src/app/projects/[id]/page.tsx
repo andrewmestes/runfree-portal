@@ -527,16 +527,13 @@ export default function ProjectDetailPage() {
    * the people, then the work, and the Vision Stack last because it is the
    * output rather than the way in.
    *
-   * Counts ride along on the tabs because they are what makes the process
-   * legible to a first-time visitor. Deliverables carries none: coaches
-   * routinely run part of the process, so any total there reads as a target
-   * that a deliberately partial engagement has failed to hit.
+   * The tabs carry labels only. Counts were tried and removed — Andrew:
+   * "i don't want to see these numbers in the column." In a narrow rail a
+   * number beside a word reads as a score rather than a signpost, and the
+   * same objection that keeps a ratio off Deliverables applies to all of
+   * them: a coach running part of the process should not see a tally.
    */
   const hasDeliverables = (detail.template?.hasVisionStack ?? false) || deliverableGroups.length > 0;
-  const datesCount = detail.prepItems.filter((i) =>
-    dateGroups.some((g) => g.id === i.group_id)
-  ).length;
-
   // Title Case throughout — "The process" next to "Key dates" read as an
   // unfinished sentence rather than a set of labels.
   //
@@ -551,20 +548,16 @@ export default function ProjectDetailPage() {
   //
   // Access is absent for the same class of reason: who can get in is a
   // property of the project, and it lives in the header beside the logo.
-  const prepareCount = detail.prepItems.filter((i) =>
-    prepareGroups.some((g) => g.id === i.group_id)
-  ).length;
-
   const panelItems = [
     prepareGroups.length > 0 || prepResources.length > 0
-      ? { key: "prepare", label: "Preparation", count: prepareCount }
+      ? { key: "prepare", label: "Preparation" }
       : null,
-    modules.length > 0 ? { key: "process", label: "The Process", count: modules.length } : null,
-    { key: "team", label: "Team", count: detail.contacts.length + detail.members.length },
-    dateGroups.length > 0 ? { key: "dates", label: "Key Dates", count: datesCount } : null,
-    { key: "sessions", label: "Session Recordings", count: detail.sessions.length },
-    hasDeliverables ? { key: "deliverables", label: "Deliverables", count: null } : null,
-  ].filter((x): x is { key: string; label: string; count: number | null } => x !== null);
+    modules.length > 0 ? { key: "process", label: "The Process" } : null,
+    { key: "team", label: "Team" },
+    dateGroups.length > 0 ? { key: "dates", label: "Key Dates" } : null,
+    { key: "sessions", label: "Session Recordings" },
+    hasDeliverables ? { key: "deliverables", label: "Deliverables" } : null,
+  ].filter((x): x is { key: string; label: string } => x !== null);
 
   // Landing on The Process, not on whatever happens to lead the rail.
   // Preparation is first in the list because it comes first in the
@@ -621,7 +614,7 @@ export default function ProjectDetailPage() {
           onSignOut={handleSignOut}
         />
 
-      <main className="min-w-0 flex-1 pb-16 lg:overflow-y-auto">
+      <main className="min-w-0 flex-1 lg:overflow-y-auto">
         {/* Inside the content column, not above the whole shell — so the
             church's mark shares a left edge with everything under it.
             Andrew: "the church logo should probably be lined up with the
@@ -1547,7 +1540,7 @@ function ProjectSidebar({
   profile,
   onSignOut,
 }: {
-  items: { key: string; label: string; count?: number | null }[];
+  items: { key: string; label: string }[];
   active: string;
   onSelect: (key: string) => void;
   /** Everything this person can reach, for the switcher. */
@@ -1710,7 +1703,7 @@ function ProjectToolbar({
   active,
   onSelect,
 }: {
-  items: { key: string; label: string; count?: number | null }[];
+  items: { key: string; label: string }[];
   active: string;
   onSelect: (key: string) => void;
 }) {
@@ -1736,15 +1729,6 @@ function ProjectToolbar({
                     }`}
                   >
                     {it.label}
-                    {it.count != null && it.count > 0 && (
-                      <span
-                        className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
-                          on ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {it.count}
-                      </span>
-                    )}
                   </button>
                 </li>
               );
@@ -1770,15 +1754,6 @@ function ProjectToolbar({
                   }`}
                 >
                   <span className="min-w-0 flex-1 truncate">{it.label}</span>
-                  {it.count != null && it.count > 0 && (
-                    <span
-                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
-                        on ? "bg-white/25 text-white" : "bg-white/10 text-white/70"
-                      }`}
-                    >
-                      {it.count}
-                    </span>
-                  )}
                 </button>
               </li>
             );
@@ -4676,7 +4651,21 @@ function PrepItemForm({
       <div>
           <input
             type="file"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              const picked = e.target.files?.[0] ?? null;
+              setFile(picked);
+              // Name it after the file unless you have already typed a name.
+              // Title is the one required field, and Andrew hit it trying to
+              // attach the Preparation Checklist: "i tried to add this
+              // Preparation Checklist pdf as it is, but I can't unless I fill
+              // out some info." For a document the filename IS the name
+              // nine times out of ten, so asking for it again is a toll
+              // rather than a question. Still editable — this fills the box,
+              // it does not lock it.
+              if (picked && !title.trim()) {
+                setTitle(picked.name.replace(/\.[^.]+$/, ""));
+              }
+            }}
             className="w-full text-xs text-gray-500 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-runfree-ink file:ring-1 file:ring-gray-300"
           />
           {existing?.file_name && !file && (

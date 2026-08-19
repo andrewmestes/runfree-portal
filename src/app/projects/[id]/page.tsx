@@ -215,8 +215,10 @@ export default function ProjectDetailPage() {
   const [status, setStatus] = useState<"checking" | "ready" | "not_found" | "error">("checking");
   const [activeModule, setActiveModule] = useState<string>("");
   const [handouts, setHandouts] = useState<HandoutLibrary | null>(null);
-  /** Starred projects for the sidebar — see ProjectSidebar. */
-  const [starred, setStarred] = useState<{ id: string; name: string }[]>([]);
+  /** Every project this person can reach, for the sidebar switcher. */
+  const [myProjects, setMyProjects] = useState<
+    { id: string; name: string; pinned: boolean }[]
+  >([]);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<PreviewFile | null>(null);
 
@@ -250,7 +252,9 @@ export default function ProjectDetailPage() {
             name: string;
             pinned_at: string | null;
           }[];
-          setStarred(mine.filter((x) => x.pinned_at).map((x) => ({ id: x.id, name: x.name })));
+          setMyProjects(
+            mine.map((x) => ({ id: x.id, name: x.name, pinned: !!x.pinned_at }))
+          );
         } catch {
           // The sidebar is still useful without it.
         }
@@ -562,9 +566,12 @@ export default function ProjectDetailPage() {
     hasDeliverables ? { key: "deliverables", label: "Deliverables", count: null } : null,
   ].filter((x): x is { key: string; label: string; count: number | null } => x !== null);
 
-  // A link to a panel this project doesn't have (a Younique project has no
-  // module track) lands on the first one it does, rather than a blank screen.
-  const fallbackPanel = panelItems[0]?.key ?? "team";
+  // Landing on The Process, not on whatever happens to lead the rail.
+  // Preparation is first in the list because it comes first in the
+  // engagement, but the tools are what someone opens a project to see.
+  const fallbackPanel = panelItems.some((p) => p.key === "process")
+    ? "process"
+    : (panelItems[0]?.key ?? "team");
   const activePanel = panelItems.some((p) => p.key === panel) ? panel : fallbackPanel;
 
   const nextDateItem =
@@ -608,7 +615,7 @@ export default function ProjectDetailPage() {
           items={panelItems}
           active={activePanel}
           onSelect={goPanel}
-          starred={starred}
+          projects={myProjects}
           currentProjectId={projectId}
           profile={profile}
           onSignOut={handleSignOut}
@@ -1535,7 +1542,7 @@ function ProjectSidebar({
   items,
   active,
   onSelect,
-  starred,
+  projects,
   currentProjectId,
   profile,
   onSignOut,
@@ -1543,22 +1550,35 @@ function ProjectSidebar({
   items: { key: string; label: string; count?: number | null }[];
   active: string;
   onSelect: (key: string) => void;
-  /** Pinned projects, for people who run more than one. */
-  starred: { id: string; name: string }[];
+  /** Everything this person can reach, for the switcher. */
+  projects: { id: string; name: string; pinned: boolean }[];
   currentProjectId: string;
   profile: Profile;
   onSignOut: () => void;
 }) {
-  const others = starred.filter((p) => p.id !== currentProjectId);
+  const [showAll, setShowAll] = useState(false);
+
+  const others = projects.filter((p) => p.id !== currentProjectId);
+  const starred = others.filter((p) => p.pinned);
+  const rest = [...others]
+    .filter((p) => !p.pinned)
+    .sort((a, b) => churchNameOf(a.name).localeCompare(churchNameOf(b.name)));
+
+  const projectLink =
+    "flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white/65 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60";
 
   return (
-    <aside className="flex shrink-0 flex-col bg-runfree-ink lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:overflow-y-auto">
-      <div className="flex-1 px-4 py-4 sm:px-6 lg:px-3.5 lg:py-5">
-        {/* Leaving the project is a different kind of move from switching
-            panels within it, so it sits above a rule rather than in the list.
-            Andrew: "'your projects' should be a bigger text, maybe separated
-            with a line to distinguish the tabs from going back to the home
-            page." */}
+    /**
+     * Three bands: a fixed head, a scrolling middle, a fixed foot.
+     *
+     * Andrew: "i had to scroll a little to get the 'help' 'admin' and user to
+     * show up. that should stay visible at all times." The whole column used
+     * to scroll as one, so a long project list pushed the account off the
+     * bottom. Only the middle scrolls now, which is also what lets the list
+     * grow without the column growing with it.
+     */
+    <aside className="flex shrink-0 flex-col bg-runfree-ink lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:overflow-hidden">
+      <div className="shrink-0 px-4 pt-4 sm:px-6 lg:px-3.5 lg:pt-5">
         <a
           href="/"
           className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white/70 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
@@ -1566,27 +1586,21 @@ function ProjectSidebar({
           <span aria-hidden className="text-base leading-none">←</span>
           Your projects
         </a>
-
         <div className="my-3 border-t border-white/10" />
+      </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 lg:px-3.5">
         <ProjectToolbar items={items} active={active} onSelect={onSelect} />
 
-        {/* Starred projects — the switcher for someone running several.
-            Andrew: "I think I want a 'starred' list of projects on the bottom
-            left of the column." The one you are in is left out: it is already
-            the whole column above. */}
-        {others.length > 0 && (
+        {starred.length > 0 && (
           <div className="mt-6">
             <p className="px-3.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
               Starred
             </p>
             <ul className="mt-1.5 space-y-0.5">
-              {others.map((p) => (
+              {starred.map((p) => (
                 <li key={p.id}>
-                  <a
-                    href={`/projects/${p.id}`}
-                    className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white/65 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
-                  >
+                  <a href={`/projects/${p.id}`} className={projectLink}>
                     <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 shrink-0 text-runfree-magenta" aria-hidden="true">
                       <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
                     </svg>
@@ -1597,24 +1611,61 @@ function ProjectSidebar({
             </ul>
           </div>
         )}
+
+        {/* Everything else, alphabetical and folded away. Someone running a
+            dozen engagements should be able to reach any of them without the
+            list dominating the column. */}
+        {rest.length > 0 && (
+          <div className="mt-5">
+            <button
+              onClick={() => setShowAll((v) => !v)}
+              aria-expanded={showAll}
+              className="flex w-full items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40 outline-none transition hover:text-white/80 focus-visible:ring-2 focus-visible:ring-white/60"
+            >
+              <span
+                aria-hidden
+                className={`transition-transform duration-200 ${showAll ? "rotate-90" : ""}`}
+              >
+                ›
+              </span>
+              All projects
+              <span className="ml-auto tabular-nums text-white/30">{rest.length}</span>
+            </button>
+
+            {showAll && (
+              <ul className="animate-fade mt-1 space-y-0.5">
+                {rest.map((p) => (
+                  <li key={p.id}>
+                    <a href={`/projects/${p.id}`} className={projectLink}>
+                      <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* The account and the two portal-wide destinations, at the foot of the
-          column. Certification stays in the top bar — it is a different
-          surface, not another thing in this project. */}
-      <div className="border-t border-white/10 px-4 py-3 sm:px-6 lg:px-3.5">
-        <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 pb-2 text-[11px] font-bold uppercase tracking-wider">
-          <a href="/help" className="text-white/55 transition hover:text-white">
-            Help
+      {/* Always in view: the account, and the two portal-wide destinations.
+          Stacked rather than side by side, per Andrew. */}
+      <div className="shrink-0 border-t border-white/10 px-4 py-3 sm:px-6 lg:px-3.5">
+        <a
+          href="/help"
+          className="block rounded-lg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white/55 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+        >
+          Help
+        </a>
+        {profile.is_staff && (
+          <a
+            href="/admin"
+            className="block rounded-lg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-runfree-pink outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+          >
+            Admin
           </a>
-          {profile.is_staff && (
-            <a href="/admin" className="text-runfree-pink transition hover:text-white">
-              Admin
-            </a>
-          )}
-        </div>
+        )}
 
-        <div className="flex items-center gap-2.5 rounded-xl px-1 py-1.5">
+        <div className="mt-2 flex items-center gap-2.5 border-t border-white/10 px-1 pt-3">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-runfree-grad text-[11px] font-bold text-white">
             {(profile.full_name || profile.email)
               .split(/\s+/)

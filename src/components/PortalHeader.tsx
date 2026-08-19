@@ -42,6 +42,10 @@ type Props = {
    * Hide Help, Admin and the account menu, for a page whose sidebar carries
    * them. Certification stays: it is a different surface, not another item in
    * the page you are on.
+   *
+   * Also switches the bar to full width. A page with a sidebar is flush to
+   * the left edge, and a centred header leaves its logo drifting rightwards
+   * of that edge as the window grows.
    */
   chromeInSidebar?: boolean;
   /**
@@ -112,7 +116,9 @@ export default function PortalHeader({
       {/* Brand bar */}
       <div className="h-1.5 bg-runfree-grad" />
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div
+        className={`px-4 sm:px-6 lg:px-8 ${chromeInSidebar ? "" : "mx-auto max-w-7xl"}`}
+      >
         <div className="flex items-center gap-x-8 border-b border-white/10 py-3 sm:py-4">
           <a href="/" className="flex shrink-0 items-center">
             <Image
@@ -327,7 +333,7 @@ export default function PortalHeader({
           the bar above it is left with three things instead of six. */}
       {backHref && (
         <div className="border-b border-white/10 bg-runfree-navy">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className={`px-4 sm:px-6 lg:px-8 ${chromeInSidebar ? "" : "mx-auto max-w-7xl"}`}>
             <a
               href={backHref}
               className="inline-flex items-center gap-1.5 py-2.5 text-xs font-bold uppercase tracking-wider text-white/70 outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-white"

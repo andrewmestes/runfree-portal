@@ -544,13 +544,6 @@ export default function ProjectDetailPage() {
   const fallbackPanel = panelItems[0]?.key ?? "team";
   const activePanel = panelItems.some((p) => p.key === panel) ? panel : fallbackPanel;
 
-  // Where the team is: the module of the most recent session that has
-  // actually happened, falling back to whichever module is selected.
-  const lastHeld = [...detail.sessions]
-    .filter((s) => s.held_on)
-    .sort((a, b) => (a.held_on! < b.held_on! ? 1 : -1))[0];
-  const currentModule = lastHeld?.section ?? (modules.length > 0 ? activeModule : null);
-
   const nextDateItem =
     detail.prepItems
       .filter((i) => i.due_on && dateGroups.some((g) => g.id === i.group_id))
@@ -598,7 +591,7 @@ export default function ProjectDetailPage() {
             moduleOptions={availableSections(detail)}
             onChanged={refresh}
           />
-          <ProjectStatusCard nextDate={nextDateItem} currentModule={currentModule} />
+          <ProjectStatusCard nextDate={nextDateItem} onGoToDates={() => goPanel("dates")} />
         </div>
 
         <ProjectToolbar active={activePanel} onSelect={goPanel} items={panelItems} />
@@ -1322,7 +1315,9 @@ function TaskList({
         <li
           key={t.id}
           className={`group/task flex flex-wrap items-start gap-x-3 gap-y-1 rounded-xl px-3 py-2.5 transition ${
-            t.is_done ? "bg-runfree-pink/50" : "bg-white ring-1 ring-gray-200/80"
+            t.is_done
+              ? "bg-white/95 ring-1 ring-runfree-magenta/25"
+              : "bg-white ring-1 ring-gray-200/80"
           }`}
         >
           <button
@@ -1349,7 +1344,7 @@ function TaskList({
           <span className="min-w-0 flex-1">
             <span
               className={`block text-sm font-medium ${
-                t.is_done ? "text-gray-400 line-through" : "text-runfree-ink"
+                t.is_done ? "text-gray-500 line-through" : "text-runfree-ink"
               }`}
             >
               {t.title}
@@ -2221,6 +2216,19 @@ function prettyDomain(url: string): string {
  * Above the Vision Stack on purpose. The finished work is what a church shows
  * a board; this is what they need on a Tuesday.
  */
+/**
+ * What this team owes before the next session, above every panel.
+ *
+ * One job, one control. It used to carry both an "Update" button (which
+ * edited the prose) and a "+ Add homework or a next step" button (which added
+ * tasks) — Andrew: "the update on the top right and the add homework or next
+ * step on the bottom, feels like it's doing two jobs for the same thing."
+ *
+ * They were two mechanisms for one intention. Editing is now a single mode
+ * that opens the note and the task form together, so setting what matters
+ * this month is one action rather than a choice between two buttons that
+ * looked unrelated but weren't.
+ */
 function PrioritiesBanner({
   detail,
   canEdit,
@@ -2240,15 +2248,9 @@ function PrioritiesBanner({
   const [draft, setDraft] = useState(detail.priorities ?? "");
   const [busy, setBusy] = useState(false);
 
-  // Collapsible, and it remembers. Andrew: "as I scroll through tabs, the
-  // 'what's important now' block is pretty large and requires me to scroll a
-  // bit much... Especially in 'the process' tab, I want the process icons to
-  // be the main focus."
-  //
-  // It stays above every panel, so its height is paid on every screen — a
-  // coach who has read it this morning should be able to fold it away and
-  // have it stay folded. Open by default: a church seeing the project for the
-  // first time should not have to find it.
+  // Collapsible, and it remembers. It sits above every panel, so its height
+  // is paid on every screen — and on The Process it was pushing the module
+  // icons below the fold, which inverts what that tab is for.
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("rf-win-collapsed") === "1");
@@ -2272,11 +2274,14 @@ function PrioritiesBanner({
     }
   }
 
-  // Nothing set and nobody who could set it: show nothing rather than an
-  // empty promise.
   const open = detail.tasks.filter((t) => !t.is_done);
   const done = detail.tasks.filter((t) => t.is_done);
   if (!detail.priorities && detail.tasks.length === 0 && !canEdit) return null;
+
+  const lines = (detail.priorities ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
 
   const updated = detail.prioritiesUpdatedAt
     ? new Date(detail.prioritiesUpdatedAt).toLocaleDateString(undefined, {
@@ -2286,27 +2291,17 @@ function PrioritiesBanner({
     : null;
 
   return (
-    /* No top margin: the grid that pairs this with the status card owns the
-       spacing, and a margin here pushed one card down relative to the other. */
     <section className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
       <div className="h-1.5 bg-runfree-grad" />
       <div className="px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* The control says what it does. A bare chevron left people
+              guessing whether there was anything behind it. */}
           <button
             onClick={toggle}
             aria-expanded={!collapsed}
-            className="group flex min-w-0 items-center gap-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            className="group flex min-w-0 items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-white/60"
           >
-            <span
-              aria-hidden
-              className={`text-white/50 transition-transform duration-200 group-hover:text-white ${
-                collapsed ? "" : "rotate-90"
-              }`}
-            >
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="M7.5 4.5 13 10l-5.5 5.5" />
-              </svg>
-            </span>
             <span className="min-w-0">
               <span className="block text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
                 Coming up
@@ -2315,14 +2310,28 @@ function PrioritiesBanner({
                 What&rsquo;s Important Now
               </span>
             </span>
-            {collapsed && (open.length > 0 || detail.priorities) && (
-              <span className="ml-1 shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white/90">
-                {open.length > 0
-                  ? `${open.length} open`
-                  : `${detail.priorities!.split("\n").filter((l) => l.trim()).length}`}
-              </span>
-            )}
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/80 transition group-hover:bg-white/20 group-hover:text-white">
+              {collapsed ? "See more" : "Hide"}
+              {collapsed && open.length > 0 && (
+                <span className="tabular-nums">· {open.length}</span>
+              )}
+              <svg
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                  collapsed ? "" : "rotate-180"
+                }`}
+                aria-hidden="true"
+              >
+                <path d="M5 7.5 10 12.5 15 7.5" />
+              </svg>
+            </span>
           </button>
+
           {canEdit && !editing && !collapsed && (
             <button
               onClick={() => {
@@ -2331,50 +2340,16 @@ function PrioritiesBanner({
               }}
               className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-white/25 transition hover:bg-white/10 hover:text-white"
             >
-              {detail.priorities ? "Update" : "Set priorities"}
+              Edit
             </button>
           )}
         </div>
 
         {!collapsed && (
-        <>
-
-        {editing ? (
-          <div className="mt-4 space-y-3">
-            <textarea
-              autoFocus
-              rows={5}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={"What should this team do before you meet again?\n\nOne per line reads best:\nFinish the Kingdom Concept draft\nEveryone completes the 5 Eras assessment"}
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm leading-relaxed text-runfree-ink placeholder:text-gray-400 outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={save}
-                disabled={busy}
-                className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-              >
-                {busy ? "Saving…" : "Save"}
-              </button>
-              <button
-                onClick={() => setEditing(false)}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : detail.priorities ? (
           <>
-            {/* Rendered as a checklist when written one-per-line, which is
-                how a list of commitments is naturally written. */}
-            <ul className="mt-3 space-y-2">
-              {detail.priorities
-                .split("\n")
-                .map((l) => l.trim())
-                .filter(Boolean)
-                .map((line, i) => (
+            {lines.length > 0 && !editing && (
+              <ul className="mt-3 space-y-2">
+                {lines.map((line, i) => (
                   <li key={i} className="flex items-start gap-3">
                     <span
                       aria-hidden
@@ -2383,64 +2358,100 @@ function PrioritiesBanner({
                     <span className="text-sm leading-relaxed text-white/90">{line}</span>
                   </li>
                 ))}
-            </ul>
-            {updated && <p className="mt-4 text-xs text-white/45">Updated {updated}</p>}
-          </>
-        ) : detail.tasks.length === 0 ? (
-          <p className="mt-4 rounded-xl border border-dashed border-white/25 py-6 text-center text-sm text-white/55">
-            Nothing set yet. This is the first thing your team sees — use it to
-            say what matters this month.
-          </p>
-        ) : null}
-
-        {/* Homework, gathered from every session and module. Andrew: "have
-            that populate at the very top of their project." */}
-        {(detail.tasks.length > 0 || canEdit) && (
-          <div className="mt-5 space-y-2.5">
-            {open.length > 0 && (
-              <TaskList
-                tasks={open}
-                accessToken={accessToken}
-                onChanged={onChanged}
-                canEdit={canEdit}
-                showSection
-              />
+              </ul>
             )}
 
-            {done.length > 0 && (
-              <details className="group">
-                <summary className="cursor-pointer list-none text-xs font-semibold text-white/50 transition hover:text-white">
-                  {done.length} finished
-                </summary>
-                <div className="mt-2">
-                  <TaskList
-                    tasks={done}
-                    accessToken={accessToken}
-                    onChanged={onChanged}
-                    canEdit={canEdit}
-                    showSection
-                  />
+            {editing && (
+              <div className="mt-3 space-y-3">
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={"What should this team do before you meet again?\n\nOne per line reads best."}
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm leading-relaxed text-runfree-ink outline-none placeholder:text-gray-400 focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={save}
+                    disabled={busy}
+                    className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-runfree-navy transition hover:bg-white/90 disabled:opacity-50"
+                  >
+                    {busy ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white"
+                  >
+                    Done
+                  </button>
                 </div>
-              </details>
+              </div>
             )}
 
-            {canEdit && (
-              <AddTask
-                projectId={projectId}
-                accessToken={accessToken}
-                siblings={detail.tasks}
-                moduleOptions={moduleOptions}
-                onChanged={onChanged}
-              />
+            {updated && !editing && (
+              <p className="mt-3 text-xs text-white/45">Updated {updated}</p>
             )}
-          </div>
-        )}
-        </>
+
+            {/* The tasks, introduced by a line that says what they are.
+                Andrew: "we just put... one line that says something like, here
+                are your tasks to complete before our next session. And then
+                each of the homework pieces or next steps can be listed out
+                right there." */}
+            {(detail.tasks.length > 0 || (canEdit && editing)) && (
+              <div className="mt-5 border-t border-white/10 pt-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/50">
+                  To complete before the next session
+                </p>
+
+                <div className="mt-2.5 space-y-2.5">
+                  {open.length > 0 && (
+                    <TaskList
+                      tasks={open}
+                      accessToken={accessToken}
+                      onChanged={onChanged}
+                      canEdit={canEdit}
+                      showSection
+                    />
+                  )}
+
+                  {done.length > 0 && (
+                    <details className="group">
+                      <summary className="cursor-pointer list-none text-xs font-semibold text-white/50 transition hover:text-white">
+                        {done.length} finished
+                      </summary>
+                      <div className="mt-2">
+                        <TaskList
+                          tasks={done}
+                          accessToken={accessToken}
+                          onChanged={onChanged}
+                          canEdit={canEdit}
+                          showSection
+                        />
+                      </div>
+                    </details>
+                  )}
+
+                  {/* Only while editing — the two buttons were the duplication. */}
+                  {canEdit && editing && (
+                    <AddTask
+                      projectId={projectId}
+                      accessToken={accessToken}
+                      siblings={detail.tasks}
+                      moduleOptions={moduleOptions}
+                      onChanged={onChanged}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </section>
   );
 }
+
 
 /* -------------------------------------------------------------------------- */
 /* Vision Stack                                                                */
@@ -2615,54 +2626,49 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
  * disclosure arrow.
  */
 /**
- * Where the engagement is, and when it meets next.
+ * When you next meet, and a way straight to the calendar.
  *
- * This is the navy block that used to head the Overview panel. The Overview
- * itself is gone: it was a landing pad whose main job was pointing at other
- * panels, and once these two facts sit above the tabs on every screen there
- * is nothing left for it to do that a tab strip doesn't do better.
+ * "Where you are" is gone. It duplicated the module track directly below it —
+ * which shows the same thing, larger and clickable — and it made this card
+ * change height depending on whether the note beside it was open, so the pair
+ * never looked settled. Andrew: "Let's remove the where you are for now and
+ * just leave it as next session, August twenty fourth."
  *
- * Deliberately two facts and no more. Andrew: "Let's have a 'next session'
- * piece rather than the 'where you are' with everything."
+ * The date is a button through to Key Dates. Slightly duplicative of the tab,
+ * deliberately: the date is the thing people look for, and the question it
+ * raises next is almost always "what else is coming?"
  */
 function ProjectStatusCard({
   nextDate,
-  currentModule,
+  onGoToDates,
 }: {
   nextDate: PrepItem | null;
-  currentModule: string | null;
+  onGoToDates: () => void;
 }) {
-  const moduleNo = currentModule ? moduleOrder(currentModule) : null;
-  const meta = moduleNo ? MODULE_META[moduleNo] : null;
-  if (!currentModule && !nextDate?.due_on) return null;
+  if (!nextDate?.due_on) return null;
 
   return (
     <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
       <div className="h-1.5 bg-runfree-grad" />
-      <dl className="space-y-4 p-5">
-        {nextDate?.due_on && (
-          <div>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
-              Next Session
-            </dt>
-            <dd className="mt-1 font-display text-xl font-extrabold tracking-tight">
-              {formatPrepDate(nextDate.due_on)}
-            </dd>
-            <p className="mt-0.5 text-xs text-white/60">{nextDate.title}</p>
-          </div>
-        )}
-        {currentModule && (
-          <div className={nextDate?.due_on ? "border-t border-white/10 pt-4" : ""}>
-            <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/50">
-              Where You Are
-            </dt>
-            <dd className="mt-1.5 font-display text-lg font-extrabold tracking-tight">
-              {moduleLabel(currentModule)}
-            </dd>
-            {meta && <p className="mt-0.5 text-xs text-white/60">{meta.stage}</p>}
-          </div>
-        )}
-      </dl>
+      <div className="p-5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
+          Next Session
+        </p>
+        <p className="mt-1 font-display text-2xl font-extrabold tracking-tight">
+          {formatPrepDate(nextDate.due_on)}
+        </p>
+        <p className="mt-0.5 text-xs text-white/60">{nextDate.title}</p>
+
+        <button
+          onClick={onGoToDates}
+          className="group mt-4 inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
+        >
+          All key dates
+          <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+            →
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

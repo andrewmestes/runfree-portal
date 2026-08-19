@@ -1273,6 +1273,42 @@ function SheetDropdown({
  * they are not editors. That write goes through set_task_done (migration 030)
  * rather than a policy, because RLS cannot restrict an UPDATE to one column.
  */
+/**
+ * A checkbox that is a real button only when the viewer may change it.
+ *
+ * Rendering a disabled <button> for a viewer would still announce itself as a
+ * control and pick up focus; a <span> carrying the same visual state reads as
+ * what it is — the current answer, not an offer.
+ */
+function Checkbox({
+  as,
+  onClick,
+  disabled,
+  label,
+  className,
+  children,
+}: {
+  as: "button" | "span";
+  onClick?: () => void;
+  disabled?: boolean;
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (as === "span") {
+    return (
+      <span role="img" aria-label={label} className={className}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <button onClick={onClick} disabled={disabled} aria-label={label} className={className}>
+      {children}
+    </button>
+  );
+}
+
 function TaskList({
   tasks,
   accessToken,
@@ -1320,14 +1356,36 @@ function TaskList({
               : "bg-white ring-1 ring-gray-200/80"
           }`}
         >
-          <button
-            onClick={() => toggle(t)}
-            disabled={!accessToken || busyId === t.id}
-            aria-label={t.is_done ? `Mark "${t.title}" not done` : `Mark "${t.title}" done`}
-            className={`relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition before:absolute before:-inset-2 before:content-[''] ${
+          {/* Only an editor or admin may tick a task off — migration 039.
+              Andrew: "i want only project admins or editors to be able to
+              check that it's completed. not every single person with access
+              to the project."
+
+              A viewer still sees the box and its state; it is rendered as a
+              plain element rather than a disabled button so it reads as
+              information rather than as a control that is refusing them. The
+              database is the real boundary either way. */}
+          <Checkbox
+            as={canEdit ? "button" : "span"}
+            onClick={canEdit ? () => toggle(t) : undefined}
+            disabled={!canEdit || !accessToken || busyId === t.id}
+            label={
+              canEdit
+                ? t.is_done
+                  ? `Mark "${t.title}" not done`
+                  : `Mark "${t.title}" done`
+                : t.is_done
+                  ? `"${t.title}" is complete`
+                  : `"${t.title}" is not complete`
+            }
+            className={`relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${
+              canEdit ? "before:absolute before:-inset-2 before:content-['']" : ""
+            } ${
               t.is_done
                 ? "border-runfree-magenta bg-runfree-magenta text-white"
-                : "border-gray-300 bg-white hover:border-runfree-magenta"
+                : canEdit
+                  ? "border-gray-300 bg-white hover:border-runfree-magenta"
+                  : "border-gray-300 bg-gray-50"
             }`}
           >
             {t.is_done && (
@@ -1339,7 +1397,7 @@ function TaskList({
                 />
               </svg>
             )}
-          </button>
+          </Checkbox>
 
           <span className="min-w-0 flex-1">
             <span
@@ -1944,7 +2002,6 @@ function ChurchHero({
     }
   }
 
-  const lead = detail.members.find((m) => m.isLead);
   const initials = detail.name
     .replace(/\s*-\s*.*$/, "")
     .split(/\s+/)
@@ -1999,23 +2056,20 @@ function ChurchHero({
             )}
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
               Welcome
             </p>
             <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-runfree-ink sm:text-4xl lg:text-[2.75rem]">
               {org}
             </h1>
-            <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600">
+            {/* One line: what this is and where, then the controls hard
+                right. Andrew: "this can be thinner still by putting 'edit
+                details' and project access farther to the right on the same
+                line as the website." */}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600">
               <span className="font-medium text-runfree-navy">{engagement}</span>
-              {lead && (
-                <>
-                  <span aria-hidden className="text-gray-300">
-                    ·
-                  </span>
-                  <span>led by {lead.fullName || lead.email}</span>
-                </>
-              )}
               {detail.location && (
                 <>
                   <span aria-hidden className="text-gray-300">
@@ -2040,17 +2094,10 @@ function ChurchHero({
                 </>
               )}
             </p>
-            {detail.about && !editing && (
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">{detail.about}</p>
-            )}
 
-            {/* Access lives up here with the logo, the website and the lead
-                navigator, because who can get in is a top-level fact about
-                the project rather than a section of it. It opens a dialog so
-                a coach checking who has access does not lose the panel they
-                were reading. */}
+            {/* Same row as the website, pushed right. */}
             {canManage && !editing && (
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex shrink-0 items-center gap-3">
                 <button
                   onClick={() => setEditing(true)}
                   className="text-xs font-medium text-runfree-magentaDeep outline-none hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
@@ -2112,6 +2159,11 @@ function ChurchHero({
                   </span>
                 </button>
               </div>
+            )}
+            </div>
+
+            {detail.about && !editing && (
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">{detail.about}</p>
             )}
 
             {showAccess && (
@@ -2417,8 +2469,11 @@ function PrioritiesBanner({
 
                   {done.length > 0 && (
                     <details className="group">
-                      <summary className="cursor-pointer list-none text-xs font-semibold text-white/50 transition hover:text-white">
+                      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/70 transition hover:bg-white/20 hover:text-white">
                         {done.length} finished
+                        <span aria-hidden className="text-[9px] transition group-open:rotate-180">
+                          ▼
+                        </span>
                       </summary>
                       <div className="mt-2">
                         <TaskList

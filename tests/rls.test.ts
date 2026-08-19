@@ -754,10 +754,30 @@ async function main() {
           .select("is_done, completed_at")
           .eq("id", task.id)
           .single();
+        // Reversed by migration 039. A project has a dozen viewers and one
+        // person running it; a task ticked by whoever clicked first told the
+        // coach nothing. Completion is now a statement by someone
+        // accountable for the engagement.
         record(
-          "18c. viewer CAN tick a task done (the church does the homework)",
-          !tickErr && after?.is_done === true && !!after?.completed_at,
-          tickErr ? tickErr.message : `is_done=${after?.is_done}`
+          "18c. viewer CANNOT tick a task done (039)",
+          !!tickErr && after?.is_done !== true,
+          tickErr ? "correctly rejected" : `unexpectedly ticked: is_done=${after?.is_done}`
+        );
+
+        const asProjectEditor = createUserClient(selfLeadEditor.accessToken);
+        const { error: editorTickErr } = await asProjectEditor.rpc("set_task_done", {
+          p_task_id: task.id,
+          p_done: true,
+        });
+        const { data: afterEditor } = await asAdmin
+          .from("project_tasks")
+          .select("is_done, completed_at, title")
+          .eq("id", task.id)
+          .single();
+        record(
+          "18c2. an editor CAN tick a task done",
+          !editorTickErr && afterEditor?.is_done === true && !!afterEditor?.completed_at,
+          editorTickErr ? editorTickErr.message : `is_done=${afterEditor?.is_done}`
         );
 
         const { error: renameErr } = await asViewer

@@ -320,14 +320,18 @@ export default function AdminPage() {
           </a>
         </nav>
 
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setAdding((v) => !v)}
-            className="min-h-[44px] rounded-xl bg-runfree-grad-deep px-4 text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            {adding ? "Close" : "+ Add people"}
-          </button>
-        </div>
+        {/* Sits with the search and filters rather than as a banner above
+            them — it is one action on this page, not its headline. */}
+        {!adding && (
+          <div className="mb-4">
+            <button
+              onClick={() => setAdding(true)}
+              className="rounded-lg bg-runfree-grad-deep px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              + Add people
+            </button>
+          </div>
+        )}
 
         {adding && (
           <AddPeople
@@ -556,6 +560,7 @@ const BLANK: DraftPerson = { name: "", email: "", title: "", role: "client" };
 function AddPeople({ onDone }: { onDone: () => void }) {
   const [rows, setRows] = useState<DraftPerson[]>([{ ...BLANK }]);
   const [paste, setPaste] = useState("");
+  const [showPaste, setShowPaste] = useState(false);
   const [createInGhl, setCreateInGhl] = useState(true);
   const [invite, setInvite] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -578,19 +583,16 @@ function AddPeople({ onDone }: { onDone: () => void }) {
   /**
    * Parse a pasted spreadsheet.
    *
-   * Handles both comma and tab separation, because copying a range straight
-   * out of Sheets or Excel gives tabs, which is what an admin will actually
-   * do before they ever export a .csv file. A header row is detected and
-   * used to find columns rather than assuming an order — the one thing
+   * Commas or tabs — copying a range straight out of Sheets gives tabs, which
+   * is what someone will actually do before they ever export a .csv. Columns
+   * are found by header rather than position, since that is the one thing
    * guaranteed to differ between two people's spreadsheets.
    */
   function parsePaste() {
     const lines = paste.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length === 0) return;
 
-    const split = (l: string) =>
-      l.includes("\t") ? l.split("\t") : l.split(",");
-
+    const split = (l: string) => (l.includes("\t") ? l.split("\t") : l.split(","));
     const first = split(lines[0]).map((c) => c.trim().toLowerCase().replace(/^"|"$/g, ""));
     const looksLikeHeader = first.some((c) => /name|email|role|permission|title/.test(c));
 
@@ -616,8 +618,11 @@ function AddPeople({ onDone }: { onDone: () => void }) {
     });
 
     if (parsed.length > 0) {
-      setRows(parsed);
+      // Replace a single empty starter row; otherwise append.
+      const keep = rows.filter((r) => r.email.trim() || r.name.trim());
+      setRows([...keep, ...parsed]);
       setPaste("");
+      setShowPaste(false);
     }
   }
 
@@ -642,7 +647,6 @@ function AddPeople({ onDone }: { onDone: () => void }) {
       });
       const body = await res.json();
       if (!res.ok) {
-        setResults({ results: [], summary: { created: 0, updated: 0, failed: usable.length } });
         alert(body.error ?? "That import failed.");
         return;
       }
@@ -654,45 +658,24 @@ function AddPeople({ onDone }: { onDone: () => void }) {
 
   const field =
     "w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm text-runfree-ink outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
+  const ready = rows.filter((r) => r.email.trim()).length;
 
   return (
     <section className="mb-5 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
       <div className="h-1 bg-runfree-grad" />
-      <div className="space-y-5 p-5">
-        {/* Paste first: it is how most of these will start. */}
-        <div>
-          <label className="block text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-            Paste from a spreadsheet
-          </label>
-          <p className="mt-1 text-xs text-gray-500">
-            Name, email, title, permission — commas or tabs, with or without a header row.
-            Everything lands in the table below for you to check before anything is saved.
-          </p>
-          <textarea
-            rows={3}
-            value={paste}
-            onChange={(e) => setPaste(e.target.value)}
-            placeholder="Bobby Gourley, bobby@wearechapel.org, Lead Pastor, Project Member"
-            className={`${field} mt-2 font-mono text-xs`}
-          />
-          <button
-            onClick={parsePaste}
-            disabled={!paste.trim()}
-            className="mt-2 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink disabled:opacity-40"
-          >
-            Load into the table
-          </button>
-        </div>
-
+      <div className="space-y-4 p-5">
+        {/* Typing one person in is the common case, so it leads. Andrew:
+            "lead with the middle section up top. then offer the 'paste from a
+            spreadsheet' option later." */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-separate border-spacing-y-1.5 text-sm">
+          <table className="w-full min-w-[680px] border-separate border-spacing-y-1.5 text-sm">
             <thead>
-              <tr className="text-left text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400">
-                <th className="pb-1 pr-2 font-bold">Name</th>
-                <th className="pb-1 pr-2 font-bold">Email</th>
-                <th className="pb-1 pr-2 font-bold">Title (optional)</th>
-                <th className="pb-1 pr-2 font-bold">Permission</th>
-                <th className="pb-1" />
+              <tr className="text-left text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                <th className="pb-0.5 pr-2 font-bold">Name</th>
+                <th className="pb-0.5 pr-2 font-bold">Email</th>
+                <th className="pb-0.5 pr-2 font-bold">Title</th>
+                <th className="pb-0.5 pr-2 font-bold">Permission</th>
+                <th className="pb-0.5 w-8" />
               </tr>
             </thead>
             <tbody>
@@ -743,9 +726,10 @@ function AddPeople({ onDone }: { onDone: () => void }) {
                       <button
                         onClick={() => setRows(rows.filter((_, j) => j !== i))}
                         aria-label={`Remove row ${i + 1}`}
-                        className="rounded-md px-2 py-1.5 text-xs text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                        title="Remove"
+                        className="grid h-8 w-8 place-items-center rounded-md text-gray-400 transition hover:bg-red-50 hover:text-red-600"
                       >
-                        Remove
+                        ×
                       </button>
                     )}
                   </td>
@@ -755,14 +739,51 @@ function AddPeople({ onDone }: { onDone: () => void }) {
           </table>
         </div>
 
-        <button
-          onClick={() => setRows([...rows, { ...BLANK }])}
-          className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
-        >
-          + Another person
-        </button>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <button
+            onClick={() => setRows([...rows, { ...BLANK }])}
+            className="font-semibold text-runfree-magentaDeep hover:underline"
+          >
+            + Another person
+          </button>
+          <span aria-hidden className="text-gray-300">
+            ·
+          </span>
+          <button
+            onClick={() => setShowPaste((v) => !v)}
+            aria-expanded={showPaste}
+            className="font-medium text-gray-500 transition hover:text-runfree-ink"
+          >
+            {showPaste ? "Hide spreadsheet paste" : "Paste from a spreadsheet"}
+          </button>
+        </div>
 
-        <div className="space-y-2 rounded-xl bg-gray-50 p-4">
+        {showPaste && (
+          <div className="animate-fade rounded-xl bg-gray-50 p-3">
+            <textarea
+              rows={3}
+              autoFocus
+              value={paste}
+              onChange={(e) => setPaste(e.target.value)}
+              placeholder={"Bobby Gourley, bobby@wearechapel.org, Lead Pastor, Project Member"}
+              className={`${field} bg-white font-mono text-xs`}
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <button
+                onClick={parsePaste}
+                disabled={!paste.trim()}
+                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink disabled:opacity-40"
+              >
+                Load into the table
+              </button>
+              <span className="text-[11px] text-gray-500">
+                Name, email, title, permission. Commas or tabs, header row optional.
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1.5 border-t border-gray-100 pt-4">
           <label className="flex items-start gap-2.5 text-sm text-runfree-ink">
             <input
               type="checkbox"
@@ -771,11 +792,10 @@ function AddPeople({ onDone }: { onDone: () => void }) {
               className="mt-0.5 h-4 w-4 accent-runfree-magenta"
             />
             <span>
-              Add them to GoHighLevel if they aren&rsquo;t there
+              Add to GoHighLevel if not already there
               <span className="mt-0.5 block text-xs text-gray-500">
-                Matched on email. Anyone already in GHL is updated, never duplicated. Only the two
-                certified levels get the &ldquo;{"Certified Vision Framer"}&rdquo; tag — everyone
-                else is added untagged, with their title where you gave one.
+                Matched on email, never duplicated. Only the two certified levels get the
+                certified tag.
               </span>
             </span>
           </label>
@@ -788,11 +808,10 @@ function AddPeople({ onDone }: { onDone: () => void }) {
               className="mt-0.5 h-4 w-4 accent-runfree-magenta"
             />
             <span>
-              Email them an invitation now
+              Email invitations now
               <span className="mt-0.5 block text-xs text-gray-500">
-                Leave this off for a large import — the mailer is rate-limited to a handful an
-                hour, so a cohort of thirty would silently lose most of them. Accounts are created
-                either way; you can invite people afterwards.
+                Leave off for a big import — the mailer allows only a handful an hour. Accounts
+                are created either way.
               </span>
             </span>
           </label>
@@ -801,28 +820,26 @@ function AddPeople({ onDone }: { onDone: () => void }) {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={submit}
-            disabled={busy || rows.every((r) => !r.email.trim())}
-            className="min-h-[44px] rounded-xl bg-runfree-grad-deep px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            disabled={busy || ready === 0}
+            className="min-h-[42px] rounded-xl bg-runfree-grad-deep px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
           >
-            {busy ? "Adding…" : `Add ${rows.filter((r) => r.email.trim()).length || ""} people`}
+            {busy ? "Adding…" : ready > 1 ? `Add ${ready} people` : "Add person"}
           </button>
-          {results && (
-            <button
-              onClick={onDone}
-              className="text-sm font-medium text-runfree-magentaDeep hover:underline"
-            >
-              Done
-            </button>
-          )}
+          <button
+            onClick={onDone}
+            className="text-sm font-medium text-gray-500 transition hover:text-runfree-ink"
+          >
+            {results ? "Done" : "Cancel"}
+          </button>
         </div>
 
         {results && (
-          <div className="rounded-xl border border-gray-200 p-4">
+          <div className="rounded-xl border border-gray-200 p-3.5">
             <p className="text-sm font-semibold text-runfree-ink">
               {results.summary.created} added · {results.summary.updated} updated ·{" "}
               {results.summary.failed} not done
             </p>
-            <ul className="mt-2 space-y-1.5 text-xs">
+            <ul className="mt-2 space-y-1 text-xs">
               {results.results.map((r) => (
                 <li key={r.row} className="flex flex-wrap items-baseline gap-x-2">
                   <span
@@ -836,11 +853,10 @@ function AddPeople({ onDone }: { onDone: () => void }) {
                   </span>
                   <span className="text-runfree-ink">{r.email || `row ${r.row}`}</span>
                   {r.detail && <span className="text-gray-500">— {r.detail}</span>}
-                  {r.ghl && (
+                  {r.ghl && r.ghl.status !== "disabled" && (
                     <span className="text-gray-400">
                       · GHL: {r.ghl.status}
                       {r.ghl.tagged ? " (tagged)" : ""}
-                      {r.ghl.reason ? ` — ${r.ghl.reason}` : ""}
                       {r.ghl.message ? ` — ${r.ghl.message}` : ""}
                     </span>
                   )}

@@ -17,6 +17,12 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
+  /**
+   * Absolute base for og:image and friends. Without it Next emits a relative
+   * image URL, and iMessage, Slack and WhatsApp all need an absolute one — so
+   * the share card silently falls back to a bare link.
+   */
+  metadataBase: new URL("https://portal.runfree.co"),
   title: "RunFree Portal",
   description:
     "Session recordings, coaching notes, and deliverables for RunFree engagements.",

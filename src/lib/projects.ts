@@ -522,20 +522,38 @@ export async function stampTemplateMembers(
 
   if (error || !rows?.length) return { added: 0 };
 
-  const { error: insertErr } = await client.from("project_members").insert(
-    rows.map((r) => ({
-      project_id: projectId,
-      profile_id: r.profile_id,
-      role: r.role,
-      org_role: r.org_role,
-    }))
-  );
+  /**
+   * upsert, not insert, and ignoring duplicates.
+   *
+   * The creator is already a member — create_projects adds them as admin — so
+   * a template whose member list includes them produced a primary-key
+   * conflict on (project_id, profile_id). This was ONE batch insert, so that
+   * single conflicting row failed the whole statement and NOBODY was added:
+   * Will creating a Pivvot project silently lost Brooke and everyone else,
+   * and the only sign was a console line nobody reads.
+   *
+   * ignoreDuplicates keeps the creator's existing row — which is admin,
+   * because they made the project — rather than downgrading them to whatever
+   * the template says.
+   */
+  const { data: inserted, error: insertErr } = await client
+    .from("project_members")
+    .upsert(
+      rows.map((r) => ({
+        project_id: projectId,
+        profile_id: r.profile_id,
+        role: r.role,
+        org_role: r.org_role,
+      })),
+      { onConflict: "project_id,profile_id", ignoreDuplicates: true }
+    )
+    .select("profile_id");
 
   if (insertErr) {
     console.error("Could not add the template's RunFree team:", insertErr.message);
     return { added: 0 };
   }
-  return { added: rows.length };
+  return { added: inserted?.length ?? 0 };
 }
 
 /**

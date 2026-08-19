@@ -182,11 +182,6 @@ export default function ProjectDetailPage() {
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
 
-  // Two ways to read the same engagement. "Dynamic" is the full scrolling
-  // page; "Condensed" folds every part down to one index screen. Andrew wants
-  // both live so the team and a client can be shown the same project in two
-  // styles and asked which one they prefer. Persisted per browser so a
-  // reviewer's choice survives a reload mid-comparison.
   /**
    * Which panel is showing. Kept in the URL (?panel=prepare) so a coach can
    * send someone straight to a section — "open this and look at Preparation"
@@ -582,7 +577,7 @@ export default function ProjectDetailPage() {
             doing; when it meets next is a fact you check, not an action. The
             status card takes a fixed column so the two never end up at odd
             widths as the priorities text grows. */}
-        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="mt-5 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <PrioritiesBanner
             detail={detail}
             canEdit={canEdit}
@@ -2343,9 +2338,9 @@ function PrioritiesBanner({
     : null;
 
   return (
-    <section className="flex h-full flex-col overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
-      <div className="h-1.5 shrink-0 bg-runfree-grad" />
-      <div className="flex-1 px-5 py-4">
+    <section className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
+      <div className="h-1.5 bg-runfree-grad" />
+      <div className="px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* The control says what it does. A bare chevron left people
               guessing whether there was anything behind it. */}
@@ -2384,35 +2379,26 @@ function PrioritiesBanner({
             </span>
           </button>
 
-          {canEdit && !editing && !collapsed && (
-            <button
-              onClick={() => {
-                setDraft(detail.priorities ?? "");
-                setEditing(true);
-              }}
-              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-white/25 transition hover:bg-white/10 hover:text-white"
-            >
-              Edit
-            </button>
-          )}
+          <span className="flex shrink-0 items-center gap-3">
+            {updated && !collapsed && (
+              <span className="text-[11px] text-white/45">Updated {updated}</span>
+            )}
+            {canEdit && !editing && !collapsed && (
+              <button
+                onClick={() => {
+                  setDraft(detail.priorities ?? "");
+                  setEditing(true);
+                }}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-white/25 transition hover:bg-white/10 hover:text-white"
+              >
+                Edit
+              </button>
+            )}
+          </span>
         </div>
 
         {!collapsed && (
           <>
-            {lines.length > 0 && !editing && (
-              <ul className="mt-3 space-y-2">
-                {lines.map((line, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <span
-                      aria-hidden
-                      className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-runfree-pink"
-                    />
-                    <span className="text-sm leading-relaxed text-white/90">{line}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
             {editing && (
               <div className="mt-3 space-y-3">
                 <textarea
@@ -2441,65 +2427,68 @@ function PrioritiesBanner({
               </div>
             )}
 
-            {updated && !editing && (
-              <p className="mt-3 text-xs text-white/45">Updated {updated}</p>
-            )}
+            {/* Tasks first — they are what the team acts on. */}
+            {detail.tasks.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {open.length > 0 && (
+                  <TaskList
+                    tasks={open}
+                    accessToken={accessToken}
+                    onChanged={onChanged}
+                    canEdit={canEdit}
+                    showSection
+                  />
+                )}
 
-            {/* The tasks, introduced by a line that says what they are.
-                Andrew: "we just put... one line that says something like, here
-                are your tasks to complete before our next session. And then
-                each of the homework pieces or next steps can be listed out
-                right there." */}
-            {(detail.tasks.length > 0 || (canEdit && editing)) && (
-              <div className="mt-5 border-t border-white/10 pt-4">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/50">
-                  To complete before the next session
-                </p>
-
-                <div className="mt-2.5 space-y-2.5">
-                  {open.length > 0 && (
-                    <TaskList
-                      tasks={open}
-                      accessToken={accessToken}
-                      onChanged={onChanged}
-                      canEdit={canEdit}
-                      showSection
-                    />
-                  )}
-
-                  {done.length > 0 && (
-                    <details className="group">
-                      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/70 transition hover:bg-white/20 hover:text-white">
-                        {done.length} finished
-                        <span aria-hidden className="text-[9px] transition group-open:rotate-180">
-                          ▼
-                        </span>
-                      </summary>
-                      <div className="mt-2">
-                        <TaskList
-                          tasks={done}
-                          accessToken={accessToken}
-                          onChanged={onChanged}
-                          canEdit={canEdit}
-                          showSection
-                        />
-                      </div>
-                    </details>
-                  )}
-
-                  {/* Only while editing — the two buttons were the duplication. */}
-                  {canEdit && editing && (
-                    <AddTask
-                      projectId={projectId}
-                      accessToken={accessToken}
-                      siblings={detail.tasks}
-                      moduleOptions={moduleOptions}
-                      onChanged={onChanged}
-                    />
-                  )}
-                </div>
+                {done.length > 0 && (
+                  <details className="group">
+                    <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/70 transition hover:bg-white/20 hover:text-white">
+                      {done.length} finished
+                      <span aria-hidden className="text-[9px] transition group-open:rotate-180">
+                        ▼
+                      </span>
+                    </summary>
+                    <div className="mt-2">
+                      <TaskList
+                        tasks={done}
+                        accessToken={accessToken}
+                        onChanged={onChanged}
+                        canEdit={canEdit}
+                        showSection
+                      />
+                    </div>
+                  </details>
+                )}
               </div>
             )}
+
+            {/* The written note, under the tasks. */}
+            {lines.length > 0 && !editing && (
+              <ul className={`space-y-1.5 ${detail.tasks.length > 0 ? "mt-4 border-t border-white/10 pt-3" : "mt-3"}`}>
+                {lines.map((line, i) => (
+                  <li key={i} className="flex items-start gap-2.5">
+                    <span
+                      aria-hidden
+                      className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-runfree-pink"
+                    />
+                    <span className="text-sm leading-relaxed text-white/90">{line}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {canEdit && editing && (
+              <div className="mt-3">
+                <AddTask
+                  projectId={projectId}
+                  accessToken={accessToken}
+                  siblings={detail.tasks}
+                  moduleOptions={moduleOptions}
+                  onChanged={onChanged}
+                />
+              </div>
+            )}
+
           </>
         )}
       </div>
@@ -2619,45 +2608,6 @@ function VisionStackCard({
 /* Quick tiles                                                                 */
 /* -------------------------------------------------------------------------- */
 
-function QuickTiles({
-  prepCount,
-  sessionCount,
-  teamCount,
-}: {
-  prepCount: number;
-  sessionCount: number;
-  teamCount: number;
-}) {
-  const tiles = [
-    { href: "#prepare", label: "Prepare", detail: `${prepCount} to do and review` },
-    { href: "#sessions", label: "Session recordings", detail: sessionCount === 1 ? "1 recorded" : `${sessionCount} recorded` },
-    { href: "#team", label: "Your team", detail: `${teamCount} ${teamCount === 1 ? "person" : "people"}` },
-  ];
-
-  return (
-    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-      {tiles.map((t) => (
-        <a
-          key={t.href}
-          href={t.href}
-          className="group flex items-center justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200 transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-runfree-magenta/30"
-        >
-          <span>
-            <span className="block font-display text-base font-bold text-runfree-ink">{t.label}</span>
-            <span className="mt-0.5 block text-xs text-gray-500">{t.detail}</span>
-          </span>
-          <span
-            aria-hidden
-            className="text-gray-300 transition-transform duration-200 group-hover:translate-y-0.5 group-hover:text-runfree-magenta"
-          >
-            ↓
-          </span>
-        </a>
-      ))}
-    </div>
-  );
-}
-
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <div className="text-center">
@@ -2703,9 +2653,9 @@ function ProjectStatusCard({
   if (!nextDate?.due_on) return null;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
-      <div className="h-1.5 shrink-0 bg-runfree-grad" />
-      <div className="flex flex-1 flex-col p-5">
+    <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
+      <div className="h-1.5 bg-runfree-grad" />
+      <div className="p-5">
         <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
           Next Session
         </p>
@@ -2716,7 +2666,7 @@ function ProjectStatusCard({
 
         <button
           onClick={onGoToDates}
-          className="group mt-4 inline-flex w-fit items-center gap-1.5 self-start rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white lg:mt-auto lg:pt-4"
+          className="group mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
         >
           All key dates
           <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
@@ -2730,7 +2680,6 @@ function ProjectStatusCard({
 
 function ModulePanel({
   section,
-  bare = false,
   detail,
   imageUrls,
   canEdit,
@@ -2741,8 +2690,6 @@ function ModulePanel({
   thumbs,
 }: {
   section: string;
-  /** Inside a Condensed fold: no card, no gradient rule, no title block. */
-  bare?: boolean;
   detail: ProjectDetail;
   imageUrls: Record<string, string>;
   canEdit: boolean;
@@ -2804,16 +2751,10 @@ function ModulePanel({
   if (!hasAnything && !canEdit) return null;
 
   return (
-    <div
-      className={
-        bare
-          ? ""
-          : "animate-fade mt-2 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200"
-      }
-    >
-      {!bare && <div className="h-1 bg-runfree-grad" />}
-      <div className={bare ? "space-y-8" : "space-y-10 p-6 sm:p-9"}>
-        {!bare && (
+    <div className="animate-fade mt-2 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
+      <div className="h-1 bg-runfree-grad" />
+      <div className="space-y-10 p-6 sm:p-9">
+        {(
           <div>
             <h3 className="font-display text-2xl font-extrabold tracking-tight text-runfree-ink">
               {moduleLabel(section)}
@@ -4202,7 +4143,7 @@ function PrepRow({
               href={safeExternalUrl(item.meeting_url)!}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-[28px] items-center rounded-lg bg-runfree-grad-deep px-2.5 text-[11px] font-semibold text-white transition hover:opacity-90"
+              className="inline-flex min-h-[28px] items-center rounded-lg bg-runfree-grad-deep px-3 text-[11px] font-semibold text-white transition hover:opacity-90 max-sm:min-h-[40px] max-sm:px-4 max-sm:text-xs"
             >
               Join
             </a>
@@ -4739,7 +4680,6 @@ function PrepVideosRow({
 
 function SessionsSection({
   id,
-  bare = false,
   thumbs = {},
   sessions,
   detail,
@@ -4751,8 +4691,6 @@ function SessionsSection({
   onChanged,
 }: {
   id: string;
-  /** Inside a Condensed fold the heading and margin come from the fold. */
-  bare?: boolean;
   thumbs?: Record<string, string>;
   sessions: ProjectDetail["sessions"];
   detail: ProjectDetail;
@@ -4792,7 +4730,7 @@ function SessionsSection({
 
   return (
     <section id={id} className="mt-20 scroll-mt-20">
-      {!bare && <SectionHeading eyebrow="Every time we met" title="Session recordings" />}
+      <SectionHeading eyebrow="Every time we met" title="Session Recordings" />
 
       <div className="mx-auto mt-8 max-w-3xl space-y-3">
         {sessions.length === 0 && (
@@ -5298,7 +5236,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function TeamSection({
   id,
-  bare = false,
   detail,
   imageUrls,
   canManage,
@@ -5309,8 +5246,6 @@ function TeamSection({
   onChanged,
 }: {
   id: string;
-  /** Inside a Condensed fold the heading comes from the fold. */
-  bare?: boolean;
   detail: ProjectDetail;
   imageUrls: Record<string, string>;
   canManage: boolean;
@@ -5338,7 +5273,7 @@ function TeamSection({
 
   return (
     <section id={id} className="mt-20 scroll-mt-20">
-      {!bare && <SectionHeading eyebrow="Who you're working with" title="Your Team" />}
+      <SectionHeading eyebrow="Who you're working with" title="Your Team" />
 
       {/* The church's own people lead. Andrew: "Let's lead with their actual
           church team. And then below it shows the run free team." A church
@@ -5617,172 +5552,3 @@ function PersonCard({
   );
 }
 
-function MemberRow({
-  member,
-  managing,
-  accessToken,
-  projectId,
-  onChanged,
-}: {
-  member: ProjectMember;
-  managing: boolean;
-  accessToken: string | null;
-  projectId: string;
-  onChanged: () => void;
-}) {
-  const [orgRole, setOrgRole] = useState(member.orgRole ?? "");
-
-  async function saveOrgRole() {
-    if (!accessToken || orgRole === (member.orgRole ?? "")) return;
-    await updateMemberDetails(accessToken, projectId, member.profileId, {
-      org_role: orgRole || null,
-    });
-    onChanged();
-  }
-
-  return (
-    <li className="flex flex-wrap items-center gap-3 px-6 py-3.5">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-runfree-ink">
-          {member.fullName || member.email}
-        </p>
-        <a
-          href={`mailto:${member.email}`}
-          className="truncate text-xs text-gray-500 hover:text-runfree-magentaDeep"
-        >
-          {member.email}
-        </a>
-      </div>
-
-      {managing ? (
-        <>
-          <input
-            value={orgRole}
-            onChange={(e) => setOrgRole(e.target.value)}
-            onBlur={saveOrgRole}
-            placeholder="Role at church"
-            className="w-40 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs outline-none focus:border-runfree-magenta"
-          />
-          <select
-            value={member.role}
-            onChange={async (e) => {
-              if (!accessToken) return;
-              await updateMemberRole(
-                accessToken,
-                projectId,
-                member.profileId,
-                e.target.value as ProjectRole
-              );
-              onChanged();
-            }}
-            className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-runfree-magenta"
-          >
-            <option value="viewer">Viewer</option>
-            <option value="editor">Editor</option>
-            <option value="admin">Admin</option>
-          </select>
-          <button
-            onClick={async () => {
-              if (!accessToken) return;
-              await removeMember(accessToken, projectId, member.profileId);
-              onChanged();
-            }}
-            className="rounded-lg px-2 py-1.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-runfree-ink"
-          >
-            Remove
-          </button>
-        </>
-      ) : (
-        <span className="text-xs text-gray-500">{member.orgRole || "—"}</span>
-      )}
-    </li>
-  );
-}
-
-function AddMemberForm({
-  accessToken,
-  projectId,
-  onChanged,
-}: {
-  accessToken: string | null;
-  projectId: string;
-  onChanged: () => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [orgRole, setOrgRole] = useState("");
-  const [role, setRole] = useState<ProjectRole>("viewer");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!accessToken || !email.trim()) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ email: email.trim(), role, orgRole: orgRole.trim() || null }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        setMessage(body.error || "Couldn't add that person");
-      } else {
-        setMessage(body.invited ? `Invited ${email}` : `Added ${email}`);
-        setEmail("");
-        setOrgRole("");
-        onChanged();
-      }
-    } catch {
-      setMessage("Couldn't reach the server — try again");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="flex flex-wrap items-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
-      <div className="min-w-[180px] flex-1">
-        <label className="mb-1 block text-xs font-medium text-gray-600">Email</label>
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="name@church.org"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-xs font-medium text-gray-600">Role at church</label>
-        <input
-          value={orgRole}
-          onChange={(e) => setOrgRole(e.target.value)}
-          placeholder="Executive Pastor"
-          className="w-44 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-xs font-medium text-gray-600">Access</label>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as ProjectRole)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta"
-        >
-          <option value="viewer">Viewer</option>
-          <option value="editor">Editor</option>
-          <option value="admin">Admin</option>
-        </select>
-      </div>
-      <button
-        type="submit"
-        disabled={busy}
-        className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-      >
-        {busy ? "Adding…" : "Add"}
-      </button>
-      {message && <p className="w-full text-xs text-gray-600">{message}</p>}
-    </form>
-  );
-}

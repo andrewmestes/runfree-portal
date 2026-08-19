@@ -29,6 +29,17 @@ export default function PortalFooter() {
             Help &amp; FAQ
           </a>
           {" · "}
+          {/* Reachable without signing in — Google's OAuth reviewer checks
+              these while logged out, and someone deciding whether to accept an
+              invitation should be able to read them first. */}
+          <a href="/privacy" className="font-medium text-runfree-magentaDeep hover:underline">
+            Privacy
+          </a>
+          {" · "}
+          <a href="/terms" className="font-medium text-runfree-magentaDeep hover:underline">
+            Terms
+          </a>
+          {" · "}
           Questions?{" "}
           <a
             href="mailto:andrew@runfree.co"

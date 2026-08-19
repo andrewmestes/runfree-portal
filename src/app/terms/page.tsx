@@ -5,6 +5,9 @@ import PortalFooter from "@/components/PortalFooter";
 export const metadata: Metadata = {
   title: "Terms of Service · RunFree Portal",
   description: "The terms for using the RunFree portal.",
+  // Readable by crawlers: Google must fetch these during OAuth brand
+  // verification, and the root layout otherwise marks everything noindex.
+  robots: { index: true, follow: true },
 };
 
 /**

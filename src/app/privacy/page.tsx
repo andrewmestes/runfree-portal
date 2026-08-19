@@ -5,6 +5,9 @@ import PortalFooter from "@/components/PortalFooter";
 export const metadata: Metadata = {
   title: "Privacy Policy · RunFree Portal",
   description: "What the RunFree portal collects, where it is stored, and who it is shared with.",
+  // Readable by crawlers: Google must fetch these during OAuth brand
+  // verification, and the root layout otherwise marks everything noindex.
+  robots: { index: true, follow: true },
 };
 
 /**

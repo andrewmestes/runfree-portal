@@ -582,7 +582,7 @@ export default function ProjectDetailPage() {
             doing; when it meets next is a fact you check, not an action. The
             status card takes a fixed column so the two never end up at odd
             widths as the priorities text grows. */}
-        <div className="mt-5 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <PrioritiesBanner
             detail={detail}
             canEdit={canEdit}
@@ -2291,9 +2291,9 @@ function PrioritiesBanner({
     : null;
 
   return (
-    <section className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
-      <div className="h-1.5 bg-runfree-grad" />
-      <div className="px-5 py-4">
+    <section className="flex h-full flex-col overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
+      <div className="h-1.5 shrink-0 bg-runfree-grad" />
+      <div className="flex-1 px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* The control says what it does. A bare chevron left people
               guessing whether there was anything behind it. */}
@@ -2648,9 +2648,9 @@ function ProjectStatusCard({
   if (!nextDate?.due_on) return null;
 
   return (
-    <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
-      <div className="h-1.5 bg-runfree-grad" />
-      <div className="p-5">
+    <div className="flex h-full flex-col overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
+      <div className="h-1.5 shrink-0 bg-runfree-grad" />
+      <div className="flex flex-1 flex-col p-5">
         <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
           Next Session
         </p>
@@ -2661,7 +2661,7 @@ function ProjectStatusCard({
 
         <button
           onClick={onGoToDates}
-          className="group mt-4 inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
+          className="group mt-4 inline-flex w-fit items-center gap-1.5 self-start rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white lg:mt-auto lg:pt-4"
         >
           All key dates
           <span aria-hidden className="transition-transform group-hover:translate-x-0.5">

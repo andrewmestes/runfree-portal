@@ -28,7 +28,6 @@ import {
   setLeadNavigator,
   setProjectArchived,
   setTaskDone,
-  updatePriorities,
   updateAvatar,
   updateMemberDetails,
   updateMemberRole,
@@ -589,7 +588,6 @@ export default function ProjectDetailPage() {
           <ProjectStatusCard nextDate={nextDateItem} onGoToDates={() => goPanel("dates")} />
         </div>
 
-        <ProjectToolbar active={activePanel} onSelect={goPanel} items={panelItems} />
 
         {/* One panel at a time. `key` on the wrapper restarts the fade on
             every swap, so the change is legible rather than an instant
@@ -601,7 +599,13 @@ export default function ProjectDetailPage() {
             fought the navigation rather than complementing it. Andrew: "I'm
             wondering if we need that at all anymore... I don't like the way
             that that currently looks." */}
-        <div key={activePanel} className="animate-fade mt-10">
+        {/* Rail beside the content on desktop, strip above it on a phone.
+            The rail column is fixed-width so the content does not reflow as
+            labels change between projects. */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8">
+          <ProjectToolbar active={activePanel} onSelect={goPanel} items={panelItems} />
+
+          <div key={activePanel} className="animate-fade min-w-0">
             {/* TeamSection renders the church roster itself now, so there is
                 no second ChurchTeamInfo here — that pairing was what put
                 "Church team 0" directly above a list of eight people. */}
@@ -758,6 +762,7 @@ export default function ProjectDetailPage() {
                 onChanged={refresh}
               />
           )}
+          </div>
         </div>
       </main>
 
@@ -1157,6 +1162,25 @@ function ProjectSettings({
  * part that does the teaching: someone who has never heard of a Vision Stack
  * still understands "6 dates" and "5 things to read".
  */
+/**
+ * The project's sections, as a rail on desktop and a scrolling strip on a
+ * phone.
+ *
+ * Andrew: "what if the 'tabs' were vertical along the left side? the vast
+ * majority of platforms I use have something like that... the full screen
+ * just looks like a lot right now."
+ *
+ * He is right about the cause. The page was a stack of full-width horizontal
+ * bands — header, breadcrumb, church hero, two cards, tab strip, then content
+ * — and each one pushed the actual work further down. A rail turns one of
+ * those bands into a column beside the content, which buys back its height on
+ * every panel and puts the whole structure in view at once rather than as a
+ * row you read left to right.
+ *
+ * Not on a phone. Five labels down the side of a 375px screen would leave the
+ * content about 200px wide, so below `lg` this stays the horizontal strip it
+ * was — which is also the pattern every mobile app uses for the same reason.
+ */
 function ProjectToolbar({
   items,
   active,
@@ -1166,54 +1190,78 @@ function ProjectToolbar({
   active: string;
   onSelect: (key: string) => void;
 }) {
+  if (items.length === 0) return null;
+
   return (
-    <div className="sticky top-0 z-30 -mx-4 mt-6 border-b border-gray-200/70 bg-gray-50/90 backdrop-blur-md sm:-mx-6 lg:-mx-8">
-      <div className="mx-auto max-w-7xl px-4 py-2.5 sm:px-6 lg:px-8">
-        {items.length > 0 && (
-          <nav aria-label="Project sections">
-            {/* Bigger, and the selected tab wears the brand gradient rather
-                than a pale tint. Andrew: "the tabs themselves could be a
-                little bit more prominent and colorful." These are the primary
-                navigation of the whole page now, so they are sized like it. */}
-            {/* Full width on desktop: each tab takes an equal share of the
-                bar rather than huddling at the left. Andrew asked twice for
-                these to be bigger, so they are sized as the primary
-                navigation they now are. They still scroll on a phone, where
-                five equal columns would be five unreadable slivers. */}
-            <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-1 [scrollbar-width:none] sm:gap-2 [&::-webkit-scrollbar]:hidden">
-              {items.map((it) => {
-                const on = active === it.key;
-                return (
-                  <li key={it.key} className="sm:flex-1">
-                    <button
-                      onClick={() => onSelect(it.key)}
-                      aria-current={on ? "true" : undefined}
-                      className={`inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 py-3 text-[15px] font-bold transition duration-200 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[46px] ${
-                        on
-                          ? "bg-runfree-grad text-white shadow-md"
-                          : "bg-white text-gray-600 shadow-sm ring-1 ring-gray-200 hover:text-runfree-ink hover:ring-runfree-magenta/40"
+    <>
+      {/* Phone and tablet: the strip, sticky under the header. */}
+      <div className="sticky top-0 z-30 -mx-4 mt-5 border-b border-gray-200/70 bg-gray-50/90 backdrop-blur-md sm:-mx-6 lg:hidden">
+        <nav aria-label="Project sections" className="px-4 py-2 sm:px-6">
+          <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {items.map((it) => {
+              const on = active === it.key;
+              return (
+                <li key={it.key}>
+                  <button
+                    onClick={() => onSelect(it.key)}
+                    aria-current={on ? "true" : undefined}
+                    className={`inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold transition outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
+                      on
+                        ? "bg-runfree-grad text-white shadow-sm"
+                        : "bg-white text-gray-600 shadow-sm ring-1 ring-gray-200"
+                    }`}
+                  >
+                    {it.label}
+                    {it.count != null && it.count > 0 && (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
+                          on ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {it.count}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </div>
+
+      {/* Desktop: the rail. Sticky, so it stays with you down a long panel. */}
+      <nav aria-label="Project sections" className="sticky top-6 hidden lg:block">
+        <ul className="space-y-1">
+          {items.map((it) => {
+            const on = active === it.key;
+            return (
+              <li key={it.key}>
+                <button
+                  onClick={() => onSelect(it.key)}
+                  aria-current={on ? "true" : undefined}
+                  className={`group flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-bold transition duration-150 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
+                    on
+                      ? "bg-runfree-grad text-white shadow-sm"
+                      : "text-gray-600 hover:bg-white hover:text-runfree-ink hover:shadow-sm"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                  {it.count != null && it.count > 0 && (
+                    <span
+                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
+                        on ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
                       }`}
                     >
-                      {it.label}
-                      {it.count != null && it.count > 0 && (
-                        <span
-                          className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
-                            on ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
-                          }`}
-                        >
-                          {it.count}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
-        )}
-
-      </div>
-    </div>
+                      {it.count}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    </>
   );
 }
 
@@ -2276,6 +2324,25 @@ function prettyDomain(url: string): string {
  * this month is one action rather than a choice between two buttons that
  * looked unrelated but weren't.
  */
+/**
+ * What this team owes before the next session — a checklist, and nothing else.
+ *
+ * This used to be a free-text note with a task list underneath it, which is
+ * why Andrew asked twice for the bullets to become checkboxes and twice got
+ * something that wasn't quite it. The honest answer was that they couldn't:
+ * `projects.priorities` is one text column, so it can hold a list but has
+ * nowhere to record that line three is done. A checkbox drawn beside prose
+ * would either not persist or would need a second store keyed by line number,
+ * which breaks the moment anyone edits the text above it.
+ *
+ * Migration 040 moved that prose into project_tasks, one row per line. So
+ * everything in here is now a real item with a real state, and "Edit" adds
+ * items rather than editing a paragraph.
+ *
+ *   "I would like those to be more like the element that is showing up as one
+ *    finished where it is actually something to be a checkbox that they can
+ *    complete rather than just text on a screen that has no action."
+ */
 function PrioritiesBanner({
   detail,
   canEdit,
@@ -2291,13 +2358,10 @@ function PrioritiesBanner({
   accessToken: string | null;
   onChanged: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(detail.priorities ?? "");
-  const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
 
-  // Collapsible, and it remembers. It sits above every panel, so its height
-  // is paid on every screen — and on The Process it was pushing the module
-  // icons below the fold, which inverts what that tab is for.
+  // Collapsible, and it remembers — it sits above every panel, so its height
+  // is paid on every screen.
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("rf-win-collapsed") === "1");
@@ -2309,41 +2373,15 @@ function PrioritiesBanner({
     });
   }
 
-  async function save() {
-    if (!accessToken) return;
-    setBusy(true);
-    try {
-      await updatePriorities(accessToken, detail.id, draft);
-      onChanged();
-      setEditing(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const open = detail.tasks.filter((t) => !t.is_done);
   const done = detail.tasks.filter((t) => t.is_done);
-  if (!detail.priorities && detail.tasks.length === 0 && !canEdit) return null;
-
-  const lines = (detail.priorities ?? "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const updated = detail.prioritiesUpdatedAt
-    ? new Date(detail.prioritiesUpdatedAt).toLocaleDateString(undefined, {
-        day: "numeric",
-        month: "long",
-      })
-    : null;
+  if (detail.tasks.length === 0 && !canEdit) return null;
 
   return (
     <section className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
       <div className="h-1.5 bg-runfree-grad" />
       <div className="px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* The control says what it does. A bare chevron left people
-              guessing whether there was anything behind it. */}
           <button
             onClick={toggle}
             aria-expanded={!collapsed}
@@ -2379,117 +2417,76 @@ function PrioritiesBanner({
             </span>
           </button>
 
-          <span className="flex shrink-0 items-center gap-3">
-            {updated && !collapsed && (
-              <span className="text-[11px] text-white/45">Updated {updated}</span>
-            )}
-            {canEdit && !editing && !collapsed && (
-              <button
-                onClick={() => {
-                  setDraft(detail.priorities ?? "");
-                  setEditing(true);
-                }}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-white/25 transition hover:bg-white/10 hover:text-white"
-              >
-                Edit
-              </button>
-            )}
-          </span>
+          {canEdit && !collapsed && !adding && (
+            <button
+              onClick={() => setAdding(true)}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-white/25 transition hover:bg-white/10 hover:text-white"
+            >
+              + Add
+            </button>
+          )}
         </div>
 
         {!collapsed && (
-          <>
-            {editing && (
-              <div className="mt-3 space-y-3">
-                <textarea
-                  autoFocus
-                  rows={4}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={"What should this team do before you meet again?\n\nOne per line reads best."}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm leading-relaxed text-runfree-ink outline-none placeholder:text-gray-400 focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={save}
-                    disabled={busy}
-                    className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-runfree-navy transition hover:bg-white/90 disabled:opacity-50"
-                  >
-                    {busy ? "Saving…" : "Save"}
-                  </button>
-                  <button
-                    onClick={() => setEditing(false)}
-                    className="rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
+          <div className="mt-3 space-y-2">
+            {open.length > 0 && (
+              <TaskList
+                tasks={open}
+                accessToken={accessToken}
+                onChanged={onChanged}
+                canEdit={canEdit}
+                showSection
+              />
             )}
 
-            {/* Tasks first — they are what the team acts on. */}
-            {detail.tasks.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {open.length > 0 && (
+            {open.length === 0 && done.length > 0 && (
+              <p className="text-sm text-white/60">
+                Everything here is done. Nice work.
+              </p>
+            )}
+
+            {detail.tasks.length === 0 && canEdit && !adding && (
+              <p className="text-sm text-white/55">
+                Nothing set yet. This is the first thing your team sees — add what matters before
+                you next meet.
+              </p>
+            )}
+
+            {done.length > 0 && (
+              <details className="group pt-0.5">
+                <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/70 transition hover:bg-white/20 hover:text-white">
+                  {done.length} finished
+                  <span aria-hidden className="text-[9px] transition group-open:rotate-180">
+                    ▼
+                  </span>
+                </summary>
+                <div className="mt-2">
                   <TaskList
-                    tasks={open}
+                    tasks={done}
                     accessToken={accessToken}
                     onChanged={onChanged}
                     canEdit={canEdit}
                     showSection
                   />
-                )}
-
-                {done.length > 0 && (
-                  <details className="group">
-                    <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/70 transition hover:bg-white/20 hover:text-white">
-                      {done.length} finished
-                      <span aria-hidden className="text-[9px] transition group-open:rotate-180">
-                        ▼
-                      </span>
-                    </summary>
-                    <div className="mt-2">
-                      <TaskList
-                        tasks={done}
-                        accessToken={accessToken}
-                        onChanged={onChanged}
-                        canEdit={canEdit}
-                        showSection
-                      />
-                    </div>
-                  </details>
-                )}
-              </div>
+                </div>
+              </details>
             )}
 
-            {/* The written note, under the tasks. */}
-            {lines.length > 0 && !editing && (
-              <ul className={`space-y-1.5 ${detail.tasks.length > 0 ? "mt-4 border-t border-white/10 pt-3" : "mt-3"}`}>
-                {lines.map((line, i) => (
-                  <li key={i} className="flex items-start gap-2.5">
-                    <span
-                      aria-hidden
-                      className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-runfree-pink"
-                    />
-                    <span className="text-sm leading-relaxed text-white/90">{line}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {canEdit && editing && (
-              <div className="mt-3">
+            {canEdit && adding && (
+              <div className="pt-1">
                 <AddTask
                   projectId={projectId}
                   accessToken={accessToken}
                   siblings={detail.tasks}
                   moduleOptions={moduleOptions}
-                  onChanged={onChanged}
+                  onChanged={() => {
+                    setAdding(false);
+                    onChanged();
+                  }}
                 />
               </div>
             )}
-
-          </>
+          </div>
         )}
       </div>
     </section>

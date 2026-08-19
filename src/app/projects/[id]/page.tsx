@@ -404,7 +404,7 @@ export default function ProjectDetailPage() {
             </p>
             <a
               href="/"
-              className="mt-6 inline-block rounded-lg bg-runfree-grad-deep px-4 py-2.5 font-medium text-white transition hover:opacity-90"
+              className="mt-6 inline-block rounded-lg bg-runfree-grad px-4 py-2.5 font-medium text-white transition hover:opacity-90"
             >
               Back to your projects
             </a>
@@ -954,7 +954,7 @@ function ChurchTeamInfo({
                     <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (e.g. Lead Pastor)" className={field} />
                     <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (optional)" className={field} />
                     <div className="flex gap-2">
-                      <button type="submit" disabled={busy || !name.trim()} className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+                      <button type="submit" disabled={busy || !name.trim()} className="rounded-lg bg-runfree-grad px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
                         {busy ? "Saving…" : "Add to roster"}
                       </button>
                       <button type="button" onClick={() => setAdding(false)} className="rounded-lg px-3 py-2 text-xs font-medium text-gray-500 hover:text-runfree-ink">
@@ -1553,7 +1553,7 @@ function AddTask({
         <button
           type="submit"
           disabled={busy || !title.trim()}
-          className="min-h-[44px] rounded-lg bg-runfree-grad-deep px-4 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+          className="min-h-[44px] rounded-lg bg-runfree-grad px-4 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "Saving…" : "Add"}
         </button>
@@ -1851,7 +1851,7 @@ function ProjectAccess({
                     <button
                       type="submit"
                       disabled={busy || !email.trim()}
-                      className="min-h-[44px] rounded-lg bg-runfree-grad-deep px-4 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                      className="min-h-[44px] rounded-lg bg-runfree-grad px-4 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
                     >
                       {busy ? "Sending…" : "Grant access & invite"}
                     </button>
@@ -1901,7 +1901,7 @@ function BackToTop() {
     <button
       onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
       aria-label="Back to top"
-      className={`fixed bottom-6 right-6 z-40 grid h-11 w-11 place-items-center rounded-full bg-runfree-grad-deep text-white shadow-lg transition-all duration-200 hover:opacity-90 ${
+      className={`fixed bottom-6 right-6 z-40 grid h-11 w-11 place-items-center rounded-full bg-runfree-grad text-white shadow-lg transition-all duration-200 hover:opacity-90 ${
         show ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"
       }`}
     >
@@ -2214,7 +2214,7 @@ function ChurchHero({
                   <button
                     onClick={saveDetails}
                     disabled={busy}
-                    className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                    className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
                   >
                     {busy ? "Saving…" : "Save"}
                   </button>
@@ -3006,7 +3006,7 @@ function SectionNote({
             <button
               onClick={save}
               disabled={busy}
-              className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {busy ? "Saving…" : "Save"}
             </button>
@@ -3156,7 +3156,7 @@ function HandoutPills({
                 aria-expanded={single ? undefined : on}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[38px] ${
                   lead
-                    ? "bg-runfree-grad-deep text-white shadow-sm hover:opacity-95"
+                    ? "bg-runfree-grad text-white shadow-sm hover:opacity-95"
                     : on
                       ? "bg-runfree-pink text-runfree-magentaDeep ring-1 ring-runfree-magenta/40"
                       : "bg-white text-gray-600 ring-1 ring-gray-200 hover:text-runfree-ink hover:ring-runfree-magenta/40"
@@ -3208,7 +3208,7 @@ function ExtraHandouts({
       {fieldGuide?.files[0] && (
         <button
           onClick={() => onOpen(fieldGuide.files[0].id, fieldGuide.files[0].title)}
-          className="group flex w-full items-center gap-4 rounded-2xl bg-runfree-grad-deep p-5 text-left text-white outline-none transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+          className="group flex w-full items-center gap-4 rounded-2xl bg-runfree-grad p-5 text-left text-white outline-none transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
         >
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15">
             <DocIcon />
@@ -4143,7 +4143,7 @@ function PrepRow({
               href={safeExternalUrl(item.meeting_url)!}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-[28px] items-center rounded-lg bg-runfree-grad-deep px-3 text-[11px] font-semibold text-white transition hover:opacity-90 max-sm:min-h-[40px] max-sm:px-4 max-sm:text-xs"
+              className="inline-flex min-h-[28px] items-center rounded-lg bg-runfree-grad px-3 text-[11px] font-semibold text-white transition hover:opacity-90 max-sm:min-h-[40px] max-sm:px-4 max-sm:text-xs"
             >
               Join
             </a>
@@ -4437,7 +4437,7 @@ function PrepItemForm({
         <button
           type="submit"
           disabled={busy || !title.trim()}
-          className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+          className="rounded-lg bg-runfree-grad px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "Saving…" : existing ? "Save" : "Add"}
         </button>
@@ -4801,7 +4801,7 @@ function SessionsSection({
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                  className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
                 >
                   Add session
                 </button>
@@ -5057,7 +5057,7 @@ function SessionRow({
                 <button
                   onClick={save}
                   disabled={saving}
-                  className="rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                  className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
                 >
                   {saving ? "Saving…" : "Save"}
                 </button>
@@ -5448,7 +5448,7 @@ function AddRunFreeMember({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-lg bg-runfree-grad-deep px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          className="rounded-lg bg-runfree-grad px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "Adding…" : "Add"}
         </button>

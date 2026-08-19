@@ -109,7 +109,7 @@ export default function VisionStackPage() {
             <h1 className="font-display text-2xl font-bold text-runfree-ink">Not found</h1>
             <a
               href="/"
-              className="mt-6 inline-block rounded-lg bg-runfree-grad-deep px-4 py-2.5 font-medium text-white transition hover:opacity-90"
+              className="mt-6 inline-block rounded-lg bg-runfree-grad px-4 py-2.5 font-medium text-white transition hover:opacity-90"
             >
               Back to your projects
             </a>

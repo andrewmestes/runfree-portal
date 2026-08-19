@@ -24,7 +24,10 @@ export default {
       },
       backgroundImage: {
         "runfree-grad": "linear-gradient(90deg, #E43D96, #F15A25)",
-        "runfree-grad-deep": "linear-gradient(90deg, #C21F73, #C43F18)",
+        // Deliberately one gradient, not two. The deeper pair read as muddy
+        // beside the bright one — Andrew: "I like the first, brighter, image.
+        // the second is a bit dark." Removed rather than left defined, so
+        // nobody reaches for it again by habit.
         "runfree-sunset":
           "linear-gradient(80deg, #20378C 4%, #2F57D0 28%, #E43D96 62%, #FF7C58 98%)",
       },

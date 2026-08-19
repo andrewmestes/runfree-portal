@@ -257,7 +257,7 @@ export default function AdminVideosPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-runfree-grad-deep px-6 py-2.5 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="rounded-lg bg-runfree-grad px-6 py-2.5 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {saving ? "Adding…" : "Add Video"}
             </button>

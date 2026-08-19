@@ -105,7 +105,7 @@ export default function CertificationHubPage() {
           </p>
           <a
             href="/"
-            className="mt-6 inline-flex rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-semibold text-white"
+            className="mt-6 inline-flex rounded-lg bg-runfree-grad px-4 py-2 text-sm font-semibold text-white"
           >
             Back to your projects
           </a>

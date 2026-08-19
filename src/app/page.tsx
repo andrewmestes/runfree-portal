@@ -224,7 +224,7 @@ export default function HomePage() {
             </p>
             <button
               onClick={handleSignOut}
-              className="mt-6 w-full rounded-lg bg-runfree-grad-deep px-4 py-2.5 font-medium text-white transition hover:opacity-90"
+              className="mt-6 w-full rounded-lg bg-runfree-grad px-4 py-2.5 font-medium text-white transition hover:opacity-90"
             >
               Sign out
             </button>
@@ -263,7 +263,7 @@ export default function HomePage() {
                 aria-pressed={layout === l}
                 className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition ${
                   layout === l
-                    ? "bg-runfree-grad-deep text-white"
+                    ? "bg-runfree-grad text-white"
                     : "text-gray-500 hover:text-runfree-ink"
                 }`}
               >
@@ -275,7 +275,7 @@ export default function HomePage() {
           <>
             <a
               href="/projects/new"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
             >
               + New project
             </a>

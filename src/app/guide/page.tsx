@@ -224,7 +224,7 @@ export default function GuidePage() {
                     onClick={() =>
                       setPreview({ ...file, num: null, label: file.title })
                     }
-                    className="mt-6 rounded-lg bg-runfree-grad-deep px-8 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                    className="mt-6 rounded-lg bg-runfree-grad px-8 py-3 text-sm font-semibold text-white transition hover:opacity-90"
                   >
                     Open the Guide
                   </button>

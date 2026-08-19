@@ -461,7 +461,7 @@ function FeedbackForm({
               aria-pressed={kind === k.value}
               className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
                 kind === k.value
-                  ? "bg-runfree-grad-deep text-white"
+                  ? "bg-runfree-grad text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -492,7 +492,7 @@ function FeedbackForm({
           <button
             type="submit"
             disabled={busy || !message.trim()}
-            className="rounded-lg bg-runfree-grad-deep px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
+            className="rounded-lg bg-runfree-grad px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
           >
             {busy ? "Sending…" : "Submit"}
           </button>

@@ -105,7 +105,7 @@ export default function NewProjectPage() {
             </p>
             <a
               href="/"
-              className="mt-6 inline-block rounded-lg bg-runfree-grad-deep px-4 py-2.5 font-medium text-white transition hover:opacity-90"
+              className="mt-6 inline-block rounded-lg bg-runfree-grad px-4 py-2.5 font-medium text-white transition hover:opacity-90"
             >
               Back to your projects
             </a>
@@ -186,7 +186,7 @@ export default function NewProjectPage() {
           <button
             type="submit"
             disabled={creating}
-            className="w-full rounded-lg bg-runfree-grad-deep px-4 py-2.5 font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded-lg bg-runfree-grad px-4 py-2.5 font-medium text-white transition hover:opacity-90 disabled:opacity-50"
           >
             {creating ? "Creating…" : "Create project"}
           </button>

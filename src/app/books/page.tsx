@@ -510,7 +510,7 @@ function FeaturedCard({
             </h3>
             <button
               onClick={() => onOpen(file)}
-              className="mt-4 rounded-lg bg-runfree-grad-deep px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              className="mt-4 rounded-lg bg-runfree-grad px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
             >
               Open
             </button>
@@ -573,7 +573,7 @@ function VisualSummaryCard({
             <span className="mt-1 block font-display text-base font-bold leading-snug text-runfree-ink">
               {file.title}
             </span>
-            <span className="mt-3 inline-block rounded-lg bg-runfree-grad-deep px-4 py-1.5 text-sm font-semibold text-white transition group-hover:opacity-90">
+            <span className="mt-3 inline-block rounded-lg bg-runfree-grad px-4 py-1.5 text-sm font-semibold text-white transition group-hover:opacity-90">
               Open
             </span>
           </span>

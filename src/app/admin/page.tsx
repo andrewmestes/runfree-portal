@@ -275,7 +275,7 @@ export default function AdminPage() {
           </p>
           <a
             href="/"
-            className="mt-6 inline-block rounded-lg bg-runfree-grad-deep px-4 py-2.5 text-sm font-medium text-white"
+            className="mt-6 inline-block rounded-lg bg-runfree-grad px-4 py-2.5 text-sm font-medium text-white"
           >
             Back to your projects
           </a>
@@ -303,7 +303,7 @@ export default function AdminPage() {
             and the video library — so they stay separate rather than being
             crammed into one list. */}
         <nav className="mb-6 flex flex-wrap gap-2">
-          <span className="rounded-full bg-runfree-grad-deep px-3.5 py-1.5 text-xs font-semibold text-white">
+          <span className="rounded-full bg-runfree-grad px-3.5 py-1.5 text-xs font-semibold text-white">
             People
           </span>
           <a
@@ -326,7 +326,7 @@ export default function AdminPage() {
           <div className="mb-4">
             <button
               onClick={() => setAdding(true)}
-              className="rounded-lg bg-runfree-grad-deep px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              className="rounded-lg bg-runfree-grad px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
             >
               + Add people
             </button>
@@ -527,7 +527,7 @@ function FilterChip({
       onClick={onClick}
       aria-pressed={on}
       className={`min-h-[36px] rounded-full px-3 text-xs font-semibold transition ${
-        on ? "bg-runfree-grad-deep text-white" : "bg-white text-gray-500 ring-1 ring-gray-200 hover:text-runfree-ink"
+        on ? "bg-runfree-grad text-white" : "bg-white text-gray-500 ring-1 ring-gray-200 hover:text-runfree-ink"
       }`}
     >
       {children}
@@ -821,7 +821,7 @@ function AddPeople({ onDone }: { onDone: () => void }) {
           <button
             onClick={submit}
             disabled={busy || ready === 0}
-            className="min-h-[42px] rounded-xl bg-runfree-grad-deep px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+            className="min-h-[42px] rounded-xl bg-runfree-grad px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
           >
             {busy ? "Adding…" : ready > 1 ? `Add ${ready} people` : "Add person"}
           </button>

@@ -89,7 +89,7 @@ export default function FilePreview({
           <a
             href={blobUrl || undefined}
             download={`${file.title}.pdf`}
-            className={`shrink-0 rounded-lg bg-runfree-grad-deep px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 ${
+            className={`shrink-0 rounded-lg bg-runfree-grad px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 ${
               blobUrl ? "" : "pointer-events-none opacity-40"
             }`}
           >

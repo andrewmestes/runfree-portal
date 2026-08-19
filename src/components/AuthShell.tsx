@@ -115,7 +115,7 @@ export function SubmitButton({
     <button
       type="submit"
       disabled={loading}
-      className="w-full rounded-lg bg-runfree-grad-deep px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
+      className="w-full rounded-lg bg-runfree-grad px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
     >
       {loading ? busyLabel : idleLabel}
     </button>

@@ -215,7 +215,7 @@ export default function ResourcesPage() {
             </p>
             <button
               onClick={handleSignOut}
-              className="mt-6 w-full rounded-lg bg-runfree-grad-deep px-4 py-2.5 font-medium text-white transition hover:opacity-90"
+              className="mt-6 w-full rounded-lg bg-runfree-grad px-4 py-2.5 font-medium text-white transition hover:opacity-90"
             >
               Sign out
             </button>

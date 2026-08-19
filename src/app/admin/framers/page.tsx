@@ -492,7 +492,7 @@ export default function FramersAdminPage() {
               <button
                 type="submit"
                 disabled={adding}
-                className="rounded-lg bg-runfree-grad-deep px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                className="rounded-lg bg-runfree-grad px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
               >
                 {adding
                   ? inviteOnAdd
@@ -599,7 +599,7 @@ export default function FramersAdminPage() {
                   <button
                     onClick={runImport}
                     disabled={!parsed || parsed.rows.length === 0 || importing}
-                    className="rounded-lg bg-runfree-grad-deep px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                    className="rounded-lg bg-runfree-grad px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
                   >
                     {importing
                       ? "Importing…"
@@ -709,7 +709,7 @@ export default function FramersAdminPage() {
                 aria-pressed={statusFilter === key}
                 className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
                   statusFilter === key
-                    ? "bg-runfree-grad-deep text-white shadow-sm"
+                    ? "bg-runfree-grad text-white shadow-sm"
                     : "bg-white text-gray-600 ring-1 ring-gray-200 hover:ring-runfree-magenta/40"
                 }`}
               >

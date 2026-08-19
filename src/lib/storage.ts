@@ -88,22 +88,48 @@ export async function uploadDeliverableFile(
 }
 
 /**
+ * Where a prep document lives is what decides who can read it, so the path
+ * is not cosmetic here the way `logo-` and `prep-` prefixes are.
+ *
+ * The storage read policy compares `storage.foldername(name)[2]` — the
+ * second path segment — against the literal 'private', and only lets an
+ * owner or an editor/admin member through when it matches. A file written
+ * to `{project}/prep-x.pdf` has no second segment, so that test can never
+ * fire and every project member can read it. Marking a prep item private
+ * therefore hides the ROW (read_prep_items, 030) while leaving the FILE
+ * readable to anyone holding a signed URL.
+ *
+ * Putting private uploads under `{project}/private/` is what connects the
+ * checkbox to the file. Keep this in step with the policy: if one moves,
+ * the other has to.
+ */
+function prepFilePath(projectId: string, file: File, isPrivate: boolean): string {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+  const leaf = `prep-${crypto.randomUUID()}.${ext}`;
+  return isPrivate ? `${projectId}/private/${leaf}` : `${projectId}/${leaf}`;
+}
+
+/** True when a stored path is one the read policy treats as private. */
+export function isPrivatePath(path: string): boolean {
+  return path.split("/")[1] === "private";
+}
+
+/**
  * Upload a document against a preparation item — an Insights Discovery
  * profile, a guest perspective write-up.
  *
- * Same bucket, same RLS, same reasoning as uploadDeliverableFile: the path's
- * first segment is the project id, which is what
- * `007_deliverable_image_storage.sql` reads to decide who may write. The
- * `prep-` prefix is for humans reading a bucket listing and nothing else.
+ * Same bucket and same RLS as uploadDeliverableImage: the path's first
+ * segment is the project id, which is what
+ * `007_deliverable_image_storage.sql` reads to decide who may write.
  */
 export async function uploadPrepFile(
   accessToken: string,
   projectId: string,
-  file: File
+  file: File,
+  isPrivate = false
 ): Promise<{ path: string; name: string; mime: string; size: number }> {
   const client = createUserClient(accessToken);
-  const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
-  const path = `${projectId}/prep-${crypto.randomUUID()}.${ext}`;
+  const path = prepFilePath(projectId, file, isPrivate);
 
   const { error } = await client.storage.from(BUCKET).upload(path, file, {
     contentType: file.type || "application/octet-stream",
@@ -117,6 +143,36 @@ export async function uploadPrepFile(
     mime: file.type || "application/octet-stream",
     size: file.size,
   };
+}
+
+/**
+ * Move an already-uploaded prep document between the public and private
+ * paths, so that ticking Private on a document uploaded last week actually
+ * restricts it rather than only hiding its row.
+ *
+ * Returns the path the file now lives at — unchanged when it was already on
+ * the right side, so callers can assign the result unconditionally. A failed
+ * move throws rather than returning the old path: silently reporting success
+ * while a confidential file stays readable is the one outcome worth being
+ * loud about.
+ */
+export async function setPrepFilePrivacy(
+  accessToken: string,
+  path: string,
+  isPrivate: boolean
+): Promise<string> {
+  if (isPrivatePath(path) === isPrivate) return path;
+
+  const segments = path.split("/");
+  const projectId = segments[0];
+  const leaf = segments[segments.length - 1];
+  const next = isPrivate ? `${projectId}/private/${leaf}` : `${projectId}/${leaf}`;
+
+  const client = createUserClient(accessToken);
+  const { error } = await client.storage.from(BUCKET).move(path, next);
+  if (error) throw error;
+
+  return next;
 }
 
 export async function replaceDeliverableImage(

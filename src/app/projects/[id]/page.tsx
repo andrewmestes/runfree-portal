@@ -49,6 +49,7 @@ import {
   getSignedImageUrls,
   uploadDeliverableImage,
   uploadPrepFile,
+  setPrepFilePrivacy,
   uploadProjectLogo,
 } from "@/lib/storage";
 import { extractLoomId } from "@/lib/loom";
@@ -3910,7 +3911,16 @@ function PrepItemForm({
           setBusy(false);
           return;
         }
-        uploaded = await uploadPrepFile(accessToken, projectId, file);
+        uploaded = await uploadPrepFile(accessToken, projectId, file, isPrivate);
+      }
+
+      // Privacy is enforced by where the file sits, not by the checkbox
+      // alone (see setPrepFilePrivacy). Ticking Private on a document
+      // uploaded weeks ago has to move it, or the row hides while the file
+      // stays readable to every member holding a signed URL.
+      let movedPath: string | null = null;
+      if (!uploaded && existing?.file_path && existing.is_private !== isPrivate) {
+        movedPath = await setPrepFilePrivacy(accessToken, existing.file_path, isPrivate);
       }
 
       const payload = {
@@ -3928,7 +3938,9 @@ function PrepItemForm({
               file_mime: uploaded.mime,
               file_size: uploaded.size,
             }
-          : {}),
+          : movedPath
+            ? { file_path: movedPath }
+            : {}),
       };
 
       if (existing) {

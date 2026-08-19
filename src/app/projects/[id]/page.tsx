@@ -194,12 +194,12 @@ export default function ProjectDetailPage() {
    * Read from the URL on mount rather than held in state alone, so a shared
    * link, a refresh, and the browser Back button all land in the same place.
    */
-  const [panel, setPanel] = useState<string>("overview");
+  const [panel, setPanel] = useState<string>("");
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("panel");
     if (fromUrl) setPanel(fromUrl);
     const onPop = () => {
-      setPanel(new URLSearchParams(window.location.search).get("panel") || "overview");
+      setPanel(new URLSearchParams(window.location.search).get("panel") || "");
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -500,55 +500,33 @@ export default function ProjectDetailPage() {
   const datesCount = detail.prepItems.filter((i) =>
     dateGroups.some((g) => g.id === i.group_id)
   ).length;
-  const prepareCount = detail.prepItems.filter((i) =>
-    prepareGroups.some((g) => g.id === i.group_id)
-  ).length;
 
   // Title Case throughout — "The process" next to "Key dates" read as an
   // unfinished sentence rather than a set of labels.
   //
-  // There is no Access tab. Who can get in is a property of the project, not
-  // a section of it, so it lives in the header beside the logo and the
-  // website — and it was landing one click from the Team tab, which shows
-  // the church's people and looked like the same thing.
+  // The Process leads. There is no Overview tab: it was a landing pad whose
+  // job was pointing at the other panels, and the two cards above the tabs
+  // now carry the orientation it existed to give.
+  //
+  // Preparation is not a tab either — it is the first thing inside The
+  // Process, because it IS the first step of the process rather than a
+  // parallel section. Andrew: "let's remove Preparation from the tab, and
+  // make it the first thing under The Process."
+  //
+  // Access is absent for the same class of reason: who can get in is a
+  // property of the project, and it lives in the header beside the logo.
   const panelItems = [
-    { key: "overview", label: "Overview", count: null },
+    modules.length > 0 ? { key: "process", label: "The Process", count: modules.length } : null,
     { key: "team", label: "Team", count: detail.contacts.length + detail.members.length },
     dateGroups.length > 0 ? { key: "dates", label: "Key Dates", count: datesCount } : null,
-    prepareGroups.length > 0 || prepResources.length > 0
-      ? { key: "prepare", label: "Preparation", count: prepareCount }
-      : null,
-    modules.length > 0 ? { key: "process", label: "The Process", count: modules.length } : null,
     { key: "sessions", label: "Session Recordings", count: detail.sessions.length },
     hasDeliverables ? { key: "deliverables", label: "Deliverables", count: null } : null,
   ].filter((x): x is { key: string; label: string; count: number | null } => x !== null);
 
   // A link to a panel this project doesn't have (a Younique project has no
-  // module track) lands on the Overview rather than on a blank screen.
-  const activePanel = panelItems.some((p) => p.key === panel) ? panel : "overview";
-
-  const doorways = panelItems
-    .filter((p) => p.key !== "overview" && p.key !== "access")
-    .map((p) => ({
-      key: p.key,
-      label: p.label,
-      blurb:
-        p.key === "team"
-          ? `${detail.members.length} from RunFree${
-              detail.contacts.length > 0 ? ` · ${detail.contacts.length} from the church` : ""
-            }`
-          : p.key === "dates"
-            ? `${datesCount} on the calendar`
-            : p.key === "prepare"
-              ? `${prepareCount} to read and do before we begin`
-              : p.key === "process"
-                ? `${modules.length} tools, in the order we use them`
-                : p.key === "sessions"
-                  ? detail.sessions.length === 1
-                    ? "1 session recorded"
-                    : `${detail.sessions.length} sessions recorded`
-                  : "What your team builds together",
-    }));
+  // module track) lands on the first one it does, rather than a blank screen.
+  const fallbackPanel = panelItems[0]?.key ?? "team";
+  const activePanel = panelItems.some((p) => p.key === panel) ? panel : fallbackPanel;
 
   // Where the team is: the module of the most recent session that has
   // actually happened, falling back to whichever module is selected.
@@ -584,14 +562,27 @@ export default function ProjectDetailPage() {
       />
 
       <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8">
-        <PrioritiesBanner
-          detail={detail}
-          canEdit={canEdit}
-          accessToken={accessToken}
-          projectId={projectId}
-          moduleOptions={availableSections(detail)}
-          onChanged={refresh}
-        />
+        {/* Orientation sits above the tabs, on every panel, rather than
+            inside one you have to navigate to. Andrew: "let's do a side by
+            side with the 'coming up' and the 'where you are / next together'
+            cards. Then right under them make the tabs big enough to be full
+            width."
+
+            What you owe leads on the left because it is the thing that needs
+            doing; when it meets next is a fact you check, not an action. The
+            status card takes a fixed column so the two never end up at odd
+            widths as the priorities text grows. */}
+        <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <PrioritiesBanner
+            detail={detail}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            projectId={projectId}
+            moduleOptions={availableSections(detail)}
+            onChanged={refresh}
+          />
+          <ProjectStatusCard nextDate={nextDateItem} currentModule={currentModule} />
+        </div>
 
         <ProjectToolbar active={activePanel} onSelect={goPanel} items={panelItems} />
 
@@ -606,16 +597,6 @@ export default function ProjectDetailPage() {
             wondering if we need that at all anymore... I don't like the way
             that that currently looks." */}
         <div key={activePanel} className="animate-fade mt-10">
-            {activePanel === "overview" && (
-              <OverviewPanel
-                detail={detail}
-                doorways={doorways}
-                onGo={goPanel}
-                nextDate={nextDateItem}
-                currentModule={currentModule}
-              />
-            )}
-
             {/* TeamSection renders the church roster itself now, so there is
                 no second ChurchTeamInfo here — that pairing was what put
                 "Church team 0" directly above a list of eight people. */}
@@ -650,28 +631,32 @@ export default function ProjectDetailPage() {
               </section>
             )}
 
-            {activePanel === "prepare" && (
-              <PrepareSection
-                id="prepare"
-                prep={prepResources}
-                overview={overviewResources}
-                thumbs={thumbs}
-                prepGroups={prepareGroups}
-                prepItems={detail.prepItems}
-                projectId={projectId}
-                canEdit={canEdit}
-                accessToken={accessToken}
-                fileUrls={imageUrls}
-                onChanged={refresh}
-                handouts={handouts}
-                onOpenHandout={openHandout}
-              />
-            )}
-
             {activePanel === "process" && modules.length > 0 && (
               <section id="process">
                 <SectionHeading eyebrow="The process" title="Pivvot Vision Framing Process" />
-                <div className="mt-10">
+
+                {/* Preparation leads the process rather than sitting beside
+                    it in a tab of its own — it is step zero, the work a team
+                    does before the first session. Andrew: "let's remove
+                    Preparation from the tab, and make it the first thing
+                    under The Process." */}
+                <PrepareSection
+                  id="prepare"
+                  prep={prepResources}
+                  overview={overviewResources}
+                  thumbs={thumbs}
+                  prepGroups={prepareGroups}
+                  prepItems={detail.prepItems}
+                  projectId={projectId}
+                  canEdit={canEdit}
+                  accessToken={accessToken}
+                  fileUrls={imageUrls}
+                  onChanged={refresh}
+                  handouts={handouts}
+                  onOpenHandout={openHandout}
+                />
+
+                <div className="mt-14">
                   <ModuleNav modules={modules} active={activeModule} onSelect={setActiveModule} />
                   {/* Pinned under the icons, unchanged by the selection. */}
                   <HandoutPills
@@ -2104,7 +2089,9 @@ function PrioritiesBanner({
     : null;
 
   return (
-    <section className="mt-8 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-runfree-magenta/25">
+    /* No top margin: the grid that pairs this with the status card owns the
+       spacing, and a margin here pushed one card down relative to the other. */
+    <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-runfree-magenta/25">
       <div className="h-1.5 bg-runfree-grad" />
       <div className="p-6 sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2405,160 +2392,54 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
  * disclosure arrow.
  */
 /**
- * One tint per doorway, drawn from the brand family rather than from a
- * generic rainbow — magenta and orange are the gradient's own ends, indigo
- * and navy the grounds it sits on. Written as whole class strings because
- * Tailwind scans source text and never sees a name built by interpolation.
- */
-const DOORWAY_TINT: Record<string, { card: string; bar: string; arrow: string }> = {
-  team: {
-    card: "bg-runfree-pink/40 ring-runfree-magenta/20 hover:ring-runfree-magenta/50",
-    bar: "bg-runfree-magenta",
-    arrow: "text-runfree-magentaDeep",
-  },
-  dates: {
-    card: "bg-orange-50 ring-orange-200/70 hover:ring-orange-300",
-    bar: "bg-runfree-orange",
-    arrow: "text-orange-600",
-  },
-  prepare: {
-    card: "bg-runfree-indigo/60 ring-runfree-navy/15 hover:ring-runfree-navy/35",
-    bar: "bg-runfree-navy",
-    arrow: "text-runfree-navy",
-  },
-  process: {
-    card: "bg-white ring-gray-200 hover:ring-runfree-magenta/40",
-    bar: "bg-runfree-grad",
-    arrow: "text-runfree-magentaDeep",
-  },
-  sessions: {
-    card: "bg-emerald-50 ring-emerald-200/70 hover:ring-emerald-300",
-    bar: "bg-emerald-500",
-    arrow: "text-emerald-700",
-  },
-  deliverables: {
-    card: "bg-runfree-navy/[0.06] ring-runfree-navy/20 hover:ring-runfree-navy/40",
-    bar: "bg-runfree-grad-deep",
-    arrow: "text-runfree-navy",
-  },
-  default: {
-    card: "bg-white ring-gray-200 hover:ring-runfree-magenta/30",
-    bar: "bg-gray-200",
-    arrow: "text-gray-400",
-  },
-};
-
-/**
- * The landing panel — the first thing anyone sees, and the only screen
- * written for someone who has never heard of a Vision Frame.
+ * Where the engagement is, and when it meets next.
  *
- * It answers three questions and stops: where are we, what do we owe, and
- * what is in here. The doorways carry counts rather than jargon, because
- * "6 dates" teaches a first-time visitor more than "Horizon Storyline" does.
+ * This is the navy block that used to head the Overview panel. The Overview
+ * itself is gone: it was a landing pad whose main job was pointing at other
+ * panels, and once these two facts sit above the tabs on every screen there
+ * is nothing left for it to do that a tab strip doesn't do better.
  *
- * What it deliberately does NOT show is a completion ratio. An earlier draft
- * led with "0 of 23 deliverables" and Andrew: "leading with 23 deliverables
- * feels overwhelming... sometimes coaches don't finish all 23 based on what
- * they're delivering. sometimes we do portions of the process, rather than
- * the whole thing." A denominator turns a deliberately partial engagement
- * into a page that reads as 74% failed, so the count of what EXISTS is shown
- * and the count of what is missing never is.
+ * Deliberately two facts and no more. Andrew: "Let's have a 'next session'
+ * piece rather than the 'where you are' with everything."
  */
-function OverviewPanel({
-  detail,
-  doorways,
-  onGo,
+function ProjectStatusCard({
   nextDate,
   currentModule,
 }: {
-  detail: ProjectDetail;
-  doorways: { key: string; label: string; blurb: string }[];
-  onGo: (key: string) => void;
   nextDate: PrepItem | null;
   currentModule: string | null;
 }) {
   const moduleNo = currentModule ? moduleOrder(currentModule) : null;
   const meta = moduleNo ? MODULE_META[moduleNo] : null;
-
-  // No "sessions so far". It counted `sessions` rows, which only exist where
-  // someone logged a recording — Christ Chapel had met in person twice more
-  // than the number claimed. A count that is wrong whenever a coach doesn't
-  // upload is worse than no count, and nothing here needs it.
-  const stats: { label: string; value: string; sub?: string }[] = [];
-  if (currentModule) {
-    stats.push({
-      label: "Where you are",
-      value: moduleLabel(currentModule),
-      sub: meta?.stage,
-    });
-  }
-  if (nextDate?.due_on) {
-    stats.push({
-      label: "Next together",
-      value: formatPrepDate(nextDate.due_on),
-      sub: nextDate.title,
-    });
-  }
+  if (!currentModule && !nextDate?.due_on) return null;
 
   return (
-    <div className="animate-fade">
-      {stats.length > 0 && (
-        <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
-          <div className="h-1 bg-runfree-grad" />
-          <dl
-            className={`grid gap-6 p-6 sm:p-8 ${
-              stats.length > 1 ? "sm:grid-cols-2" : ""
-            }`}
-          >
-            {stats.map((s) => (
-              <div key={s.label}>
-                <dt className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
-                  {s.label}
-                </dt>
-                <dd className="mt-1.5 font-display text-xl font-extrabold tracking-tight sm:text-2xl">
-                  {s.value}
-                </dd>
-                {s.sub && <p className="mt-0.5 text-xs text-white/60">{s.sub}</p>}
-              </div>
-            ))}
-          </dl>
-        </div>
-      )}
-
-      <div className="mt-8">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-          What&rsquo;s in here
-        </h3>
-        {/* Andrew: "the cards underneath what's in here could be a little
-            more colorful." Each doorway carries its own tint from the brand
-            family, so the grid reads as six distinct places rather than six
-            identical white rectangles — and the colour is a second cue for
-            "these are different destinations", not decoration. */}
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {doorways.map((d) => {
-            const tint = DOORWAY_TINT[d.key] ?? DOORWAY_TINT.default;
-            return (
-              <button
-                key={d.key}
-                onClick={() => onGo(d.key)}
-                className={`group relative flex flex-col items-start overflow-hidden rounded-2xl p-5 text-left shadow-sm ring-1 outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-runfree-magenta ${tint.card}`}
-              >
-                <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${tint.bar}`} />
-                <span className="font-display text-base font-extrabold tracking-tight text-runfree-ink">
-                  {d.label}
-                </span>
-                <span className="mt-1 text-[13px] leading-snug text-gray-600">{d.blurb}</span>
-                <span
-                  aria-hidden
-                  className={`mt-3 transition-transform duration-200 group-hover:translate-x-1 ${tint.arrow}`}
-                >
-                  →
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+    <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
+      <div className="h-1.5 bg-runfree-grad" />
+      <dl className="space-y-5 p-6 sm:p-7">
+        {nextDate?.due_on && (
+          <div>
+            <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
+              Next Session
+            </dt>
+            <dd className="mt-1.5 font-display text-2xl font-extrabold tracking-tight">
+              {formatPrepDate(nextDate.due_on)}
+            </dd>
+            <p className="mt-0.5 text-xs text-white/60">{nextDate.title}</p>
+          </div>
+        )}
+        {currentModule && (
+          <div className={nextDate?.due_on ? "border-t border-white/10 pt-5" : ""}>
+            <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/50">
+              Where You Are
+            </dt>
+            <dd className="mt-1.5 font-display text-lg font-extrabold tracking-tight">
+              {moduleLabel(currentModule)}
+            </dd>
+            {meta && <p className="mt-0.5 text-xs text-white/60">{meta.stage}</p>}
+          </div>
+        )}
+      </dl>
     </div>
   );
 }

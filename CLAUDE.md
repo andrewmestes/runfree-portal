@@ -182,9 +182,18 @@ against the live database instead of reasoning about the policy on paper.
 ## The project page is panels, not a long scroll
 
 `/projects/[id]` shows **one panel at a time**, selected by `?panel=<key>`
-(`overview` | `team` | `dates` | `prepare` | `process` | `sessions` |
-`deliverables` | `access`). Andrew: "it should be VERY easy for someone to
-navigate even if they have no idea what is all included in the project."
+(`process` | `team` | `dates` | `sessions` | `deliverables`). Andrew: "it
+should be VERY easy for someone to navigate even if they have no idea what is
+all included in the project."
+
+There is no `overview`, `prepare` or `access` panel, and each absence is
+deliberate. Orientation moved *above* the tabs — the priorities card and the
+navy status card render on every panel, which is what the Overview existed to
+do. Preparation is the first block inside The Process, because it is step zero
+of that process rather than a parallel section. Access is a dialog in the
+header, since who can sign in is a property of the project, not a section of
+it. Old `?panel=overview` links still work: an unknown key falls back to the
+first available panel.
 
 Two consequences that are easy to get wrong:
 

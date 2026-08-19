@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentProfile, getCurrentSession, listMyProjects, logout } from "@/lib/auth";
+import {
+  getCurrentProfile,
+  getCurrentSession,
+  listMyProjects,
+  logout,
+  setProjectPinned,
+} from "@/lib/auth";
 import { createUserClient } from "@/lib/supabase";
 import { getSignedImageUrls } from "@/lib/storage";
 import PortalHeader from "@/components/PortalHeader";
@@ -28,6 +34,8 @@ type ProjectRow = {
   logo_path: string | null;
   location: string | null;
   templates: { name: string; slug: string } | null;
+  /** When this user pinned it, or null. See migration 038. */
+  pinned_at: string | null;
   /** Filled in after the list loads — one signing call, one members call. */
   logoUrl?: string;
   leadContact?: string | null;
@@ -90,7 +98,7 @@ export default function HomePage() {
         }
 
         setProfile(current);
-        const mine = (await listMyProjects()) as ProjectRow[];
+        const mine = (await listMyProjects()) as unknown as ProjectRow[];
 
         // A church client is on exactly one engagement and has no use for a
         // list of one. Send them straight in — "I want it to go directly to
@@ -153,6 +161,23 @@ export default function HomePage() {
 
     return () => unsubscribe?.();
   }, [router]);
+
+  /**
+   * Re-sort in place rather than refetching. The server is already updated;
+   * a round trip would only make the star feel slow, and the ordering rule is
+   * simple enough to apply here — pinned first, most recent pin at the top.
+   */
+  function togglePin(id: string, pinned: boolean) {
+    setProjects((prev) =>
+      [...prev]
+        .map((p) => (p.id === id ? { ...p, pinned_at: pinned ? new Date().toISOString() : null } : p))
+        .sort((a, b) => {
+          if (!!a.pinned_at !== !!b.pinned_at) return a.pinned_at ? -1 : 1;
+          if (a.pinned_at && b.pinned_at) return a.pinned_at < b.pinned_at ? 1 : -1;
+          return 0;
+        })
+    );
+  }
 
   async function handleSignOut() {
     await logout();
@@ -250,14 +275,14 @@ export default function HomePage() {
           <ul className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
             {projects.map((project, i) => (
               <li key={project.id}>
-                <ProjectListRow project={project} first={i === 0} />
+                <ProjectListRow project={project} first={i === 0} onToggled={togglePin} />
               </li>
             ))}
           </ul>
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard key={project.id} project={project} onToggled={togglePin} />
             ))}
           </div>
         )}
@@ -359,16 +384,87 @@ function ProjectMeta({ project }: { project: ProjectRow }) {
   return <p className="mt-1 truncate text-xs text-gray-500">{bits.join(" · ")}</p>;
 }
 
-function ProjectCard({ project }: { project: ProjectRow }) {
+/**
+ * Pin a project to the top of your own list.
+ *
+ * Andrew: "when listing projects, I'd like to be able to reorder these, maybe
+ * even star or pin them to the top the way Asana does."
+ *
+ * Pinning beat drag-to-reorder here. A hand-sorted list has to be maintained
+ * — every new project lands somewhere arbitrary and needs dragging into
+ * place — whereas a star is one click, needs no upkeep, and answers the
+ * actual question ("which two am I working on this week?"). Manual ordering
+ * can still go on top of this later if it turns out to be wanted.
+ *
+ * It sits inside a card that is itself a link, so the click has to be stopped
+ * from navigating — hence preventDefault as well as stopPropagation.
+ */
+function PinButton({
+  project,
+  onToggled,
+}: {
+  project: ProjectRow;
+  onToggled: (id: string, pinned: boolean) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const pinned = !!project.pinned_at;
+
+  async function toggle(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    try {
+      await setProjectPinned(project.id, !pinned);
+      onToggled(project.id, !pinned);
+    } catch {
+      // Leave the star as it was; the list is still usable unsorted.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      aria-pressed={pinned}
+      title={pinned ? "Unpin from the top" : "Pin to the top"}
+      aria-label={
+        pinned ? `Unpin ${churchName(project)}` : `Pin ${churchName(project)} to the top`
+      }
+      className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg outline-none transition focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
+        pinned
+          ? "text-runfree-magenta hover:bg-runfree-pink"
+          : "text-gray-300 hover:bg-gray-100 hover:text-runfree-magentaDeep"
+      } ${busy ? "opacity-50" : ""}`}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill={pinned ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+        className="h-5 w-5"
+        aria-hidden="true"
+      >
+        <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
+      </svg>
+    </button>
+  );
+}
+
+function ProjectCard({ project, onToggled }: { project: ProjectRow; onToggled: (id: string, pinned: boolean) => void }) {
   return (
     <a
       href={`/projects/${project.id}`}
-      className="group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 transition duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-runfree-magenta/35"
+      className={`group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-runfree-magenta/35 ${
+        project.pinned_at ? "ring-runfree-magenta/40" : "ring-gray-200"
+      }`}
     >
       <div className="h-1 bg-runfree-grad" />
       <div className="flex flex-1 items-start gap-4 p-6">
         <ProjectMark project={project} size={48} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           {project.templates?.name && (
             <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
               {project.templates.name}
@@ -379,12 +475,21 @@ function ProjectCard({ project }: { project: ProjectRow }) {
           </h2>
           <ProjectMeta project={project} />
         </div>
+        <PinButton project={project} onToggled={onToggled} />
       </div>
     </a>
   );
 }
 
-function ProjectListRow({ project, first }: { project: ProjectRow; first: boolean }) {
+function ProjectListRow({
+  project,
+  first,
+  onToggled,
+}: {
+  project: ProjectRow;
+  first: boolean;
+  onToggled: (id: string, pinned: boolean) => void;
+}) {
   return (
     <a
       href={`/projects/${project.id}`}
@@ -402,6 +507,7 @@ function ProjectListRow({ project, first }: { project: ProjectRow; first: boolea
           {project.templates.name}
         </span>
       )}
+      <PinButton project={project} onToggled={onToggled} />
       <span aria-hidden className="shrink-0 text-gray-300">
         →
       </span>

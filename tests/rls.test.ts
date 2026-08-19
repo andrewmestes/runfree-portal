@@ -557,6 +557,60 @@ async function main() {
     }
 
     // -----------------------------------------------------------------
+    // 16h-16k. Pinning a project (migration 038). Any member may pin their
+    // OWN membership row; nobody may reach anyone else's, and the function
+    // must not become a back door into `role`.
+    // -----------------------------------------------------------------
+    {
+      const asViewer = createUserClient(viewerA.accessToken);
+      const { error: pinErr } = await asViewer.rpc("set_project_pinned", {
+        p_project_id: projectA.id,
+        p_pinned: true,
+      });
+      record("16h. a viewer can pin their own project", !pinErr, pinErr?.message);
+
+      const { data: pinnedRow } = await supabaseAdmin
+        .from("project_members")
+        .select("pinned_at, role")
+        .eq("project_id", projectA.id)
+        .eq("profile_id", viewerA.id)
+        .single();
+      record(
+        "16i. pinning set pinned_at and left role alone",
+        !!pinnedRow?.pinned_at && pinnedRow?.role === "viewer",
+        `pinned_at=${!!pinnedRow?.pinned_at} role=${pinnedRow?.role}`
+      );
+
+      // A project they are not a member of must be refused, not silently
+      // ignored — silence would read to the app as success.
+      const { error: foreignErr } = await asViewer.rpc("set_project_pinned", {
+        p_project_id: projectB.id,
+        p_pinned: true,
+      });
+      record(
+        "16j. cannot pin a project you are not a member of",
+        !!foreignErr,
+        foreignErr ? "correctly rejected" : "unexpectedly succeeded"
+      );
+
+      const { error: unpinErr } = await asViewer.rpc("set_project_pinned", {
+        p_project_id: projectA.id,
+        p_pinned: false,
+      });
+      const { data: unpinned } = await supabaseAdmin
+        .from("project_members")
+        .select("pinned_at")
+        .eq("project_id", projectA.id)
+        .eq("profile_id", viewerA.id)
+        .single();
+      record(
+        "16k. unpinning clears it",
+        !unpinErr && unpinned?.pinned_at === null,
+        unpinErr?.message ?? `pinned_at=${unpinned?.pinned_at}`
+      );
+    }
+
+    // -----------------------------------------------------------------
     // 17. Preparation cards (migration 022). The group is template-scoped
     // and follows template_resources' visibility; the items are
     // project-scoped, readable by anyone who can see the project — there is

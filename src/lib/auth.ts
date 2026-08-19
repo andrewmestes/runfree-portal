@@ -132,12 +132,50 @@ export async function listMyProjects() {
   const client = createUserClient(session.access_token);
   const { data, error } = await client
     .from("projects")
-    .select("*, templates(name, slug)")
+    .select("*, templates(name, slug), project_members!inner(pinned_at, profile_id)")
     .is("archived_at", null)
+    .eq("project_members.profile_id", session.user.id)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data;
+
+  /**
+   * Pinned first, most recently pinned at the top of that group, then
+   * everything else newest-first as before.
+   *
+   * The sort is here rather than in the query because pinned_at lives on the
+   * caller's own membership row, and PostgREST cannot order a parent by an
+   * embedded child's column. The inner join is what limits that embed to one
+   * row — the caller's — so `project_members[0]` is unambiguous.
+   *
+   * Note the owner sees projects they are not a member of (am_owner bypasses
+   * RLS), and the inner join would hide those. That is why this is a LEFT
+   * join in effect: rows with no membership come back with an empty array and
+   * simply sort as unpinned.
+   */
+  const rows = (data ?? []) as (Record<string, unknown> & {
+    project_members?: { pinned_at: string | null }[];
+  })[];
+
+  return rows
+    .map((r) => ({ ...r, pinned_at: r.project_members?.[0]?.pinned_at ?? null }))
+    .sort((a, b) => {
+      if (!!a.pinned_at !== !!b.pinned_at) return a.pinned_at ? -1 : 1;
+      if (a.pinned_at && b.pinned_at) return a.pinned_at < b.pinned_at ? 1 : -1;
+      return 0;
+    });
+}
+
+/** Pin or unpin a project for the signed-in user. See migration 038. */
+export async function setProjectPinned(projectId: string, pinned: boolean) {
+  const session = await getCurrentSession();
+  if (!session) throw new Error("Not signed in");
+  const client = createUserClient(session.access_token);
+  const { error } = await client.rpc("set_project_pinned", {
+    p_project_id: projectId,
+    p_pinned: pinned,
+  });
+  if (error) throw error;
 }
 
 /**

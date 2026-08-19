@@ -213,6 +213,13 @@ export type Database = {
           /** Marks the RunFree person leading this engagement. */
           is_lead: boolean;
           added_at: string;
+          /**
+           * When THIS member pinned the project to the top of their own list.
+           * Per person, not per project — see migration 038. Only writable
+           * through set_project_pinned(); manage_members keeps this table
+           * admin-only for direct UPDATE.
+           */
+          pinned_at: string | null;
         };
         Insert: {
           project_id: string;
@@ -221,11 +228,13 @@ export type Database = {
           org_role?: string | null;
           is_lead?: boolean;
           added_at?: string;
+          pinned_at?: string | null;
         };
         Update: {
           role?: "viewer" | "editor" | "admin";
           org_role?: string | null;
           is_lead?: boolean;
+          pinned_at?: string | null;
         };
         Relationships: [
           {
@@ -851,6 +860,15 @@ export type Database = {
        */
       set_task_done: {
         Args: { p_task_id: string; p_done: boolean };
+        Returns: undefined;
+      };
+      /**
+       * Pinning is a personal preference any member may set on their own
+       * membership row, but manage_members keeps that table admin-only for
+       * UPDATE and RLS cannot limit an UPDATE to one column — see 038.
+       */
+      set_project_pinned: {
+        Args: { p_project_id: string; p_pinned: boolean };
         Returns: undefined;
       };
     };

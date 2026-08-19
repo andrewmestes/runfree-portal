@@ -525,7 +525,14 @@ export default function ProjectDetailPage() {
   //
   // Access is absent for the same class of reason: who can get in is a
   // property of the project, and it lives in the header beside the logo.
+  const prepareCount = detail.prepItems.filter((i) =>
+    prepareGroups.some((g) => g.id === i.group_id)
+  ).length;
+
   const panelItems = [
+    prepareGroups.length > 0 || prepResources.length > 0
+      ? { key: "prepare", label: "Preparation", count: prepareCount }
+      : null,
     modules.length > 0 ? { key: "process", label: "The Process", count: modules.length } : null,
     { key: "team", label: "Team", count: detail.contacts.length + detail.members.length },
     dateGroups.length > 0 ? { key: "dates", label: "Key Dates", count: datesCount } : null,
@@ -549,8 +556,7 @@ export default function ProjectDetailPage() {
       <PortalHeader
         profile={profile}
         onSignOut={handleSignOut}
-        backHref="/"
-        backLabel="Your projects"
+        backHref={undefined}
         title=""
         showTitleBlock={false}
         certificationAccess={profile.certification_access || profile.is_staff}
@@ -569,18 +575,22 @@ export default function ProjectDetailPage() {
 
           Below `lg` the sidebar becomes the hero and a scrolling strip again,
           because a fixed column on a 375px screen leaves nothing for content. */}
+      {/* The church's own name and mark, back in the page header. Andrew:
+          "put the church info back where it was. not in the column, but in
+          the header of the page." The column keeps the navigation; identity
+          belongs across the top, where a client opens the page and sees
+          themselves. */}
+      <ChurchHero
+        detail={detail}
+        logoUrl={detail.logoPath ? imageUrls[detail.logoPath] : undefined}
+        imageUrls={imageUrls}
+        canManage={canManage}
+        accessToken={accessToken}
+        onChanged={refresh}
+      />
+
       <div className="lg:flex lg:items-start">
-        <ProjectSidebar
-          detail={detail}
-          logoUrl={detail.logoPath ? imageUrls[detail.logoPath] : undefined}
-          imageUrls={imageUrls}
-          canManage={canManage}
-          accessToken={accessToken}
-          onChanged={refresh}
-          items={panelItems}
-          active={activePanel}
-          onSelect={goPanel}
-        />
+        <ProjectSidebar items={panelItems} active={activePanel} onSelect={goPanel} />
 
       <main className="min-w-0 flex-1 px-4 pb-16 sm:px-6 lg:px-8">
         {/* Orientation sits above the tabs, on every panel, rather than
@@ -651,29 +661,27 @@ export default function ProjectDetailPage() {
               </section>
             )}
 
+            {activePanel === "prepare" && (
+              <PrepareSection
+                id="prepare"
+                standalone
+                prep={prepResources}
+                overview={overviewResources}
+                thumbs={thumbs}
+                prepGroups={prepareGroups}
+                prepItems={detail.prepItems}
+                projectId={projectId}
+                canEdit={canEdit}
+                accessToken={accessToken}
+                fileUrls={imageUrls}
+                onChanged={refresh}
+                handouts={handouts}
+                onOpenHandout={openHandout}
+              />
+            )}
+
             {activePanel === "process" && modules.length > 0 && (
               <section id="process">
-
-                {/* Preparation leads the process rather than sitting beside
-                    it in a tab of its own — it is step zero, the work a team
-                    does before the first session. Andrew: "let's remove
-                    Preparation from the tab, and make it the first thing
-                    under The Process." */}
-                <PrepareSection
-                  id="prepare"
-                  prep={prepResources}
-                  overview={overviewResources}
-                  thumbs={thumbs}
-                  prepGroups={prepareGroups}
-                  prepItems={detail.prepItems}
-                  projectId={projectId}
-                  canEdit={canEdit}
-                  accessToken={accessToken}
-                  fileUrls={imageUrls}
-                  onChanged={refresh}
-                  handouts={handouts}
-                  onOpenHandout={openHandout}
-                />
 
                 <div className="mt-8">
                   <ModuleNav modules={modules} active={activeModule} onSelect={setActiveModule} />
@@ -1387,99 +1395,341 @@ function ProjectIdentityControls({
 }
 
 /**
- * The project's own column: whose engagement this is, where to go in it, and
- * who can get in.
- *
- * Three things that were previously three separate full-width bands stacked
- * above the content — the church hero, the access row, and the tab strip.
- * Moving them into one column is what lets the work start at the top of the
- * screen. Andrew: "we could also tuck other elements here to clean up the
- * look overall."
- *
- * Sticky and full height on desktop so it stays with you down a long panel.
- * Below `lg` it unrolls: the identity becomes a compact header and the nav
- * becomes the horizontal strip, because a fixed column on a phone leaves
- * nothing for the content beside it.
+ * The church's own name and mark, first thing, at full size. A client should
+ * open this and see themselves — not a RunFree product with their project
+ * filed inside it.
  */
-function ProjectSidebar({
+function ChurchHero({
   detail,
   logoUrl,
   imageUrls,
   canManage,
   accessToken,
   onChanged,
+}: {
+  detail: ProjectDetail;
+  logoUrl?: string;
+  /** Signed URLs, so the access stack can show real faces. */
+  imageUrls?: Record<string, string>;
+  canManage: boolean;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const logoInput = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [showAccess, setShowAccess] = useState(false);
+  const [form, setForm] = useState({
+    location: detail.location ?? "",
+    website_url: detail.websiteUrl ?? "",
+    about: detail.about ?? "",
+  });
+
+  async function uploadLogo(file: File | undefined) {
+    if (!file || !accessToken) return;
+    if (!file.type.startsWith("image/")) return;
+    setBusy(true);
+    try {
+      const { path } = await uploadProjectLogo(accessToken, detail.id, file);
+      await updateProject(accessToken, detail.id, { logo_path: path });
+      onChanged();
+    } catch (err) {
+      console.error("Logo upload failed:", err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveDetails() {
+    if (!accessToken) return;
+    setBusy(true);
+    try {
+      await updateProject(accessToken, detail.id, {
+        location: form.location || null,
+        website_url: form.website_url || null,
+        about: form.about || null,
+      });
+      onChanged();
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const initials = detail.name
+    .replace(/\s*-\s*.*$/, "")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+
+  // "Athena Christian Church - Pivvot Vision Framing" → the church, and the work.
+  const [org, engagement] = splitProjectName(detail.name, detail.template?.name ?? null);
+
+  return (
+    <div className="border-b border-gray-200 bg-white">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-7">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          {/* Works for any engagement: a church's logo, or the person's
+              photo on a Younique or coaching project. */}
+          <div
+            onClick={() => canManage && logoInput.current?.click()}
+            onDragOver={(e) => canManage && e.preventDefault()}
+            onDrop={(e) => {
+              if (!canManage) return;
+              e.preventDefault();
+              uploadLogo(e.dataTransfer.files?.[0]);
+            }}
+            title={canManage ? "Upload a logo or photo" : undefined}
+            className={`group relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-200 ${
+              canManage ? "cursor-pointer hover:ring-runfree-magenta/40" : ""
+            }`}
+          >
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt={org} className="h-full w-full object-contain p-2" />
+            ) : (
+              <span className="font-display text-2xl font-extrabold tracking-tight text-runfree-navy/40">
+                {initials}
+              </span>
+            )}
+            {canManage && (
+              <>
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep opacity-0 transition group-hover:opacity-100">
+                  {busy ? "Uploading…" : logoUrl ? "Replace" : "Add logo"}
+                </span>
+                <input
+                  ref={logoInput}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => uploadLogo(e.target.files?.[0])}
+                />
+              </>
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
+              Welcome
+            </p>
+            <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-runfree-ink sm:text-4xl lg:text-[2.75rem]">
+              {org}
+            </h1>
+            {/* One line: what this is and where, then the controls hard
+                right. Andrew: "this can be thinner still by putting 'edit
+                details' and project access farther to the right on the same
+                line as the website." */}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600">
+              <span className="font-medium text-runfree-navy">{engagement}</span>
+              {detail.location && (
+                <>
+                  <span aria-hidden className="text-gray-300">
+                    ·
+                  </span>
+                  <span>{detail.location}</span>
+                </>
+              )}
+              {safeExternalUrl(detail.websiteUrl) && (
+                <>
+                  <span aria-hidden className="text-gray-300">
+                    ·
+                  </span>
+                  <a
+                    href={safeExternalUrl(detail.websiteUrl)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-runfree-magentaDeep hover:underline"
+                  >
+                    {prettyDomain(detail.websiteUrl!)}
+                  </a>
+                </>
+              )}
+            </p>
+
+            {/* Same row as the website, pushed right. */}
+            {canManage && !editing && (
+              <div className="flex shrink-0 items-center gap-3">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-xs font-medium text-runfree-magentaDeep outline-none hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+                >
+                  Edit details
+                </button>
+                {/* A stack of faces rather than a labelled button. Andrew:
+                    "can we make the 'manage access' look a little more like
+                    the screenshots I sent? We could potentially remove the
+                    name 'manage access' until it's clicked on."
+
+                    Who is on the project is the information; "manage access"
+                    is only the verb for changing it, and it earns its words
+                    inside the dialog rather than in the header. The accessible
+                    name still says what the control does, so a screen reader
+                    hears the verb a sighted user infers from the faces. */}
+                <button
+                  onClick={() => setShowAccess(true)}
+                  aria-label={`Manage access — ${detail.members.length} ${
+                    detail.members.length === 1 ? "person has" : "people have"
+                  } access`}
+                  className="group inline-flex items-center rounded-full p-0.5 outline-none transition hover:bg-white focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+                >
+                  <span className="flex -space-x-2">
+                    {detail.members.slice(0, 5).map((m) => {
+                      const url = m.avatarPath ? imageUrls?.[m.avatarPath] : undefined;
+                      return url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={m.profileId}
+                          src={url}
+                          alt=""
+                          className="h-8 w-8 rounded-full object-cover ring-2 ring-white"
+                        />
+                      ) : (
+                        <span
+                          key={m.profileId}
+                          className="grid h-8 w-8 place-items-center rounded-full bg-runfree-indigo text-[10px] font-bold text-runfree-navy ring-2 ring-white"
+                        >
+                          {(m.fullName || m.email)
+                            .split(/\s+/)
+                            .slice(0, 2)
+                            .map((w) => w[0])
+                            .join("")
+                            .toUpperCase()}
+                        </span>
+                      );
+                    })}
+                    {detail.members.length > 5 && (
+                      <span className="grid h-8 w-8 place-items-center rounded-full bg-runfree-grad text-[10px] font-bold text-white ring-2 ring-white">
+                        +{detail.members.length - 5}
+                      </span>
+                    )}
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-gray-400 ring-2 ring-white transition group-hover:text-runfree-magentaDeep">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="h-3.5 w-3.5">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    </span>
+                  </span>
+                </button>
+              </div>
+            )}
+            </div>
+
+            {detail.about && !editing && (
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">{detail.about}</p>
+            )}
+
+            {showAccess && (
+              <Modal
+                title="Project access"
+                subtitle="Who can sign in, and what they can do once they are here."
+                onClose={() => setShowAccess(false)}
+              >
+                <ProjectAccess
+                  id="access"
+                  embedded
+                  detail={detail}
+                  projectId={detail.id}
+                  accessToken={accessToken}
+                  onChanged={onChanged}
+                />
+              </Modal>
+            )}
+
+            {canManage && editing && (
+              <div className="mt-4 max-w-xl space-y-3 rounded-xl bg-gray-50 p-4 ring-1 ring-gray-200">
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex-1 min-w-[150px]">
+                    <Field label="Location">
+                      <input
+                        value={form.location}
+                        onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+                        placeholder="Athens, GA"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                      />
+                    </Field>
+                  </div>
+                  <div className="flex-1 min-w-[180px]">
+                    <Field label="Website">
+                      <input
+                        value={form.website_url}
+                        onChange={(e) => setForm((f) => ({ ...f, website_url: e.target.value }))}
+                        placeholder="athenachristian.org"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                      />
+                    </Field>
+                  </div>
+                </div>
+                <Field label="About">
+                  <textarea
+                    rows={2}
+                    value={form.about}
+                    onChange={(e) => setForm((f) => ({ ...f, about: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                  />
+                </Field>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveDetails}
+                    disabled={busy}
+                    className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                  >
+                    {busy ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-runfree-ink"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The project's own column: navigation, and nothing else.
+ *
+ * It briefly carried the church's identity and the access controls too, but
+ * Andrew wanted those back across the top — "put the church info back where
+ * it was. not in the column, but in the header of the page." He is right that
+ * identity reads better full width: a client opening this should see their
+ * own name across the page, not tucked into a nav rail.
+ *
+ * So the column does one job. Sticky and full height on desktop; below `lg`
+ * it becomes the horizontal strip, because a fixed column on a 375px screen
+ * leaves nothing for the content beside it.
+ */
+function ProjectSidebar({
   items,
   active,
   onSelect,
 }: {
-  detail: ProjectDetail;
-  logoUrl?: string;
-  imageUrls: Record<string, string>;
-  canManage: boolean;
-  accessToken: string | null;
-  onChanged: () => void;
   items: { key: string; label: string; count?: number | null }[];
   active: string;
   onSelect: (key: string) => void;
 }) {
-  const [org, engagement] = splitProjectName(detail.name, detail.template?.name ?? null);
-
   return (
-    <aside className="shrink-0 border-gray-200 bg-white lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:overflow-y-auto lg:border-r">
-      <div className="px-4 py-4 sm:px-6 lg:px-5">
-        {/* Identity. The church's own mark and name, because a client should
-            open this and see themselves rather than a RunFree product with
-            their project filed inside it. */}
-        <div className="flex items-center gap-3">
-          {logoUrl ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={logoUrl}
-              alt={org}
-              className="h-11 w-11 shrink-0 rounded-xl object-contain ring-1 ring-gray-200"
-            />
-          ) : (
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-runfree-grad text-sm font-bold text-white">
-              {org
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((w) => w[0])
-                .join("")
-                .toUpperCase()}
-            </span>
-          )}
-          <span className="min-w-0">
-            <span className="block truncate font-display text-base font-extrabold tracking-tight text-runfree-ink">
-              {org}
-            </span>
-            <span className="block truncate text-xs text-gray-500">{engagement}</span>
-          </span>
-        </div>
+    <aside className="shrink-0 border-gray-200 bg-gray-100 lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:overflow-y-auto lg:border-r">
+      <div className="px-4 py-4 sm:px-6 lg:px-4 lg:py-5">
+        {/* The way back leads the column rather than floating under the logo.
+            Andrew: "let's get the 'your projects' at the top of the column,
+            instead of floating in the middle of nowhere under the logo." */}
+        <a
+          href="/"
+          className="mb-4 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 outline-none transition hover:text-runfree-ink focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+        >
+          <span aria-hidden>←</span>
+          Your projects
+        </a>
 
-        {safeExternalUrl(detail.websiteUrl) && (
-          <a
-            href={safeExternalUrl(detail.websiteUrl)!}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 inline-block truncate text-xs font-medium text-runfree-magentaDeep hover:underline"
-          >
-            {prettyDomain(detail.websiteUrl!)}
-          </a>
-        )}
-
-        <div className="mt-4 border-t border-gray-100 pt-4">
-          <ProjectToolbar items={items} active={active} onSelect={onSelect} />
-        </div>
-
-        {/* Who can get in, at the bottom of the column where a settings-ish
-            control belongs rather than beside the church's name. */}
-        <ProjectIdentityControls
-          detail={detail}
-          imageUrls={imageUrls}
-          canManage={canManage}
-          accessToken={accessToken}
-          onChanged={onChanged}
-        />
+        <ProjectToolbar items={items} active={active} onSelect={onSelect} />
       </div>
     </aside>
   );
@@ -1565,14 +1815,14 @@ function ProjectToolbar({
                   className={`group flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-bold transition duration-150 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
                     on
                       ? "bg-runfree-grad text-white shadow-sm"
-                      : "text-gray-600 hover:bg-white hover:text-runfree-ink hover:shadow-sm"
+                      : "text-gray-700 hover:bg-white hover:text-runfree-ink hover:shadow-sm"
                   }`}
                 >
                   <span className="min-w-0 flex-1 truncate">{it.label}</span>
                   {it.count != null && it.count > 0 && (
                     <span
                       className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
-                        on ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
+                        on ? "bg-white/25 text-white" : "bg-white text-gray-500"
                       }`}
                     >
                       {it.count}
@@ -2676,18 +2926,23 @@ function ProjectStatusCard({
   return (
     <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
       <div className="h-1.5 bg-runfree-grad" />
-      <div className="p-5">
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
-          Next Session
-        </p>
-        <p className="mt-1 font-display text-2xl font-extrabold tracking-tight">
-          {formatPrepDate(nextDate.due_on)}
-        </p>
-        <p className="mt-0.5 text-xs text-white/60">{nextDate.title}</p>
+      {/* Date and link side by side, so this card is the same height as the
+          bar beside it. Andrew: "can you put the link on the right of the
+          date to make that card the same height as the 'what's important
+          now' bar?" */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-4">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
+            Next Session
+          </p>
+          <p className="mt-0.5 font-display text-xl font-extrabold tracking-tight">
+            {formatPrepDate(nextDate.due_on)}
+          </p>
+        </div>
 
         <button
           onClick={onGoToDates}
-          className="group mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
+          className="group inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
         >
           All key dates
           <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
@@ -4488,8 +4743,11 @@ function PrepareSection({
   onChanged,
   handouts,
   onOpenHandout,
+  standalone = false,
 }: {
   id: string;
+  /** True when this is a panel in its own right rather than a row. */
+  standalone?: boolean;
   prep: ProjectDetail["resources"];
   overview: ProjectDetail["resources"];
   thumbs: Record<string, string>;
@@ -4504,7 +4762,13 @@ function PrepareSection({
   onOpenHandout: (fileId: string, title: string) => void;
 }) {
   const extras = handouts?.extras ?? [];
-  const [open, setOpen] = useState(false);
+  /**
+   * Open when it IS the panel, closed when it is a row inside another one.
+   * It was built as a fold under The Process; now that Preparation has a
+   * place in the rail, arriving at it only to find one collapsed line would
+   * be a wasted click.
+   */
+  const [open, setOpen] = useState(standalone);
 
   if (prep.length === 0 && overview.length === 0 && prepGroups.length === 0 && extras.length === 0)
     return null;

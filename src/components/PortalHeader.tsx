@@ -39,6 +39,12 @@ type Props = {
   /** CVF pages pass this; the merged header shows no separate mark. */
   badge?: boolean;
   /**
+   * Hide Help, Admin and the account menu, for a page whose sidebar carries
+   * them. Certification stays: it is a different surface, not another item in
+   * the page you are on.
+   */
+  chromeInSidebar?: boolean;
+  /**
    * Which half of the portal this page belongs to. "certification" swaps the
    * bar's identity to Pivvot Vision Framing, so a framer can tell from the
    * top of the screen that they are no longer in the projects portal.
@@ -84,6 +90,7 @@ export default function PortalHeader({
   certificationAccess = false,
   section = "projects",
   badge = false,
+  chromeInSidebar = false,
 }: Props) {
   // One shape from here down, whichever prop the caller used.
   const person = profile ?? (framer ? { full_name: framer.name ?? null, is_staff: !!framer.is_admin } : null);
@@ -145,13 +152,15 @@ export default function PortalHeader({
               </a>
             )}
 
-            <a
-              href="/help"
-              className="text-xs font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
-            >
-              Help
-            </a>
-            {person?.is_staff && (
+            {!chromeInSidebar && (
+              <a
+                href="/help"
+                className="text-xs font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
+              >
+                Help
+              </a>
+            )}
+            {person?.is_staff && !chromeInSidebar && (
               <a
                 href="/admin"
                 className="text-xs font-bold uppercase tracking-wider text-runfree-pink transition hover:text-white"
@@ -165,6 +174,7 @@ export default function PortalHeader({
                 made it read as a row of unrelated links. The name is also now
                 a route to somewhere — /account existed but nothing linked to
                 it. */}
+            {!chromeInSidebar && (
             <div className="relative">
               <button
                 onClick={() => setMeOpen((v) => !v)}
@@ -215,6 +225,7 @@ export default function PortalHeader({
                 </>
               )}
             </div>
+            )}
           </div>
 
           {/* 44px square: Apple's minimum comfortable tap target. */}

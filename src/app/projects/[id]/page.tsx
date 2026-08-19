@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { getCurrentProfile, logout } from "@/lib/auth";
+import { getCurrentProfile, listMyProjects, logout } from "@/lib/auth";
 import {
   createDeliverable,
   availableSections,
@@ -67,6 +67,8 @@ type Profile = {
   is_staff: boolean;
   is_owner: boolean;
   certification_access: boolean;
+  /** Decides whether the sidebar offers a project switcher — see 031. */
+  account_role: "admin" | "runfree_team" | "framer_subscribed" | "framer" | "client" | null;
 };
 
 /**
@@ -213,6 +215,8 @@ export default function ProjectDetailPage() {
   const [status, setStatus] = useState<"checking" | "ready" | "not_found" | "error">("checking");
   const [activeModule, setActiveModule] = useState<string>("");
   const [handouts, setHandouts] = useState<HandoutLibrary | null>(null);
+  /** Starred projects for the sidebar — see ProjectSidebar. */
+  const [starred, setStarred] = useState<{ id: string; name: string }[]>([]);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<PreviewFile | null>(null);
 
@@ -233,6 +237,24 @@ export default function ProjectDetailPage() {
         return;
       }
       setProfile(current);
+
+      /**
+       * Starred projects, for the switcher at the foot of the sidebar.
+       * Only for people who run several — a church client has exactly one
+       * engagement and would get a list of itself.
+       */
+      if (current.is_staff || current.account_role === "framer_subscribed") {
+        try {
+          const mine = (await listMyProjects()) as unknown as {
+            id: string;
+            name: string;
+            pinned_at: string | null;
+          }[];
+          setStarred(mine.filter((x) => x.pinned_at).map((x) => ({ id: x.id, name: x.name })));
+        } catch {
+          // The sidebar is still useful without it.
+        }
+      }
 
       const result = await getProjectDetail(session.access_token, projectId);
       if (!result) {
@@ -560,6 +582,7 @@ export default function ProjectDetailPage() {
         title=""
         showTitleBlock={false}
         certificationAccess={profile.certification_access || profile.is_staff}
+        chromeInSidebar
       />
 
       {/* An app shell, not a stack of bands.
@@ -580,19 +603,33 @@ export default function ProjectDetailPage() {
           the header of the page." The column keeps the navigation; identity
           belongs across the top, where a client opens the page and sees
           themselves. */}
-      <ChurchHero
-        detail={detail}
-        logoUrl={detail.logoPath ? imageUrls[detail.logoPath] : undefined}
-        imageUrls={imageUrls}
-        canManage={canManage}
-        accessToken={accessToken}
-        onChanged={refresh}
-      />
-
       <div className="lg:flex lg:items-start">
-        <ProjectSidebar items={panelItems} active={activePanel} onSelect={goPanel} />
+        <ProjectSidebar
+          items={panelItems}
+          active={activePanel}
+          onSelect={goPanel}
+          starred={starred}
+          currentProjectId={projectId}
+          profile={profile}
+          onSignOut={handleSignOut}
+        />
 
-      <main className="min-w-0 flex-1 px-4 pb-16 sm:px-6 lg:px-8">
+      <main className="min-w-0 flex-1 pb-16">
+        {/* Inside the content column, not above the whole shell — so the
+            church's mark shares a left edge with everything under it.
+            Andrew: "the church logo should probably be lined up with the
+            content, not in the middle of the space between the column and
+            the content." */}
+        <ChurchHero
+          detail={detail}
+          logoUrl={detail.logoPath ? imageUrls[detail.logoPath] : undefined}
+          imageUrls={imageUrls}
+          canManage={canManage}
+          accessToken={accessToken}
+          onChanged={refresh}
+        />
+
+        <div className="px-4 sm:px-6 lg:px-8">
         {/* Orientation sits above the tabs, on every panel, rather than
             inside one you have to navigate to. Andrew: "let's do a side by
             side with the 'coming up' and the 'where you are / next together'
@@ -781,6 +818,7 @@ export default function ProjectDetailPage() {
                 onChanged={refresh}
               />
           )}
+        </div>
         </div>
       </main>
       </div>
@@ -1182,219 +1220,6 @@ function ProjectSettings({
  * still understands "6 dates" and "5 things to read".
  */
 /**
- * Access and project details, at the foot of the sidebar.
- *
- * Both were controls floating beside the church's name in the old hero band.
- * They are administrative — who can sign in, what the website is — so they
- * belong at the bottom of the column rather than next to the thing a client
- * opens the page to see.
- *
- * Details edit in a dialog rather than inline: the sidebar is 288px, and a
- * three-field form crammed into it would be worse than the band it replaced.
- */
-function ProjectIdentityControls({
-  detail,
-  imageUrls,
-  canManage,
-  accessToken,
-  onChanged,
-}: {
-  detail: ProjectDetail;
-  imageUrls: Record<string, string>;
-  canManage: boolean;
-  accessToken: string | null;
-  onChanged: () => void;
-}) {
-  const logoInput = useRef<HTMLInputElement>(null);
-  const [showAccess, setShowAccess] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({
-    location: detail.location ?? "",
-    website_url: detail.websiteUrl ?? "",
-    about: detail.about ?? "",
-  });
-
-  async function uploadLogo(file: File | undefined) {
-    if (!file || !accessToken || !file.type.startsWith("image/")) return;
-    setBusy(true);
-    try {
-      const { path } = await uploadProjectLogo(accessToken, detail.id, file);
-      await updateProject(accessToken, detail.id, { logo_path: path });
-      onChanged();
-    } catch (err) {
-      console.error("Logo upload failed:", err);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveDetails() {
-    if (!accessToken) return;
-    setBusy(true);
-    try {
-      await updateProject(accessToken, detail.id, {
-        location: form.location || null,
-        website_url: form.website_url || null,
-        about: form.about || null,
-      });
-      onChanged();
-      setEditing(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!canManage) return null;
-
-  const field =
-    "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-runfree-ink outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
-
-  return (
-    <div className="mt-5 border-t border-gray-100 pt-4">
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Access</p>
-
-      <button
-        onClick={() => setShowAccess(true)}
-        aria-label={`Manage access — ${detail.members.length} ${
-          detail.members.length === 1 ? "person has" : "people have"
-        } access`}
-        className="group mt-2 inline-flex items-center rounded-full p-0.5 outline-none transition hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
-      >
-        <span className="flex -space-x-2">
-          {detail.members.slice(0, 5).map((m) => {
-            const url = m.avatarPath ? imageUrls?.[m.avatarPath] : undefined;
-            return url ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                key={m.profileId}
-                src={url}
-                alt=""
-                className="h-7 w-7 rounded-full object-cover ring-2 ring-white"
-              />
-            ) : (
-              <span
-                key={m.profileId}
-                className="grid h-7 w-7 place-items-center rounded-full bg-runfree-indigo text-[9px] font-bold text-runfree-navy ring-2 ring-white"
-              >
-                {(m.fullName || m.email)
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((w) => w[0])
-                  .join("")
-                  .toUpperCase()}
-              </span>
-            );
-          })}
-          {detail.members.length > 5 && (
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-runfree-grad text-[9px] font-bold text-white ring-2 ring-white">
-              +{detail.members.length - 5}
-            </span>
-          )}
-          <span className="grid h-7 w-7 place-items-center rounded-full bg-white text-gray-400 ring-2 ring-white transition group-hover:text-runfree-magentaDeep">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="h-3 w-3">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </span>
-        </span>
-      </button>
-
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-        <button
-          onClick={() => {
-            setForm({
-              location: detail.location ?? "",
-              website_url: detail.websiteUrl ?? "",
-              about: detail.about ?? "",
-            });
-            setEditing(true);
-          }}
-          className="font-medium text-runfree-magentaDeep hover:underline"
-        >
-          Edit details
-        </button>
-        <button
-          onClick={() => logoInput.current?.click()}
-          className="font-medium text-gray-500 transition hover:text-runfree-ink"
-        >
-          {busy ? "Uploading…" : detail.logoPath ? "Replace logo" : "Add logo"}
-        </button>
-        <input
-          ref={logoInput}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => uploadLogo(e.target.files?.[0])}
-        />
-      </div>
-
-      {showAccess && (
-        <Modal
-          title="Project access"
-          subtitle="Who can sign in, and what they can do once they are here."
-          onClose={() => setShowAccess(false)}
-        >
-          <ProjectAccess
-            id="access"
-            embedded
-            detail={detail}
-            projectId={detail.id}
-            accessToken={accessToken}
-            onChanged={onChanged}
-          />
-        </Modal>
-      )}
-
-      {editing && (
-        <Modal title="Project details" onClose={() => setEditing(false)}>
-          <div className="space-y-3">
-            <Field label="Location">
-              <input
-                value={form.location}
-                onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                placeholder="Athens, GA"
-                className={field}
-              />
-            </Field>
-            <Field label="Website">
-              <input
-                value={form.website_url}
-                onChange={(e) => setForm((f) => ({ ...f, website_url: e.target.value }))}
-                placeholder="https://church.org"
-                className={field}
-              />
-            </Field>
-            <Field label="About this engagement">
-              <textarea
-                rows={3}
-                value={form.about}
-                onChange={(e) => setForm((f) => ({ ...f, about: e.target.value }))}
-                className={field}
-              />
-            </Field>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={saveDetails}
-                disabled={busy}
-                className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-              >
-                {busy ? "Saving…" : "Save"}
-              </button>
-              <button
-                onClick={() => setEditing(false)}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:text-runfree-ink"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-/**
  * The church's own name and mark, first thing, at full size. A client should
  * open this and see themselves — not a RunFree product with their project
  * filed inside it.
@@ -1469,7 +1294,7 @@ function ChurchHero({
 
   return (
     <div className="border-b border-gray-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-7">
+      <div className="px-4 py-5 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           {/* Works for any engagement: a church's logo, or the person's
               photo on a Younique or coaching project. */}
@@ -1710,29 +1535,117 @@ function ProjectSidebar({
   items,
   active,
   onSelect,
+  starred,
+  currentProjectId,
+  profile,
+  onSignOut,
 }: {
   items: { key: string; label: string; count?: number | null }[];
   active: string;
   onSelect: (key: string) => void;
+  /** Pinned projects, for people who run more than one. */
+  starred: { id: string; name: string }[];
+  currentProjectId: string;
+  profile: Profile;
+  onSignOut: () => void;
 }) {
+  const others = starred.filter((p) => p.id !== currentProjectId);
+
   return (
-    <aside className="shrink-0 border-gray-200 bg-gray-100 lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:overflow-y-auto lg:border-r">
-      <div className="px-4 py-4 sm:px-6 lg:px-4 lg:py-5">
-        {/* The way back leads the column rather than floating under the logo.
-            Andrew: "let's get the 'your projects' at the top of the column,
-            instead of floating in the middle of nowhere under the logo." */}
+    <aside className="flex shrink-0 flex-col bg-runfree-ink lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:overflow-y-auto">
+      <div className="flex-1 px-4 py-4 sm:px-6 lg:px-3.5 lg:py-5">
+        {/* Leaving the project is a different kind of move from switching
+            panels within it, so it sits above a rule rather than in the list.
+            Andrew: "'your projects' should be a bigger text, maybe separated
+            with a line to distinguish the tabs from going back to the home
+            page." */}
         <a
           href="/"
-          className="mb-4 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 outline-none transition hover:text-runfree-ink focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+          className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white/70 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
         >
-          <span aria-hidden>←</span>
+          <span aria-hidden className="text-base leading-none">←</span>
           Your projects
         </a>
 
+        <div className="my-3 border-t border-white/10" />
+
         <ProjectToolbar items={items} active={active} onSelect={onSelect} />
+
+        {/* Starred projects — the switcher for someone running several.
+            Andrew: "I think I want a 'starred' list of projects on the bottom
+            left of the column." The one you are in is left out: it is already
+            the whole column above. */}
+        {others.length > 0 && (
+          <div className="mt-6">
+            <p className="px-3.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">
+              Starred
+            </p>
+            <ul className="mt-1.5 space-y-0.5">
+              {others.map((p) => (
+                <li key={p.id}>
+                  <a
+                    href={`/projects/${p.id}`}
+                    className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white/65 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 shrink-0 text-runfree-magenta" aria-hidden="true">
+                      <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
+                    </svg>
+                    <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* The account and the two portal-wide destinations, at the foot of the
+          column. Certification stays in the top bar — it is a different
+          surface, not another thing in this project. */}
+      <div className="border-t border-white/10 px-4 py-3 sm:px-6 lg:px-3.5">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 pb-2 text-[11px] font-bold uppercase tracking-wider">
+          <a href="/help" className="text-white/55 transition hover:text-white">
+            Help
+          </a>
+          {profile.is_staff && (
+            <a href="/admin" className="text-runfree-pink transition hover:text-white">
+              Admin
+            </a>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2.5 rounded-xl px-1 py-1.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-runfree-grad text-[11px] font-bold text-white">
+            {(profile.full_name || profile.email)
+              .split(/\s+/)
+              .slice(0, 2)
+              .map((w) => w[0])
+              .join("")
+              .toUpperCase()}
+          </span>
+          <span className="min-w-0 flex-1">
+            <a
+              href="/account"
+              className="block truncate text-[13px] font-semibold text-white outline-none hover:underline focus-visible:ring-2 focus-visible:ring-white/60"
+            >
+              {profile.full_name || profile.email}
+            </a>
+            <button
+              onClick={onSignOut}
+              className="text-[11px] text-white/45 transition hover:text-white"
+            >
+              Sign out
+            </button>
+          </span>
+        </div>
       </div>
     </aside>
   );
+}
+
+/** "Christ Chapel - Pivvot Vision Framing" -> "Christ Chapel". */
+function churchNameOf(name: string): string {
+  return name.split(/\s+-\s+/)[0].trim() || name;
 }
 
 /**
@@ -1815,14 +1728,14 @@ function ProjectToolbar({
                   className={`group flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-bold transition duration-150 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
                     on
                       ? "bg-runfree-grad text-white shadow-sm"
-                      : "text-gray-700 hover:bg-white hover:text-runfree-ink hover:shadow-sm"
+                      : "text-white/75 hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   <span className="min-w-0 flex-1 truncate">{it.label}</span>
                   {it.count != null && it.count > 0 && (
                     <span
                       className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
-                        on ? "bg-white/25 text-white" : "bg-white text-gray-500"
+                        on ? "bg-white/25 text-white" : "bg-white/10 text-white/70"
                       }`}
                     >
                       {it.count}
@@ -2656,12 +2569,16 @@ function PrioritiesBanner({
       <div className="h-1.5 bg-runfree-grad" />
       <div className="px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* The whole header is the control, and the chevron sits hard
+              right where a disclosure belongs. Andrew: "the down arrow or the
+              thing you click to expand it, should be larger, more obvious,
+              right aligned probably." */}
           <button
             onClick={toggle}
             aria-expanded={!collapsed}
-            className="group flex min-w-0 items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            className="group flex min-w-0 flex-1 items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-white/60"
           >
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="block text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
                 Coming up
               </span>
@@ -2669,19 +2586,20 @@ function PrioritiesBanner({
                 What&rsquo;s Important Now
               </span>
             </span>
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/80 transition group-hover:bg-white/20 group-hover:text-white">
-              {collapsed ? "See more" : "Hide"}
-              {collapsed && open.length > 0 && (
-                <span className="tabular-nums">· {open.length}</span>
-              )}
+            {collapsed && open.length > 0 && (
+              <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold tabular-nums text-white">
+                {open.length}
+              </span>
+            )}
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 text-white transition group-hover:bg-white/25">
               <svg
                 viewBox="0 0 20 20"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.4"
+                strokeWidth="2.6"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                className={`h-5 w-5 transition-transform duration-200 ${
                   collapsed ? "" : "rotate-180"
                 }`}
                 aria-hidden="true"
@@ -3417,8 +3335,8 @@ function HandoutPills({
   const open = ordered.find((g) => g.id === expanded);
 
   return (
-    <div className="mt-7">
-      <ul className="flex flex-wrap justify-center gap-2">
+    <div className="mt-12">
+      <ul className="flex flex-wrap justify-center gap-2.5">
         {ordered.map((g) => {
           const lead = isFieldGuide(g.name);
           const single = g.files.length === 1;
@@ -3430,7 +3348,7 @@ function HandoutPills({
                   single ? onOpen(g.files[0].id, g.files[0].title) : setExpanded(on ? null : g.id)
                 }
                 aria-expanded={single ? undefined : on}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[38px] ${
+                className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[44px] ${
                   lead
                     ? "bg-runfree-grad text-white shadow-sm hover:opacity-95"
                     : on
@@ -3439,7 +3357,7 @@ function HandoutPills({
                 }`}
               >
                 <span className={lead ? "text-white" : "text-runfree-magentaDeep"}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                     <path d="M14 3v5h5" />
                     <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
                   </svg>
@@ -4799,6 +4717,96 @@ function PrepareSection({
    * costing 60px instead of a screenful — which is what puts Funnel Fusion
    * above the fold.
    */
+  const body = (
+    <div className="space-y-4">
+      {checklistHandouts.length > 0 && (
+        <ExtraHandouts extras={checklistHandouts} onOpen={onOpenHandout} />
+      )}
+
+      {prepGroups.length > 0 && (
+        <PrepCards
+          groups={prepGroups}
+          items={prepItems}
+          projectId={projectId}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          fileUrls={fileUrls}
+          onChanged={onChanged}
+        />
+      )}
+
+      {videos.length > 0 && (
+        <div>
+          <h4 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+            Orientation Videos
+          </h4>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {videos.map((v) => (
+              <VideoCard
+                key={v.id}
+                title={v.title}
+                url={v.external_url!}
+                thumbnail={thumbs[v.external_url!]}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {reading.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {reading.map((r) => {
+            const inner = (
+              <>
+                {r.title}
+                {r.external_url && (
+                  <span aria-hidden className="ml-1.5 text-gray-400">
+                    →
+                  </span>
+                )}
+              </>
+            );
+            return (
+              <li key={r.id}>
+                {r.external_url ? (
+                  <a
+                    href={safeExternalUrl(r.external_url)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-runfree-magenta/40 hover:text-runfree-ink"
+                  >
+                    {inner}
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-gray-50 px-3.5 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
+                    {inner}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+
+  /**
+   * A titled section with its parts on show when it IS the panel; a single
+   * collapsed row when it is one item inside another panel.
+   *
+   * Andrew: "change 'prepare your team' to be a simple title, and the 4
+   * elements show up uncollapsed in an organized way." Folds inside a fold
+   * meant three clicks to reach a reading list.
+   */
+  if (standalone) {
+    return (
+      <section id={id} className="scroll-mt-8">
+        <SectionHeading eyebrow="Before you begin" title="Prepare Your Team" />
+        <div className="mt-8">{body}</div>
+      </section>
+    );
+  }
+
   return (
     <section id={id} className="scroll-mt-8">
       <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
@@ -4833,128 +4841,9 @@ function PrepareSection({
         </button>
 
         {open && (
-          <div className="animate-fade space-y-3 border-t border-gray-100 px-5 py-4">
-            {checklistHandouts.length > 0 && (
-              <ExtraHandouts extras={checklistHandouts} onOpen={onOpenHandout} />
-            )}
-
-            {prepGroups.length > 0 && (
-              <PrepCards
-                groups={prepGroups}
-                items={prepItems}
-                projectId={projectId}
-                canEdit={canEdit}
-                accessToken={accessToken}
-                fileUrls={fileUrls}
-                onChanged={onChanged}
-                asRows
-              />
-            )}
-
-            {/* Videos get a row of their own, matching the groups above, so
-                the whole block is a consistent list of drop-downs rather than
-                three drop-downs and a stray gallery. Three across, per "We
-                can use three columns to present the videos to make those
-                smaller." */}
-            {videos.length > 0 && (
-              <PrepVideosRow videos={videos} thumbs={thumbs} />
-            )}
-
-            {reading.length > 0 && (
-              <ul className="flex flex-wrap gap-2 pt-1">
-                {reading.map((r) => {
-                  const inner = (
-                    <>
-                      {r.title}
-                      {r.external_url && (
-                        <span aria-hidden className="ml-1.5 text-gray-400">
-                          →
-                        </span>
-                      )}
-                    </>
-                  );
-                  return (
-                    <li key={r.id}>
-                      {r.external_url ? (
-                        <a
-                          href={safeExternalUrl(r.external_url)!}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-runfree-magenta/40 hover:text-runfree-ink"
-                        >
-                          {inner}
-                        </a>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-gray-50 px-3.5 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
-                          {inner}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
+          <div className="animate-fade border-t border-gray-100 px-5 py-4">{body}</div>
         )}
       </div>
-    </section>
-  );
-}
-
-/** The orientation videos, as one more drop-down row inside Preparation. */
-function PrepVideosRow({
-  videos,
-  thumbs,
-}: {
-  videos: ProjectDetail["resources"];
-  thumbs: Record<string, string>;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="group flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
-      >
-        <span
-          aria-hidden
-          className={`shrink-0 text-gray-400 transition-transform duration-200 group-hover:text-runfree-magentaDeep ${
-            open ? "rotate-90" : ""
-          }`}
-        >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-            <path d="M7.5 4.5 13 10l-5.5 5.5" />
-          </svg>
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-base font-semibold tracking-tight text-runfree-ink">
-            Orientation Videos
-          </span>
-          <span className="mt-0.5 block truncate text-xs text-gray-500">
-            Watch these before the first session.
-          </span>
-        </span>
-        <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-gray-500">
-          {videos.length}
-        </span>
-      </button>
-
-      {open && (
-        <div className="border-t border-gray-100 px-5 py-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {videos.map((v) => (
-              <VideoCard
-                key={v.id}
-                title={v.title}
-                url={v.external_url!}
-                thumbnail={thumbs[v.external_url!]}
-              />
-            ))}
-          </div>
-        </div>
-      )}
     </section>
   );
 }
@@ -5206,7 +5095,7 @@ function SessionRow({
             <img
               src={thumb}
               alt=""
-              className="hidden h-14 w-24 shrink-0 rounded-lg object-cover ring-1 ring-gray-200 sm:block"
+              className="hidden h-16 w-28 shrink-0 rounded-lg object-cover ring-1 ring-gray-200 sm:block"
             />
           ) : session.recording_url ? (
             <span className="rounded-full bg-runfree-pink px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">

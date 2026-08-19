@@ -95,6 +95,7 @@ export default function AdminPage() {
   // grouping by permission answers it at a glance. Alphabetical is for
   // finding one known person, which is what the search box is for.
   const [sort, setSort] = useState<"first" | "last" | "role">("role");
+  const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -319,6 +320,24 @@ export default function AdminPage() {
           </a>
         </nav>
 
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setAdding((v) => !v)}
+            className="min-h-[44px] rounded-xl bg-runfree-grad-deep px-4 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            {adding ? "Close" : "+ Add people"}
+          </button>
+        </div>
+
+        {adding && (
+          <AddPeople
+            onDone={() => {
+              setAdding(false);
+              void load();
+            }}
+          />
+        )}
+
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={query}
@@ -510,4 +529,355 @@ function FilterChip({
       {children}
     </button>
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Adding people                                                               */
+/* -------------------------------------------------------------------------- */
+
+type DraftPerson = { name: string; email: string; title: string; role: AccountRole };
+
+const BLANK: DraftPerson = { name: "", email: "", title: "", role: "client" };
+
+/**
+ * Add people to the portal — one at a time, or a spreadsheet at once.
+ *
+ * Andrew: "I need to be able to add people to the site from here, also, the
+ * ability to upload or import from a CSV would be great... when doing a bulk
+ * import, we need to set permissions for everyone separately."
+ *
+ * So a pasted CSV becomes an editable table rather than being imported
+ * blind. Permission is a dropdown on every row, defaulting to whatever the
+ * CSV said and to Project Member when it said nothing — the safest level, and
+ * the one most rows will be. Nothing is written until the table is reviewed
+ * and submitted, because "import" that silently grants admin to a
+ * mis-typed row is the failure worth designing out.
+ */
+function AddPeople({ onDone }: { onDone: () => void }) {
+  const [rows, setRows] = useState<DraftPerson[]>([{ ...BLANK }]);
+  const [paste, setPaste] = useState("");
+  const [createInGhl, setCreateInGhl] = useState(true);
+  const [invite, setInvite] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [results, setResults] = useState<
+    | null
+    | {
+        results: {
+          row: number;
+          email: string;
+          name: string;
+          status: string;
+          detail?: string;
+          invited?: boolean;
+          ghl?: { status: string; reason?: string; message?: string; tagged?: boolean };
+        }[];
+        summary: { created: number; updated: number; failed: number };
+      }
+  >(null);
+
+  /**
+   * Parse a pasted spreadsheet.
+   *
+   * Handles both comma and tab separation, because copying a range straight
+   * out of Sheets or Excel gives tabs, which is what an admin will actually
+   * do before they ever export a .csv file. A header row is detected and
+   * used to find columns rather than assuming an order — the one thing
+   * guaranteed to differ between two people's spreadsheets.
+   */
+  function parsePaste() {
+    const lines = paste.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return;
+
+    const split = (l: string) =>
+      l.includes("\t") ? l.split("\t") : l.split(",");
+
+    const first = split(lines[0]).map((c) => c.trim().toLowerCase().replace(/^"|"$/g, ""));
+    const looksLikeHeader = first.some((c) => /name|email|role|permission|title/.test(c));
+
+    const idx = {
+      name: looksLikeHeader ? first.findIndex((c) => /name/.test(c) && !/user/.test(c)) : 0,
+      email: looksLikeHeader ? first.findIndex((c) => /e-?mail/.test(c)) : 1,
+      title: looksLikeHeader ? first.findIndex((c) => /title|role at|position|job/.test(c)) : 2,
+      role: looksLikeHeader
+        ? first.findIndex((c) => /permission|access|level|^role$/.test(c))
+        : 3,
+    };
+
+    const body = looksLikeHeader ? lines.slice(1) : lines;
+    const parsed: DraftPerson[] = body.map((line) => {
+      const cells = split(line).map((c) => c.trim().replace(/^"|"$/g, ""));
+      const at = (i: number) => (i >= 0 ? (cells[i] ?? "") : "");
+      return {
+        name: at(idx.name),
+        email: at(idx.email),
+        title: at(idx.title),
+        role: matchRole(at(idx.role)) ?? "client",
+      };
+    });
+
+    if (parsed.length > 0) {
+      setRows(parsed);
+      setPaste("");
+    }
+  }
+
+  async function submit() {
+    const usable = rows.filter((r) => r.email.trim());
+    if (usable.length === 0) return;
+    setBusy(true);
+    setResults(null);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const res = await fetch("/api/admin/people/add", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ people: usable, createInGhl, invite }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setResults({ results: [], summary: { created: 0, updated: 0, failed: usable.length } });
+        alert(body.error ?? "That import failed.");
+        return;
+      }
+      setResults(body);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field =
+    "w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm text-runfree-ink outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
+
+  return (
+    <section className="mb-5 overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
+      <div className="h-1 bg-runfree-grad" />
+      <div className="space-y-5 p-5">
+        {/* Paste first: it is how most of these will start. */}
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+            Paste from a spreadsheet
+          </label>
+          <p className="mt-1 text-xs text-gray-500">
+            Name, email, title, permission — commas or tabs, with or without a header row.
+            Everything lands in the table below for you to check before anything is saved.
+          </p>
+          <textarea
+            rows={3}
+            value={paste}
+            onChange={(e) => setPaste(e.target.value)}
+            placeholder="Bobby Gourley, bobby@wearechapel.org, Lead Pastor, Project Member"
+            className={`${field} mt-2 font-mono text-xs`}
+          />
+          <button
+            onClick={parsePaste}
+            disabled={!paste.trim()}
+            className="mt-2 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink disabled:opacity-40"
+          >
+            Load into the table
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] border-separate border-spacing-y-1.5 text-sm">
+            <thead>
+              <tr className="text-left text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                <th className="pb-1 pr-2 font-bold">Name</th>
+                <th className="pb-1 pr-2 font-bold">Email</th>
+                <th className="pb-1 pr-2 font-bold">Title (optional)</th>
+                <th className="pb-1 pr-2 font-bold">Permission</th>
+                <th className="pb-1" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i}>
+                  <td className="pr-2">
+                    <input
+                      value={r.name}
+                      onChange={(e) => setRows(edit(rows, i, { name: e.target.value }))}
+                      placeholder="Full name"
+                      className={field}
+                    />
+                  </td>
+                  <td className="pr-2">
+                    <input
+                      type="email"
+                      value={r.email}
+                      onChange={(e) => setRows(edit(rows, i, { email: e.target.value }))}
+                      placeholder="name@church.org"
+                      className={field}
+                    />
+                  </td>
+                  <td className="pr-2">
+                    <input
+                      value={r.title}
+                      onChange={(e) => setRows(edit(rows, i, { title: e.target.value }))}
+                      placeholder="Lead Pastor"
+                      className={field}
+                    />
+                  </td>
+                  <td className="pr-2">
+                    <select
+                      value={r.role}
+                      onChange={(e) =>
+                        setRows(edit(rows, i, { role: e.target.value as AccountRole }))
+                      }
+                      className={field}
+                    >
+                      {ROLES.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    {rows.length > 1 && (
+                      <button
+                        onClick={() => setRows(rows.filter((_, j) => j !== i))}
+                        aria-label={`Remove row ${i + 1}`}
+                        className="rounded-md px-2 py-1.5 text-xs text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <button
+          onClick={() => setRows([...rows, { ...BLANK }])}
+          className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
+        >
+          + Another person
+        </button>
+
+        <div className="space-y-2 rounded-xl bg-gray-50 p-4">
+          <label className="flex items-start gap-2.5 text-sm text-runfree-ink">
+            <input
+              type="checkbox"
+              checked={createInGhl}
+              onChange={(e) => setCreateInGhl(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-runfree-magenta"
+            />
+            <span>
+              Add them to GoHighLevel if they aren&rsquo;t there
+              <span className="mt-0.5 block text-xs text-gray-500">
+                Matched on email. Anyone already in GHL is updated, never duplicated. Only the two
+                certified levels get the &ldquo;{"Certified Vision Framer"}&rdquo; tag — everyone
+                else is added untagged, with their title where you gave one.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2.5 text-sm text-runfree-ink">
+            <input
+              type="checkbox"
+              checked={invite}
+              onChange={(e) => setInvite(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-runfree-magenta"
+            />
+            <span>
+              Email them an invitation now
+              <span className="mt-0.5 block text-xs text-gray-500">
+                Leave this off for a large import — the mailer is rate-limited to a handful an
+                hour, so a cohort of thirty would silently lose most of them. Accounts are created
+                either way; you can invite people afterwards.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={submit}
+            disabled={busy || rows.every((r) => !r.email.trim())}
+            className="min-h-[44px] rounded-xl bg-runfree-grad-deep px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "Adding…" : `Add ${rows.filter((r) => r.email.trim()).length || ""} people`}
+          </button>
+          {results && (
+            <button
+              onClick={onDone}
+              className="text-sm font-medium text-runfree-magentaDeep hover:underline"
+            >
+              Done
+            </button>
+          )}
+        </div>
+
+        {results && (
+          <div className="rounded-xl border border-gray-200 p-4">
+            <p className="text-sm font-semibold text-runfree-ink">
+              {results.summary.created} added · {results.summary.updated} updated ·{" "}
+              {results.summary.failed} not done
+            </p>
+            <ul className="mt-2 space-y-1.5 text-xs">
+              {results.results.map((r) => (
+                <li key={r.row} className="flex flex-wrap items-baseline gap-x-2">
+                  <span
+                    className={`font-semibold ${
+                      r.status === "created" || r.status === "updated"
+                        ? "text-runfree-magentaDeep"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {r.status}
+                  </span>
+                  <span className="text-runfree-ink">{r.email || `row ${r.row}`}</span>
+                  {r.detail && <span className="text-gray-500">— {r.detail}</span>}
+                  {r.ghl && (
+                    <span className="text-gray-400">
+                      · GHL: {r.ghl.status}
+                      {r.ghl.tagged ? " (tagged)" : ""}
+                      {r.ghl.reason ? ` — ${r.ghl.reason}` : ""}
+                      {r.ghl.message ? ` — ${r.ghl.message}` : ""}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function edit(rows: DraftPerson[], i: number, patch: Partial<DraftPerson>): DraftPerson[] {
+  return rows.map((r, j) => (j === i ? { ...r, ...patch } : r));
+}
+
+/** The same aliases the route accepts, so the table shows what will be saved. */
+function matchRole(raw: string): AccountRole | null {
+  const v = raw.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const direct = ROLES.find((r) => r.value === v);
+  if (direct) return direct.value;
+  const byLabel = ROLES.find((r) => r.label.toLowerCase().replace(/[\s-]+/g, "_") === v);
+  if (byLabel) return byLabel.value;
+  const aliases: Record<string, AccountRole> = {
+    site_admin: "admin",
+    portal_admin: "admin",
+    staff: "runfree_team",
+    team: "runfree_team",
+    runfree: "runfree_team",
+    subscribed: "framer_subscribed",
+    certified: "framer",
+    certified_framer: "framer",
+    participant: "client",
+    member: "client",
+    viewer: "client",
+    project_member: "client",
+  };
+  return aliases[v] ?? null;
 }

@@ -152,3 +152,116 @@ export async function untagContactAsCertifiedFramer(
     return { status: "failed", message: describe(error) };
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Creating and reconciling contacts                                           */
+/* -------------------------------------------------------------------------- */
+
+export type GhlSyncResult =
+  | { status: "disabled" }
+  | { status: "matched"; contactId: string; tagged: boolean }
+  | { status: "created"; contactId: string; tagged: boolean }
+  | { status: "skipped"; reason: string }
+  | { status: "failed"; message: string };
+
+/**
+ * Create a contact in GoHighLevel.
+ *
+ * Deliberately separate from tagging, and deliberately not called on its own
+ * anywhere — syncPersonToGHL() below is the only entry point, because
+ * creating a contact without first searching would duplicate anyone who is
+ * already in the CRM under a slightly different name.
+ *
+ * `title` lands on the contact's companyName field rather than a custom
+ * field: custom fields are per-location and have to exist before you can
+ * write to them, so using one would make this fail on any location that
+ * hasn't been prepared. companyName is standard and always present.
+ */
+async function createGHLContact(input: {
+  email: string;
+  name?: string | null;
+  title?: string | null;
+  tags?: string[];
+}): Promise<string> {
+  const parts = (input.name ?? "").trim().split(/\s+/).filter(Boolean);
+  const firstName = parts[0] ?? "";
+  const lastName = parts.slice(1).join(" ");
+
+  const response = await client().post("/contacts/", {
+    locationId: process.env.GHL_LOCATION_ID,
+    email: input.email.trim().toLowerCase(),
+    ...(firstName ? { firstName } : {}),
+    ...(lastName ? { lastName } : {}),
+    ...(input.title ? { companyName: input.title } : {}),
+    ...(input.tags?.length ? { tags: input.tags } : {}),
+    source: "RunFree Portal",
+  });
+
+  return response.data?.contact?.id ?? response.data?.id ?? "";
+}
+
+/**
+ * Put a person into GoHighLevel and make their tags match their portal role.
+ *
+ * The rule Andrew described: match on email; tag as certified only if they
+ * actually hold a certification role; create the contact if there is no
+ * profile there yet, carrying their title where we have one.
+ *
+ *   "The check would be their name and email matching a profile in GHL, then
+ *    tagging them accordingly if they're added as a certified person. if
+ *    they're just a participant or staff member, I'd like them added to GHL
+ *    (with their title brought in where relevant), but not tagged as
+ *    'certified' unless they have that permission level."
+ *
+ * Matching is on EMAIL ALONE, not name+email. Names in a CRM are wrong
+ * constantly — nicknames, maiden names, a typo from an old import — and
+ * requiring both to agree would create a second contact for someone already
+ * there, which is the one outcome worse than not syncing at all. Email is
+ * unique and is what the inbound webhook already keys on.
+ *
+ * Never throws. A CRM that is down or misconfigured must not stop someone
+ * being added to the portal; the caller reports what happened per person.
+ */
+export async function syncPersonToGHL(input: {
+  email: string;
+  name?: string | null;
+  title?: string | null;
+  /** The portal role being granted, which decides the certified tag. */
+  certified: boolean;
+  /**
+   * Whether to create a contact that isn't there. Off by default: adding a
+   * church viewer to the CRM puts a real person into marketing workflows,
+   * which is a decision for whoever is importing, not a side effect.
+   */
+  createIfMissing?: boolean;
+}): Promise<GhlSyncResult> {
+  if (!isGhlConfigured()) return { status: "disabled" };
+
+  const email = input.email.trim().toLowerCase();
+  if (!email) return { status: "skipped", reason: "no email" };
+
+  try {
+    const existing = await searchGHLContactByEmail(email);
+
+    if (existing) {
+      if (!input.certified) return { status: "matched", contactId: existing.id, tagged: false };
+      await client().post(`/contacts/${existing.id}/tags`, { tags: [CERTIFIED_TAG] });
+      return { status: "matched", contactId: existing.id, tagged: true };
+    }
+
+    if (!input.createIfMissing) {
+      return { status: "skipped", reason: "not in GHL, and creating was not requested" };
+    }
+
+    const contactId = await createGHLContact({
+      email,
+      name: input.name,
+      title: input.title,
+      tags: input.certified ? [CERTIFIED_TAG] : [],
+    });
+
+    return { status: "created", contactId, tagged: input.certified };
+  } catch (error) {
+    return { status: "failed", message: describe(error) };
+  }
+}

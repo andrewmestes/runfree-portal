@@ -14,6 +14,7 @@ import { getSignedImageUrls, replaceDeliverableImage, uploadDeliverableFile } fr
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
+import VisionStackGraphic from "@/components/VisionStackGraphic";
 import AccessError from "@/components/AccessError";
 
 type Profile = {
@@ -146,22 +147,36 @@ export default function VisionStackPage() {
           aria-hidden
           className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-runfree-magenta/25 blur-3xl"
         />
-        <div className="relative mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 lg:px-8 lg:py-24">
-          <p className="font-display text-xl font-bold tracking-tight text-runfree-pink sm:text-2xl">
-            {church}
-          </p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
-            The Vision Stack
-          </h1>
-          <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-white/75">
-            Everything your team has built, from the convictions underneath it all to the tools
-            that put it to work.
-          </p>
-          {stackItems.length > 0 && (
-            <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-semibold text-white ring-1 ring-white/20">
-              {ready} of {stackItems.length} complete
+        <div className="relative mx-auto grid max-w-5xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_auto] lg:gap-16 lg:px-8 lg:py-24">
+          <div className="text-center lg:text-left">
+            <p className="font-display text-xl font-bold tracking-tight text-runfree-pink sm:text-2xl">
+              {church}
             </p>
-          )}
+            <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
+              The Vision Stack
+            </h1>
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-white/75">
+              Everything your team has built, from the convictions underneath it all to the tools
+              that put it to work.
+            </p>
+            {ready > 0 && (
+              <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-semibold text-white ring-1 ring-white/20">
+                {ready} {ready === 1 ? "piece" : "pieces"} finished
+              </p>
+            )}
+          </div>
+
+          {/* The stack assembles itself on arrival, and each plate is a
+              button down to its own section. */}
+          <VisionStackGraphic
+            className="w-full max-w-[300px] justify-self-center lg:max-w-[340px]"
+            onSelect={(slug) =>
+              document.getElementById(`layer-${slug}`)?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              })
+            }
+          />
         </div>
       </div>
 
@@ -170,6 +185,7 @@ export default function VisionStackPage() {
           {detail.stackLayers.map((layer, i) => (
             <LayerBlock
               key={layer.slug}
+              slug={layer.slug}
               index={i}
               name={layer.name}
               blurb={layer.blurb}
@@ -227,6 +243,7 @@ function useReveal<T extends HTMLElement>() {
 }
 
 function LayerBlock({
+  slug,
   index,
   name,
   blurb,
@@ -238,6 +255,8 @@ function LayerBlock({
   projectId,
   onChanged,
 }: {
+  /** Anchor target for the hero graphic's plates. */
+  slug: string;
   index: number;
   name: string;
   blurb: string | null;
@@ -254,6 +273,7 @@ function LayerBlock({
 
   return (
     <section
+      id={`layer-${slug}`}
       ref={ref}
       style={{
         // Each layer steps further right, so the page reads as a stack.

@@ -566,7 +566,7 @@ export default function ProjectDetailPage() {
         onChanged={refresh}
       />
 
-      <main className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
         {/* Orientation sits above the tabs, on every panel, rather than
             inside one you have to navigate to. Andrew: "let's do a side by
             side with the 'coming up' and the 'where you are / next together'
@@ -577,7 +577,7 @@ export default function ProjectDetailPage() {
             doing; when it meets next is a fact you check, not an action. The
             status card takes a fixed column so the two never end up at odd
             widths as the priorities text grows. */}
-        <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="mt-5 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <PrioritiesBanner
             detail={detail}
             canEdit={canEdit}
@@ -638,7 +638,6 @@ export default function ProjectDetailPage() {
 
             {activePanel === "process" && modules.length > 0 && (
               <section id="process">
-                <SectionHeading eyebrow="The process" title="Pivvot Vision Framing Process" />
 
                 {/* Preparation leads the process rather than sitting beside
                     it in a tab of its own — it is step zero, the work a team
@@ -661,7 +660,7 @@ export default function ProjectDetailPage() {
                   onOpenHandout={openHandout}
                 />
 
-                <div className="mt-14">
+                <div className="mt-8">
                   <ModuleNav modules={modules} active={activeModule} onSelect={setActiveModule} />
                   {/* Pinned under the icons, unchanged by the selection. */}
                   <HandoutPills
@@ -1169,7 +1168,7 @@ function ProjectToolbar({
 }) {
   return (
     <div className="sticky top-0 z-30 -mx-4 mt-6 border-b border-gray-200/70 bg-gray-50/90 backdrop-blur-md sm:-mx-6 lg:-mx-8">
-      <div className="mx-auto max-w-6xl px-4 py-2.5 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-2.5 sm:px-6 lg:px-8">
         {items.length > 0 && (
           <nav aria-label="Project sections">
             {/* Bigger, and the selected tab wears the brand gradient rather
@@ -1949,8 +1948,8 @@ function ChurchHero({
 
   return (
     <div className="border-b border-gray-200 bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-7">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           {/* Works for any engagement: a church's logo, or the person's
               photo on a Younique or coaching project. */}
           <div
@@ -2276,7 +2275,7 @@ function PrioritiesBanner({
        spacing, and a margin here pushed one card down relative to the other. */
     <section className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
       <div className="h-1.5 bg-runfree-grad" />
-      <div className="px-6 py-5 sm:px-7">
+      <div className="px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             onClick={toggle}
@@ -2297,7 +2296,7 @@ function PrioritiesBanner({
               <span className="block text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
                 Coming up
               </span>
-              <span className="block font-display text-xl font-extrabold tracking-tight sm:text-2xl">
+              <span className="block font-display text-lg font-extrabold tracking-tight">
                 What&rsquo;s Important Now
               </span>
             </span>
@@ -2355,7 +2354,7 @@ function PrioritiesBanner({
           <>
             {/* Rendered as a checklist when written one-per-line, which is
                 how a list of commitments is naturally written. */}
-            <ul className="mt-4 space-y-2.5">
+            <ul className="mt-3 space-y-2">
               {detail.priorities
                 .split("\n")
                 .map((l) => l.trim())
@@ -2366,7 +2365,7 @@ function PrioritiesBanner({
                       aria-hidden
                       className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-runfree-pink"
                     />
-                    <span className="text-[15px] leading-relaxed text-white/90">{line}</span>
+                    <span className="text-sm leading-relaxed text-white/90">{line}</span>
                   </li>
                 ))}
             </ul>
@@ -2625,20 +2624,20 @@ function ProjectStatusCard({
   return (
     <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
       <div className="h-1.5 bg-runfree-grad" />
-      <dl className="space-y-5 p-6 sm:p-7">
+      <dl className="space-y-4 p-5">
         {nextDate?.due_on && (
           <div>
             <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
               Next Session
             </dt>
-            <dd className="mt-1.5 font-display text-2xl font-extrabold tracking-tight">
+            <dd className="mt-1 font-display text-xl font-extrabold tracking-tight">
               {formatPrepDate(nextDate.due_on)}
             </dd>
             <p className="mt-0.5 text-xs text-white/60">{nextDate.title}</p>
           </div>
         )}
         {currentModule && (
-          <div className={nextDate?.due_on ? "border-t border-white/10 pt-5" : ""}>
+          <div className={nextDate?.due_on ? "border-t border-white/10 pt-4" : ""}>
             <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/50">
               Where You Are
             </dt>
@@ -4449,7 +4448,6 @@ function PrepareSection({
   onChanged,
   handouts,
   onOpenHandout,
-  showTitle = true,
 }: {
   id: string;
   prep: ProjectDetail["resources"];
@@ -4464,57 +4462,184 @@ function PrepareSection({
   onChanged: () => void;
   handouts: HandoutLibrary | null;
   onOpenHandout: (fileId: string, title: string) => void;
-  /** False inside a Condensed fold, which supplies its own heading. */
-  showTitle?: boolean;
 }) {
   const extras = handouts?.extras ?? [];
+  const [open, setOpen] = useState(false);
+
   if (prep.length === 0 && overview.length === 0 && prepGroups.length === 0 && extras.length === 0)
     return null;
 
   const videos = [...prep, ...overview].filter((r) => r.kind === "video" && r.external_url);
   const reading = [...prep, ...overview].filter((r) => r.kind !== "video");
+  const checklistHandouts = extras.filter((g) => PREP_HANDOUT.test(g.name));
+
+  const itemCount =
+    prepItems.filter((i) => prepGroups.some((g) => g.id === i.group_id)).length +
+    videos.length +
+    reading.length;
+
+  /**
+   * One line, closed by default, sitting between the tabs and the module
+   * track.
+   *
+   * Andrew: "the preparation work, the entire thing should be collapsible and
+   * just a very small line up above the icons... All four of those sections I
+   * want tucked underneath one master row called prepare your team or
+   * preparation work. That way, that takes up a very small line right
+   * underneath the main tabs, and then they can immediately see the process
+   * icons."
+   *
+   * Preparation matters most in the first weeks and then never again, but it
+   * is the first thing in the process so it cannot move further down. A
+   * single closed row is the resolution: present, one click from open, and
+   * costing 60px instead of a screenful — which is what puts Funnel Fusion
+   * above the fold.
+   */
+  return (
+    <section id={id} className="scroll-mt-8">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="group flex w-full items-center gap-3 px-5 py-3.5 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
+        >
+          <span
+            aria-hidden
+            className={`shrink-0 text-gray-400 transition-transform duration-200 group-hover:text-runfree-magentaDeep ${
+              open ? "rotate-90" : ""
+            }`}
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="M7.5 4.5 13 10l-5.5 5.5" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
+              Before you begin
+            </span>
+            <span className="block font-display text-base font-bold tracking-tight text-runfree-ink">
+              Prepare Your Team
+            </span>
+          </span>
+          {itemCount > 0 && (
+            <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-gray-500">
+              {itemCount}
+            </span>
+          )}
+        </button>
+
+        {open && (
+          <div className="animate-fade space-y-3 border-t border-gray-100 px-5 py-4">
+            {checklistHandouts.length > 0 && (
+              <ExtraHandouts extras={checklistHandouts} onOpen={onOpenHandout} />
+            )}
+
+            {prepGroups.length > 0 && (
+              <PrepCards
+                groups={prepGroups}
+                items={prepItems}
+                projectId={projectId}
+                canEdit={canEdit}
+                accessToken={accessToken}
+                fileUrls={fileUrls}
+                onChanged={onChanged}
+                asRows
+              />
+            )}
+
+            {/* Videos get a row of their own, matching the groups above, so
+                the whole block is a consistent list of drop-downs rather than
+                three drop-downs and a stray gallery. Three across, per "We
+                can use three columns to present the videos to make those
+                smaller." */}
+            {videos.length > 0 && (
+              <PrepVideosRow videos={videos} thumbs={thumbs} />
+            )}
+
+            {reading.length > 0 && (
+              <ul className="flex flex-wrap gap-2 pt-1">
+                {reading.map((r) => {
+                  const inner = (
+                    <>
+                      {r.title}
+                      {r.external_url && (
+                        <span aria-hidden className="ml-1.5 text-gray-400">
+                          →
+                        </span>
+                      )}
+                    </>
+                  );
+                  return (
+                    <li key={r.id}>
+                      {r.external_url ? (
+                        <a
+                          href={safeExternalUrl(r.external_url)!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-runfree-magenta/40 hover:text-runfree-ink"
+                        >
+                          {inner}
+                        </a>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-gray-50 px-3.5 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
+                          {inner}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** The orientation videos, as one more drop-down row inside Preparation. */
+function PrepVideosRow({
+  videos,
+  thumbs,
+}: {
+  videos: ProjectDetail["resources"];
+  thumbs: Record<string, string>;
+}) {
+  const [open, setOpen] = useState(false);
 
   return (
-    <section id={id} className={showTitle ? "mt-20 scroll-mt-8" : "scroll-mt-8"}>
-      {showTitle && <SectionHeading eyebrow="Before you begin" title="Prepare your team" />}
+    <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="group flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
+      >
+        <span
+          aria-hidden
+          className={`shrink-0 text-gray-400 transition-transform duration-200 group-hover:text-runfree-magentaDeep ${
+            open ? "rotate-90" : ""
+          }`}
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <path d="M7.5 4.5 13 10l-5.5 5.5" />
+          </svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-semibold tracking-tight text-runfree-ink">
+            Orientation Videos
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-gray-500">
+            Watch these before the first session.
+          </span>
+        </span>
+        <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-gray-500">
+          {videos.length}
+        </span>
+      </button>
 
-      {/* The editable work leads. The orientation videos below it are context;
-          these cards are what the team actually has to act on. */}
-      {/* The Preparation Checklist is the one handout that belongs to this
-          block — it is the list the team works through before session one.
-          The Field Guide moved to the process section with the rest of the
-          handouts, per Andrew: "I want 'the process' to look and feel more
-          like the original for sure, with icons, handouts, field guide, and
-          videos." */}
-      <ExtraHandouts extras={extras.filter((g) => PREP_HANDOUT.test(g.name))} onOpen={onOpenHandout} />
-
-      {prepGroups.length > 0 && (
-        <div className="mt-8">
-          <PrepCards
-            groups={prepGroups}
-            items={prepItems}
-            projectId={projectId}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            fileUrls={fileUrls}
-            onChanged={onChanged}
-            asRows
-          />
-        </div>
-      )}
-
-      {/* Orientation videos are the same weight as the reading, so they sit
-          beside it on a wide screen rather than below. Andrew: "it goes into
-          reading and prep work on the left side and then orientation videos
-          on the bottom. I'm not sure structurally if those could be side by
-          side." Two across here rather than three: paired with the cards
-          above, three made each still too small to read the title on. */}
-      {videos.length > 0 && (
-        <div className="mt-8">
-          <h4 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-            Orientation
-          </h4>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {open && (
+        <div className="border-t border-gray-100 px-5 py-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {videos.map((v) => (
               <VideoCard
                 key={v.id}
@@ -4525,41 +4650,6 @@ function PrepareSection({
             ))}
           </div>
         </div>
-      )}
-
-      {reading.length > 0 && (
-        <ul className="mt-4 flex flex-wrap gap-2">
-          {reading.map((r) => {
-            const inner = (
-              <>
-                {r.title}
-                {r.external_url && (
-                  <span aria-hidden className="ml-1.5 text-gray-400">
-                    →
-                  </span>
-                )}
-              </>
-            );
-            return (
-              <li key={r.id}>
-                {r.external_url ? (
-                  <a
-                    href={safeExternalUrl(r.external_url)!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-runfree-magenta/40 hover:text-runfree-ink"
-                  >
-                    {inner}
-                  </a>
-                ) : (
-                  <span className="inline-flex items-center rounded-full bg-gray-50 px-3.5 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
-                    {inner}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
       )}
     </section>
   );

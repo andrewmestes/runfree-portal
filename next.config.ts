@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
     ],
   },
   env: {
-    NEXT_PUBLIC_APP_NAME: "RunFree Client Portal",
+    NEXT_PUBLIC_APP_NAME: "RunFree Portal",
   },
 };
 

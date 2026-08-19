@@ -5,11 +5,14 @@ export default function AuthShell({
   subtitle,
   children,
   footer,
+  about,
 }: {
   title: string;
   subtitle: string;
   children: React.ReactNode;
   footer: React.ReactNode;
+  /** A plain explanation of the product, shown to signed-out visitors. */
+  about?: React.ReactNode;
 }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-runfree-indigo/40 px-4 py-12">
@@ -38,6 +41,23 @@ export default function AuthShell({
 
             <div className="mt-8">{children}</div>
           </div>
+
+          {/* What this is, readable without signing in.
+              Google rejected brand verification with "your home page does not
+              explain the purpose of your app" — and it was right: a logged-out
+              visitor saw a sign-in box and nothing else. This is also the
+              first thing a church leader sees when they follow an invitation,
+              so it should have been here regardless of Google. */}
+          {about && (
+            <div className="border-t border-gray-100 bg-gray-50/70 px-8 py-6">
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
+                What this is
+              </h2>
+              <div className="mt-2 space-y-2.5 text-sm leading-relaxed text-gray-600">
+                {about}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 text-center text-sm text-gray-600">{footer}</div>

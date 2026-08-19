@@ -55,8 +55,43 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title="RunFree Client Portal"
+      title="RunFree Portal"
       subtitle="Sign in to your engagement"
+      about={
+        <>
+          <p>
+            <strong className="font-semibold text-runfree-ink">RunFree Portal</strong> is the
+            private workspace for churches and leaders working through a vision-framing or
+            coaching engagement with RunFree, and for Certified Vision Framers who facilitate
+            that process.
+          </p>
+          <p>
+            Inside, a church team finds everything for their engagement in one place: the dates
+            they are meeting, the reading and preparation before each session, the handouts and
+            teaching videos for each stage of the process, recordings and notes from every
+            session held, and the finished work their team produces &mdash; their mission,
+            values, strategy and measures.
+          </p>
+          <p>
+            Signing in with Google shares only your name, email address and profile picture. The
+            portal cannot read your Gmail, Drive, Calendar or contacts, and never asks to. You
+            can use an email address and password instead if you prefer.
+          </p>
+          <p>
+            Every project is private to the church it belongs to and the RunFree team leading it.
+            Access is by invitation only &mdash; there is no public area and nothing here is
+            indexed or shared. See our{" "}
+            <a href="/privacy" className="font-medium text-runfree-magentaDeep hover:underline">
+              Privacy Policy
+            </a>{" "}
+            and{" "}
+            <a href="/terms" className="font-medium text-runfree-magentaDeep hover:underline">
+              Terms of Service
+            </a>
+            .
+          </p>
+        </>
+      }
       footer={
         <p className="leading-relaxed">
           Access is granted by RunFree when you're added to a project. Need an

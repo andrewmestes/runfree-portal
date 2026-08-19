@@ -17,13 +17,13 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "RunFree Client Portal",
+  title: "RunFree Portal",
   description:
     "Session recordings, coaching notes, and deliverables for RunFree engagements.",
   // Gated per-engagement content — nothing here should be indexed.
   robots: { index: false, follow: false },
   openGraph: {
-    title: "RunFree Client Portal",
+    title: "RunFree Portal",
     siteName: "RunFree",
     description:
       "Session recordings, coaching notes, and deliverables for RunFree engagements.",

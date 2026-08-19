@@ -112,6 +112,25 @@ export default function HomePage() {
           return;
         }
 
+        /**
+         * A certified framer with no projects lands on the certification hub,
+         * not on an empty projects list.
+         *
+         * Andrew: "the logo links to the list of projects. if someone doesn't
+         * have access to that, let's make sure that takes them to the home
+         * page of the certification rather than an error message."
+         *
+         * Doing it here rather than by changing the logo's href fixes every
+         * route to "/" at once — the logo, the footer, "Your projects", and
+         * any bookmark — instead of the one link that happened to be noticed.
+         * Staff are excluded: an empty list is a real state for someone who is
+         * about to create their first project, and they need the button.
+         */
+        if (!current.is_staff && mine.length === 0 && current.certification_access) {
+          router.replace("/certification");
+          return;
+        }
+
         setProjects(mine);
         setStatus("ready");
 

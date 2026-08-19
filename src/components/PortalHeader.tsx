@@ -118,30 +118,6 @@ export default function PortalHeader({
             />
           </a>
 
-          {/* On the certification side the bar says so, right beside the mark.
-              Andrew: "at the top in the header, it needs to very clearly
-              distinguish that this is a different section... This is not the
-              run free portal where all the projects are held."
-
-              A rule and a second wordmark rather than a badge floating on its
-              own: it reads as "RunFree — Pivvot Vision Framing", which is the
-              actual relationship between the two. */}
-          {section === "certification" && (
-            <a
-              href="/certification"
-              className="hidden min-w-0 items-center gap-3 border-l border-white/20 pl-4 outline-none focus-visible:ring-2 focus-visible:ring-white sm:flex"
-            >
-              <span className="min-w-0">
-                <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-runfree-pink">
-                  Pivvot Vision Framing
-                </span>
-                <span className="block truncate text-sm font-bold tracking-tight text-white">
-                  Certification Resources
-                </span>
-              </span>
-            </a>
-          )}
-
           {/* Everything lives on the right. A single "HOME" floating in the
               middle of an otherwise empty bar read as a mistake — and the
               logo already goes home, which is what people try first. Back

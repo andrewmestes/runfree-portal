@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentProfile, logout } from "@/lib/auth";
+import { getCurrentProfile, logout, listMyProjects } from "@/lib/auth";
 import { listFeedback, resolveFeedback, submitFeedback, type FeedbackKind, type FeedbackRow } from "@/lib/feedback";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
@@ -34,6 +34,21 @@ export default function HelpPage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [status, setStatus] = useState<"checking" | "ready" | "error">("checking");
   const [mine, setMine] = useState<FeedbackRow[]>([]);
+  /**
+   * Help is written for what you can actually reach.
+   *
+   * Andrew: "if somebody only has certification access and then they click on
+   * that help and FAQ button on the bottom, and it gives them answers to how
+   * to run all kinds of stuff that they don't have access to, that might not
+   * make sense."
+   *
+   * One page, sections gated — rather than two Help pages, which would need
+   * the footer to know which one to link to and would leave anyone holding
+   * both kinds of access reading half their answers in each. A framer with no
+   * projects gets the certification section and nothing about running an
+   * engagement; a church client gets the reverse.
+   */
+  const [hasProjects, setHasProjects] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -51,6 +66,11 @@ export default function HelpPage() {
         return;
       }
       setProfile(current);
+      try {
+        setHasProjects(((await listMyProjects()) ?? []).length > 0);
+      } catch {
+        // Assume none; the certification section still shows.
+      }
       setMine(await listFeedback(session.access_token));
       setStatus("ready");
     } catch (err) {
@@ -86,13 +106,32 @@ export default function HelpPage() {
 
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
 
+        {/* Only for someone who has a project to use. */}
+        {(hasProjects || profile.is_staff) && (
         <Section title="Using your portal">
           <Faq q="Where do I find the materials for our next session?">
-            Open your project and use the six icons across the middle — one per module
-            of the process. Selecting one shows everything for it: the handouts, the
-            videos to watch beforehand, photos from our working sessions, and what that
-            module produces. Nothing loads a new page, so you can move between them
-            freely.
+            Open your project and stay on <strong>The Process</strong>, the first tab.
+            The six icons across it are the six tools of the process — click one and
+            everything for it appears underneath: the handouts, the videos to watch
+            beforehand, photos from our working sessions, and what that module
+            produces. Nothing loads a new page, so you can move between them freely.
+            <br />
+            <br />
+            The work to do before we start is in the <strong>Prepare Your Team</strong>
+            row just above those icons — click it to open it.
+          </Faq>
+          <Faq q="What are the tabs across the top of my project?">
+            Five, and they hold different things:
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li><strong>The Process</strong> — the six tools, their handouts and videos, and the preparation work.</li>
+              <li><strong>Team</strong> — your church&rsquo;s team, and the RunFree people working with you.</li>
+              <li><strong>Key Dates</strong> — everything already in the diary.</li>
+              <li><strong>Session Recordings</strong> — every session we have held, with its recording and the charts from the room.</li>
+              <li><strong>Deliverables</strong> — the finished work, in the Vision Stack.</li>
+            </ul>
+            Above them, <strong>What&rsquo;s Important Now</strong> is what your team owes
+            before we next meet, and the card beside it says when that is. That pair stays
+            on screen whichever tab you are on, and you can fold the first one away.
           </Faq>
           <Faq q="What is the Vision Stack?">
             It is the finished work — everything your team builds across the whole
@@ -108,12 +147,21 @@ export default function HelpPage() {
           </Faq>
           <Faq q="Can I download the handouts?">
             Yes. Each module leads with one combined PDF containing everything for it,
-            and the individual sheets are listed underneath if you only want one. They
-            open in a new tab, and you can save or print from there.
+            and the individual sheets are listed underneath if you only want one.
+            Clicking one opens it inside the portal, with a <strong>Download</strong>
+            button in the corner — so you can read it without losing your place, and
+            save or print it when you want to.
           </Faq>
           <Faq q="Who else can see our project?">
             Only the people your church has had added, plus the RunFree team leading
             your engagement. No other church can see any of it, and nothing is public.
+            The row of faces at the top of your project is everyone who can sign in —
+            click it to see the list.
+            <br />
+            <br />
+            Being on the <em>Church Team</em> list under the Team tab is not the same as
+            having a login. That list is names and titles for everyone&rsquo;s reference;
+            access is granted separately, one person at a time.
           </Faq>
           <Faq q="I have not received my invitation.">
             Check the spam folder first — the invitation arrives from our sign-in
@@ -121,6 +169,46 @@ export default function HelpPage() {
             there, email Andrew and he can send a fresh one.
           </Faq>
         </Section>
+
+        )}
+
+        {/* The certification half, for anyone who can reach it. */}
+        {(profile.certification_access || profile.is_staff) && (
+          <Section title="Your certification resources">
+            <Faq q="Where is the certification material?">
+              <strong>Certification</strong> in the top bar opens the Certified Vision
+              Framer Hub. Five cards: Process Handouts, Training Videos, Will&rsquo;s
+              Books, the Digital Facilitator&rsquo;s Guide, and Keynotes (coming). Every
+              page there carries the Pivvot mark, so you can always tell which part of
+              the portal you are in.
+            </Faq>
+            <Faq q="Finding one particular handout">
+              Open <strong>Process Handouts</strong>. The icons across the top are the
+              six tools — click one to see only its sheets. There is also a search box
+              that looks across every module at once, which is usually faster if you
+              know part of the name.
+            </Faq>
+            <Faq q="Reading and downloading">
+              Clicking a handout opens it inside the portal with a{" "}
+              <strong>Download</strong> button, so you can read it without leaving the
+              page. Each module also has one combined PDF containing all of its sheets —
+              useful for printing a full workbook in one go.
+            </Faq>
+            <Faq q="The material changed and I am seeing the old version">
+              The handouts are read live from Google Drive, so an updated file appears
+              for everyone as soon as it is replaced there. If something still looks
+              stale, <strong>Refresh from Drive</strong> on the Handouts page forces a
+              fresh read.
+            </Faq>
+            <Faq q="What is the difference between this and a church project?">
+              The certification library is <em>your</em> material as a facilitator — how
+              to run the process. A project is one church&rsquo;s engagement: their dates,
+              their sessions, their finished work. If you are running an engagement you
+              will have both, and <em>Your projects</em> under the logo moves between
+              them.
+            </Faq>
+          </Section>
+        )}
 
         {profile.is_staff && (
           <Section title="For the RunFree team" tone="staff">
@@ -133,8 +221,18 @@ export default function HelpPage() {
               changed afterwards.
             </Faq>
             <Faq q="Adding the church's team">
-              Team &rarr; <strong>Manage</strong> &rarr; add them by email with their
-              role at the church. Give them <em>Viewer</em> unless they need to add
+              Two separate things, on purpose.
+              <br />
+              <br />
+              The <strong>roster</strong> — Team tab &rarr; Church Team — is names,
+              titles and emails for everyone in the room. Adding someone there sends
+              nothing and grants nothing.
+              <br />
+              <br />
+              <strong>Access</strong> is the row of faces at the top of the project, next
+              to the logo. Click it, and add someone by email — or use{" "}
+              <em>Give access</em> beside anyone already on the roster, which saves
+              retyping their address. Give them <em>Viewer</em> unless they need to add
               content. Access levels are per project: someone can be an admin on one
               engagement and have no access to another.
               <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -152,10 +250,22 @@ export default function HelpPage() {
               can write it up over several sittings.
             </Faq>
             <Faq q="Publishing deliverables">
-              Open the Vision Stack and click any empty tile to upload the finished PDF
-              or image. Each carries a <em>Draft</em> / <em>Live</em> toggle — the church
-              sees it only once it says Live. The counter at the top of the page reflects
-              what is finished, so it doubles as a progress read for you.
+              Open the Vision Stack from the Deliverables tab and click any empty tile to
+              upload the finished PDF or image. Each carries a <em>Draft</em> /{" "}
+              <em>Live</em> toggle — the church sees it only once it says Live. Finished
+              PDFs that do not belong to a particular tile go in{" "}
+              <strong>Final Documents</strong> on the same tab.
+              <br />
+              <br />
+              You will not see &ldquo;3 of 23&rdquo; anywhere. Plenty of engagements run
+              part of the process by design, and a total makes a deliberate choice look
+              like unfinished work — so the portal counts what is done and never what is
+              missing.
+            </Faq>
+            <Faq q="Keeping your own projects in order">
+              The star on each project pins it to the top of your list. It is yours
+              alone: what you pin does not change anyone else&rsquo;s list, so two coaches
+              sharing an engagement can each keep their own current work at the top.
             </Faq>
             <Faq q="Where handouts come from">
               The standard handouts are read live from Google Drive —
@@ -170,6 +280,19 @@ export default function HelpPage() {
               appear. And anything specific to one church does not belong there at all:
               upload it to that church&rsquo;s project instead, which is also what keeps
               one client&rsquo;s name off another client&rsquo;s screen.
+            </Faq>
+            <Faq q="Where the certification material lives">
+              <strong>Certification</strong> in the top bar opens the Certified Vision
+              Framer Hub — Process Handouts, Training Videos, Will&rsquo;s Books and the
+              Digital Facilitator&rsquo;s Guide. It is a separate section from your
+              projects, and the pages there carry the Pivvot mark so you can tell at a
+              glance which side of the portal you are on. <em>Your projects</em> under
+              the logo brings you back.
+              <br />
+              <br />
+              That material is for facilitators. What a church sees inside its own
+              project is a different set — the handouts for the process they are
+              actually running.
             </Faq>
             <Faq q="A church that is not doing the standard process">
               Create the project from scratch rather than from a template, and build the

@@ -59,7 +59,7 @@ type Row = Profile & {
 const ROLES: { value: AccountRole; label: string; hint: string }[] = [
   {
     value: "admin",
-    label: "Portal Admin",
+    label: "Site Admin",
     hint: "Manages people and permissions, edits templates and shared content, and can open a subscribed framer's projects to help them troubleshoot. Does not see other RunFree members' private projects.",
   },
   {
@@ -70,7 +70,7 @@ const ROLES: { value: AccountRole; label: string; hint: string }[] = [
   {
     value: "framer_subscribed",
     label: "Certified Framer — Subscribed",
-    hint: "Everything a certified framer has, plus the ability to create and run their own client projects. Their projects stay theirs — RunFree staff cannot see them, though a Portal Admin can for support.",
+    hint: "Everything a certified framer has, plus the ability to create and run their own client projects. Their projects stay theirs — RunFree staff cannot see them, though a Site Admin can for support.",
   },
   {
     value: "framer",
@@ -91,7 +91,10 @@ export default function AdminPage() {
   const [status, setStatus] = useState<"checking" | "ready" | "denied" | "error">("checking");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AccountRole | "all">("all");
-  const [sort, setSort] = useState<"first" | "last" | "role">("first");
+  // Permission first: this page exists to answer "who can reach what", and
+  // grouping by permission answers it at a glance. Alphabetical is for
+  // finding one known person, which is what the search box is for.
+  const [sort, setSort] = useState<"first" | "last" | "role">("role");
   const [removing, setRemoving] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -164,6 +167,41 @@ export default function AdminPage() {
     } catch (err) {
       console.error("Role change failed:", err);
       alert("Couldn't change that role.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /**
+   * Correct a misspelled name.
+   *
+   * Andrew: "We may need a way to adjust the name if spelling is off. I know
+   * that jacks with things looking at GHL, but if the email address can be the
+   * main connection, the name might be changable here?"
+   *
+   * It can, and nothing overwrites it. Email is the key everywhere that
+   * matters: the GHL webhook matches on it and only writes a name when
+   * INSERTING a certified_framers row that didn't exist; handle_new_user
+   * writes full_name once, on signup; and 034's backfill is guarded by
+   * `full_name is null`. So a name corrected here survives a re-sync.
+   *
+   * This edits profiles.full_name — what the portal shows. It deliberately
+   * does not touch certified_framers.name, which is CVF's table and GHL's to
+   * own (see CLAUDE.md).
+   */
+  async function renamePerson(id: string, name: string) {
+    const clean = name.trim();
+    setBusyId(id);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: clean || null })
+        .eq("id", id);
+      if (error) throw error;
+      await load();
+    } catch (err) {
+      console.error("Rename failed:", err);
+      alert("Couldn't save that name.");
     } finally {
       setBusyId(null);
     }
@@ -310,9 +348,9 @@ export default function AdminPage() {
           </span>
           {(
             [
+              { key: "role", label: "Permission" },
               { key: "first", label: "First name" },
               { key: "last", label: "Last name" },
-              { key: "role", label: "Permission" },
             ] as const
           ).map((o) => (
             <button
@@ -338,42 +376,52 @@ export default function AdminPage() {
               {shown.map((r) => (
                 <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
                   <span className="min-w-0 flex-1 basis-full sm:basis-auto">
-                    <span className="block truncate text-sm font-semibold text-runfree-ink">
-                      {r.full_name || r.email}
-                    </span>
-                    <span className="block truncate text-xs text-gray-500">{r.email}</span>
+                    {/* Editable in place. The email below it is the identity
+                        and stays read-only — changing that would orphan the
+                        person from their login and from GHL. */}
+                    <input
+                      defaultValue={r.full_name ?? ""}
+                      placeholder={r.email}
+                      aria-label={`Name for ${r.email}`}
+                      disabled={busyId === r.id}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") {
+                          e.currentTarget.value = r.full_name ?? "";
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value.trim() === (r.full_name ?? "").trim()) return;
+                        void renamePerson(r.id, e.target.value);
+                      }}
+                      className="block w-full truncate rounded-md bg-transparent px-1.5 py-0.5 text-sm font-semibold text-runfree-ink outline-none transition hover:bg-gray-100 focus:bg-white focus:ring-2 focus:ring-runfree-magenta disabled:opacity-50"
+                    />
+                    <span className="block truncate px-1.5 text-xs text-gray-500">{r.email}</span>
                   </span>
 
+                  {/* Two standing facts about a person, and only those.
+                      Certified in blue, Subscribed in green, both showing at
+                      once for someone who is both — Andrew: "I like the blue
+                      'certified' next to people's name. I want to make sure...
+                      that a green 'subscribed' is also added. so someone with
+                      both will have both show up there visually."
+
+                      The per-project chips ("viewer on 2", "no projects") are
+                      gone. They answered a different question from the one
+                      this row asks, changed every time anyone joined a
+                      project, and crowded out the two badges that matter.
+                      Which projects someone is on is a property of the
+                      project, and lives in Manage access there. */}
                   <span className="flex flex-wrap items-center gap-1.5">
                     {r.isFramer && (
                       <span className="rounded-full bg-runfree-indigo px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-runfree-navy">
                         Certified
                       </span>
                     )}
-                    {/* Andrew asked whether "client" should split into editor
-                        and viewer. It cannot — those are per-project — but this
-                        is the question underneath it: what does this person
-                        actually hold, and where. */}
-                    {(["admin", "editor", "viewer"] as const)
-                      .filter((role) => (r.roleCounts[role] ?? 0) > 0)
-                      .map((role) => (
-                        <span
-                          key={role}
-                          title={r.projectNames.join(", ")}
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                            role === "admin"
-                              ? "bg-runfree-magentaDeep text-white"
-                              : role === "editor"
-                                ? "bg-runfree-pink text-runfree-magentaDeep"
-                                : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {role} on {r.roleCounts[role]}
-                        </span>
-                      ))}
-                    {r.projectCount === 0 && (
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-300">
-                        No projects
+                    {r.account_role === "framer_subscribed" && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                        Subscribed
                       </span>
                     )}
                   </span>

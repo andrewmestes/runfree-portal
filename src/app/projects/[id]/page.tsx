@@ -1444,14 +1444,17 @@ function AddTask({
     }
   }
 
+  /* This form lives inside the navy What's Important Now card, so every
+     control states its own colours — inheriting produced white text in a
+     white field. */
   const field =
-    "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
+    "w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-runfree-ink placeholder:text-gray-400 outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
 
   if (!open) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="min-h-[44px] w-full rounded-xl border border-dashed border-gray-300 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
+        className="min-h-[44px] w-full rounded-xl border border-dashed border-white/30 text-xs font-semibold text-white/70 transition hover:border-white/60 hover:bg-white/5 hover:text-white"
       >
         + Add homework or a next step
       </button>
@@ -1509,7 +1512,7 @@ function AddTask({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="min-h-[44px] rounded-lg px-3 text-xs font-medium text-gray-500 hover:text-runfree-ink"
+          className="min-h-[44px] rounded-lg px-3 text-xs font-medium text-white/70 transition hover:text-white"
         >
           Cancel
         </button>
@@ -2344,7 +2347,7 @@ function PrioritiesBanner({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={"What should this team do before you meet again?\n\nOne per line reads best:\nFinish the Kingdom Concept draft\nEveryone completes the 5 Eras assessment"}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm leading-relaxed outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm leading-relaxed text-runfree-ink placeholder:text-gray-400 outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
             />
             <div className="flex gap-2">
               <button
@@ -2356,7 +2359,7 @@ function PrioritiesBanner({
               </button>
               <button
                 onClick={() => setEditing(false)}
-                className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-runfree-ink"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition hover:text-white"
               >
                 Cancel
               </button>

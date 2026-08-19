@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import PortalHeader from "@/components/PortalHeader";
 import PortalFooter from "@/components/PortalFooter";
 import { supabase } from "@/lib/supabase";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile, listMyProjects } from "@/lib/auth";
 
 /** Same shape the other pages declare locally; auth.ts exports no type. */
 type Profile = {
@@ -42,6 +42,21 @@ export default function CertificationHubPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [status, setStatus] = useState<"checking" | "ready" | "denied">("checking");
+  /**
+   * Whether to offer a way back to the projects list at all.
+   *
+   * A certified framer who holds no projects has no list to go back to — for
+   * them this hub IS the portal, and "← Your projects" leads to an empty
+   * page that reads as something broken. Andrew: "only people with that level
+   * of permissions would need to see this. otherwise it would just be this
+   * page for them."
+   *
+   * Keyed on actually having a project rather than on the role, because a
+   * subscribed framer between engagements is in the same position as a plain
+   * one, and a plain framer invited onto somebody's project genuinely does
+   * have somewhere to go.
+   */
+  const [hasProjects, setHasProjects] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -54,6 +69,11 @@ export default function CertificationHubPage() {
       }
       const current = (await getCurrentProfile()) as Profile | null;
       setProfile(current);
+      try {
+        setHasProjects(((await listMyProjects()) ?? []).length > 0);
+      } catch {
+        // Not being able to count them is no reason to block the hub.
+      }
       // Same gate the certification pages themselves use.
       setStatus(current?.certification_access || current?.is_staff ? "ready" : "denied");
     })();
@@ -105,7 +125,7 @@ export default function CertificationHubPage() {
         certificationAccess
         section="certification"
         badge
-        backHref="/"
+        backHref={hasProjects ? "/" : undefined}
         backLabel="Your projects"
         eyebrow={firstName ? `Welcome back, ${firstName}` : undefined}
         title="Certified Vision Framer Hub"

@@ -70,6 +70,7 @@ export default function PortalHeader({
   const person = profile ?? (framer ? { full_name: framer.name ?? null, is_staff: !!framer.is_admin } : null);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [certOpen, setCertOpen] = useState(false);
 
   // Escape closes it, matching every other dismissible surface in the portal.
   useEffect(() => {
@@ -111,19 +112,68 @@ export default function PortalHeader({
                 {backLabel || "Back"}
               </a>
             )}
-            {/* The certification content lives in this app now, so these are
-                real links rather than a jump to another deployment. */}
-            {certificationAccess &&
-              CERT_LINKS.map((l) => (
-                <a
-                  key={l.href}
-                  href={l.href}
-                  title={l.title}
-                  className="text-xs font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
+            {/* One door, not four. Handouts / Videos / Books / Guide sat flat
+                beside Help and Admin, so nothing said they were a different
+                thing — and a coach inside a project could not tell the
+                certification library from the project's own navigation.
+                Andrew: "I wanna make sure that we have a very clear and
+                distinct certification side of things where I can very clearly
+                understand if I am a certified person, click here."
+
+                It is a menu rather than a page because these four are the
+                whole surface; a landing page in front of them would be one
+                more click to the same links. */}
+            {certificationAccess && (
+              <div className="relative">
+                <button
+                  onClick={() => setCertOpen((v) => !v)}
+                  aria-expanded={certOpen}
+                  aria-haspopup="true"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
                 >
-                  {l.label}
-                </a>
-              ))}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-runfree-pink">
+                    <circle cx="12" cy="9" r="5" />
+                    <path d="M8.5 13.5 7 21l5-2.5L17 21l-1.5-7.5" />
+                  </svg>
+                  Certification
+                  <span aria-hidden className={`transition-transform ${certOpen ? "rotate-180" : ""}`}>
+                    ▾
+                  </span>
+                </button>
+
+                {certOpen && (
+                  <>
+                    {/* Click-away. Invisible, behind the menu, above the page. */}
+                    <button
+                      aria-hidden
+                      tabIndex={-1}
+                      onClick={() => setCertOpen(false)}
+                      className="fixed inset-0 z-40 cursor-default"
+                    />
+                    <div className="animate-fade absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-black/5">
+                      <p className="border-b border-gray-100 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        Certified Vision Framers
+                      </p>
+                      {CERT_LINKS.map((l) => (
+                        <a
+                          key={l.href}
+                          href={l.href}
+                          onClick={() => setCertOpen(false)}
+                          className="block px-4 py-2.5 text-sm font-semibold text-runfree-ink outline-none transition hover:bg-runfree-pink hover:text-runfree-magentaDeep focus-visible:bg-runfree-pink"
+                        >
+                          {l.label}
+                          {l.title && (
+                            <span className="block text-[11px] font-normal text-gray-500">
+                              {l.title}
+                            </span>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <a
               href="/help"
               className="text-xs font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
@@ -194,17 +244,24 @@ export default function PortalHeader({
 
             <div className="my-2 border-t border-white/10" />
 
-            {certificationAccess &&
-              CERT_LINKS.map((l) => (
-                <a
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="flex min-h-[44px] items-center rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"
-                >
-                  {l.label}
-                </a>
-              ))}
+            {certificationAccess && (
+              <>
+                <p className="px-2 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
+                  Certification
+                </p>
+                {CERT_LINKS.map((l) => (
+                  <a
+                    key={l.href}
+                    href={l.href}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex min-h-[44px] items-center rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"
+                  >
+                    {l.label}
+                  </a>
+                ))}
+                <div className="my-2 border-t border-white/10" />
+              </>
+            )}
 
             <a
               href="/help"

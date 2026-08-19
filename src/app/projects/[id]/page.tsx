@@ -673,6 +673,11 @@ export default function ProjectDetailPage() {
                 <SectionHeading eyebrow="The process" title="Pivvot Vision Framing Process" />
                 <div className="mt-10">
                   <ModuleNav modules={modules} active={activeModule} onSelect={setActiveModule} />
+                  {/* Pinned under the icons, unchanged by the selection. */}
+                  <HandoutPills
+                    extras={(handouts?.extras ?? []).filter((g) => !PREP_HANDOUT.test(g.name))}
+                    onOpen={openHandout}
+                  />
                 </div>
                 <ModulePanel
                   key={activeModule}
@@ -685,16 +690,6 @@ export default function ProjectDetailPage() {
                   handouts={handouts}
                   onOpenHandout={openHandout}
                   thumbs={thumbs}
-                />
-
-                {/* Andrew: "the additional handouts should be part of the
-                    process, not part of the preparation section." The Field
-                    Guide joins them here — "I want 'the process' to look and
-                    feel more like the original for sure, with icons,
-                    handouts, field guide, and videos." */}
-                <ExtraHandouts
-                  extras={(handouts?.extras ?? []).filter((g) => !PREP_HANDOUT.test(g.name))}
-                  onOpen={openHandout}
                 />
 
                 {orphanSections.length > 0 && (
@@ -3001,6 +2996,93 @@ function SheetWalkthrough({
  * The Field Guide leads, because it is the one document that describes the
  * whole engagement rather than one module of it.
  */
+/**
+ * The handouts that belong to the whole process rather than to one tool,
+ * pinned directly under the module icons and unaffected by which module is
+ * selected.
+ *
+ * Andrew: "the vision frame field guide is a little hidden and tucked away,
+ * plus the additional handouts are kinda tucked away. I'm wondering if we can
+ * make that stuff look a little bit more like the certification to where
+ * there's small pills underneath the icons... and they just stay there the
+ * whole time regardless of what section you're clicking on."
+ *
+ * They used to render after the selected module's content, which put them
+ * below a screenful of handouts, videos and charts — reachable, but only if
+ * you already knew to scroll for them. The Field Guide leads and wears the
+ * gradient: it is the one document that describes the entire engagement.
+ *
+ * A group holding one file opens it. A group holding several expands a list
+ * beneath the row, rather than opening a popover that would need its own
+ * dismissal and focus handling for a control this small.
+ */
+function HandoutPills({
+  extras,
+  onOpen,
+}: {
+  extras: HandoutLibrary["extras"];
+  onOpen: (fileId: string, title: string) => void;
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const groups = extras.filter((g) => g.files.length > 0);
+  if (groups.length === 0) return null;
+
+  const isFieldGuide = (name: string) => /field guide/i.test(name);
+  const ordered = [
+    ...groups.filter((g) => isFieldGuide(g.name)),
+    ...groups.filter((g) => !isFieldGuide(g.name)),
+  ];
+  const open = ordered.find((g) => g.id === expanded);
+
+  return (
+    <div className="mt-7">
+      <ul className="flex flex-wrap justify-center gap-2">
+        {ordered.map((g) => {
+          const lead = isFieldGuide(g.name);
+          const single = g.files.length === 1;
+          const on = expanded === g.id;
+          return (
+            <li key={g.id}>
+              <button
+                onClick={() =>
+                  single ? onOpen(g.files[0].id, g.files[0].title) : setExpanded(on ? null : g.id)
+                }
+                aria-expanded={single ? undefined : on}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[38px] ${
+                  lead
+                    ? "bg-runfree-grad-deep text-white shadow-sm hover:opacity-95"
+                    : on
+                      ? "bg-runfree-pink text-runfree-magentaDeep ring-1 ring-runfree-magenta/40"
+                      : "bg-white text-gray-600 ring-1 ring-gray-200 hover:text-runfree-ink hover:ring-runfree-magenta/40"
+                }`}
+              >
+                <span className={lead ? "text-white" : "text-runfree-magentaDeep"}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="M14 3v5h5" />
+                    <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
+                  </svg>
+                </span>
+                {lead ? g.files[0].label || moduleLabel(g.name) : moduleLabel(g.name)}
+                {!single && (
+                  <span className="text-[10px] font-bold tabular-nums opacity-70">
+                    {g.files.length}
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {open && (
+        <div className="animate-fade mt-3 rounded-2xl bg-white p-4 ring-1 ring-gray-200/80">
+          <SheetWalkthrough sheets={open.files} onOpen={onOpen} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExtraHandouts({
   extras,
   onOpen,
@@ -3290,7 +3372,12 @@ function ImageGallery({
           {error}
         </p>
       )}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {/* Three across at most, and one on a phone. Andrew: "For the images
+          in... from our sessions, let's make those a little bigger. maybe do
+          three across rather than four across. and a column for a standard
+          view." A flipchart photographed across a room is unreadable at a
+          quarter of the content width, which is what four columns gave. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {order.map((d, index) => {
         const url = d.image_path ? imageUrls[d.image_path] : undefined;
         const isDragging = dragFrom === index;
@@ -3522,8 +3609,24 @@ function PrepCards({
 }) {
   if (groups.length === 0) return null;
 
+  // Two columns only when there is something to put in both. Key Dates is the
+  // only group in its section, and a fixed two-column grid rendered it at half
+  // width with an empty half beside it — Andrew: "it just looks strange to
+  // have the card only using half of the page and the other half of the key
+  // dates as blank."
+  //
+  // Three or more get a denser grid at desktop width: the cards left over in
+  // Preparation are mostly short (a checklist with two items, an empty upload
+  // slot), so pairing them in wide columns wasted the same space differently.
+  const cols =
+    groups.length === 1
+      ? "grid-cols-1"
+      : groups.length === 2
+        ? "grid-cols-1 lg:grid-cols-2"
+        : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
+
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+    <div className={`grid gap-5 ${cols}`}>
       {groups.map((g) => (
         <PrepCard
           key={g.id}
@@ -3599,7 +3702,11 @@ function PrepCard({
 
       <div className="mt-4 flex-1">
         {ordered.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">
+          /* Compact. Andrew, on Previous Vision Equity and the Preparation
+             Checklist: "Both of those cards, I think, can be quite a bit
+             smaller." An empty card was reserving as much height as a full
+             one, so two empty slots dominated the panel. */
+          <p className="rounded-xl border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
             {canEdit ? "Nothing here yet — add the first one." : "Nothing here yet."}
           </p>
         ) : (
@@ -4175,12 +4282,18 @@ function PrepareSection({
         </div>
       )}
 
+      {/* Orientation videos are the same weight as the reading, so they sit
+          beside it on a wide screen rather than below. Andrew: "it goes into
+          reading and prep work on the left side and then orientation videos
+          on the bottom. I'm not sure structurally if those could be side by
+          side." Two across here rather than three: paired with the cards
+          above, three made each still too small to read the title on. */}
       {videos.length > 0 && (
         <div className="mt-8">
           <h4 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
             Orientation
           </h4>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {videos.map((v) => (
               <VideoCard
                 key={v.id}

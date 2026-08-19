@@ -175,6 +175,9 @@ export default function VideosPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <PortalHeader
+        section="certification"
+        backHref="/certification"
+        backLabel="Certification hub"
         framer={framer}
         onSignOut={handleSignOut}
         title="Training Videos"

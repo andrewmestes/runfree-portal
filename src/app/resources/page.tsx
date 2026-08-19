@@ -228,6 +228,9 @@ export default function ResourcesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <PortalHeader
+        section="certification"
+        backHref="/certification"
+        backLabel="Certification hub"
         framer={framer}
         onSignOut={handleSignOut}
         title="Handouts"

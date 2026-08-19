@@ -55,6 +55,7 @@ import {
 import { extractLoomId } from "@/lib/loom";
 import { MODULE_META, moduleLabel, moduleOrder } from "@/lib/modules";
 import ModuleNav, { type NavModule } from "@/components/ModuleNav";
+import FilePreview, { type PreviewFile } from "@/components/FilePreview";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
@@ -219,6 +220,7 @@ export default function ProjectDetailPage() {
   const [activeModule, setActiveModule] = useState<string>("");
   const [handouts, setHandouts] = useState<HandoutLibrary | null>(null);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<PreviewFile | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -303,41 +305,43 @@ export default function ProjectDetailPage() {
    * swallowed by a popup blocker, because by then the browser no longer
    * attributes it to a user gesture.
    */
-  const openHandout = useCallback(
-    async (fileId: string, title: string) => {
-      const tab = window.open("", "_blank");
-      if (tab) {
-        tab.document.write(
-          `<title>${title.replace(/[<>]/g, "")}</title><p style="font:16px system-ui;padding:2rem;color:#555">Opening ${title.replace(/[<>]/g, "")}…</p>`
-        );
-      }
+  /**
+   * Open a handout in the portal rather than in a new tab.
+   *
+   * The old route popped a blank tab, fetched the bytes, and pointed the tab
+   * at a blob URL. Two problems, both of which Andrew hit:
+   *
+   * 1. A failure left a blank tab with red text on it. The 17.8MB combined
+   *    module handouts were exceeding the function's default 15s cap, so
+   *    every "combined" file failed this way while the small individual
+   *    sheets always worked (the route now sets maxDuration).
+   * 2. It sent you out of the page you were reading. The certification side
+   *    already had the better answer — a preview dialog with Download and
+   *    Close — so this now uses that same component. "can we use the same
+   *    functionality for opening pdfs as the certification portal had."
+   */
+  const fetchHandoutBlobUrl = useCallback(
+    async (fileId: string): Promise<string | null> => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return null;
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session) return;
-
         const res = await fetch(`/api/projects/${projectId}/handouts/file/${fileId}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
-        if (!res.ok) throw new Error(String(res.status));
-
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        if (tab) tab.location.href = url;
-        else window.location.href = url;
-        // Long enough for the viewer to have loaded it; the object would
-        // otherwise be held for the life of the document.
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        if (!res.ok) return null;
+        return URL.createObjectURL(await res.blob());
       } catch {
-        if (tab) {
-          tab.document.body.innerHTML =
-            '<p style="font:16px system-ui;padding:2rem;color:#b00">That handout could not be opened. Please try again.</p>';
-        }
+        return null;
       }
     },
     [projectId]
   );
+
+  const openHandout = useCallback((fileId: string, title: string) => {
+    setPreview({ id: fileId, title, num: null, label: title, sizeBytes: null });
+  }, []);
 
   useEffect(() => {
     load();
@@ -759,6 +763,14 @@ export default function ProjectDetailPage() {
       </main>
 
       <BackToTop />
+
+      {preview && (
+        <FilePreview
+          file={preview}
+          fetchUrl={fetchHandoutBlobUrl}
+          onClose={() => setPreview(null)}
+        />
+      )}
 
       <PortalFooter />
     </div>

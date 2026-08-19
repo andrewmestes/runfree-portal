@@ -147,6 +147,9 @@ export default function GuidePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <PortalHeader
+        section="certification"
+        backHref="/certification"
+        backLabel="Certification hub"
         framer={framer}
         onSignOut={handleSignOut}
         title="Digital Facilitator's Guide"

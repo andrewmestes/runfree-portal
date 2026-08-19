@@ -14,6 +14,15 @@ import {
  * framers allowlist, confirms the requested file is actually inside the shared
  * library folder, then streams the live bytes from Drive.
  */
+/**
+ * The combined module handouts are 8–19MB each, and this route re-lists the
+ * whole Drive library before streaming (that listing IS the authorization
+ * boundary — see below). Next's default cap is 15 seconds, which the big ones
+ * were exceeding: every combined handout failed with "could not be opened"
+ * while the individual sheets, a few hundred KB each, always worked.
+ */
+export const maxDuration = 60;
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ driveId: string }> }

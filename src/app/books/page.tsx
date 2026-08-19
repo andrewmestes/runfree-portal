@@ -211,6 +211,9 @@ export default function BooksPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <PortalHeader
+        section="certification"
+        backHref="/certification"
+        backLabel="Certification hub"
         framer={framer}
         onSignOut={handleSignOut}
         title="Will's Books"

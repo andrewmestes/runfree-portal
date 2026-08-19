@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { MODULE_META, moduleLabel } from "@/lib/modules";
+import { MODULE_META, isProcessModule, moduleLabel } from "@/lib/modules";
 
 export type NavModule = {
   /** The raw section string, e.g. "Mod #2 CROWD CLOUD". Used as the key. */
@@ -100,17 +100,47 @@ export default function ModuleNav({
                         isActive ? "opacity-100" : "opacity-0 group-hover:opacity-70"
                       }`}
                     />
-                    <Image
-                      src={`/brand/modules/${m.order}.png`}
-                      alt=""
-                      width={76}
-                      height={76}
-                      className={`relative h-[72px] w-[72px] object-contain transition duration-300 ${
-                        isActive
-                          ? ""
-                          : "opacity-70 saturate-50 group-hover:opacity-100 group-hover:saturate-100"
-                      }`}
-                    />
+                    {/* Only the six process tools have an icon. The extra
+                        entries — the Field Guide at 0, Additional and Combined
+                        Handouts after 6 — were requesting /brand/modules/0.png
+                        and 7.png, which do not exist, so the certification
+                        handouts page rendered three broken-image glyphs in the
+                        middle of the track. They get a folder mark instead. */}
+                    {isProcessModule(m.order) ? (
+                      <Image
+                        src={`/brand/modules/${m.order}.png`}
+                        alt=""
+                        width={76}
+                        height={76}
+                        className={`relative h-[72px] w-[72px] object-contain transition duration-300 ${
+                          isActive
+                            ? ""
+                            : "opacity-70 saturate-50 group-hover:opacity-100 group-hover:saturate-100"
+                        }`}
+                      />
+                    ) : (
+                      <span
+                        className={`relative grid h-[72px] w-[72px] place-items-center rounded-full transition duration-300 ${
+                          isActive
+                            ? "bg-runfree-grad text-white"
+                            : "bg-white text-runfree-navy/60 ring-1 ring-gray-200 group-hover:text-runfree-magentaDeep group-hover:ring-runfree-magenta/40"
+                        }`}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-8 w-8"
+                          aria-hidden="true"
+                        >
+                          <path d="M14 3v5h5" />
+                          <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
+                        </svg>
+                      </span>
+                    )}
                   </span>
 
                   <span

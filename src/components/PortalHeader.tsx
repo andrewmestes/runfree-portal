@@ -47,6 +47,17 @@ type Props = {
  * So projects stay the root and these sit alongside it, rather than the old
  * arrangement where certification was a separate deployment behind a ↗.
  */
+/** "Andrew Estes" -> "AE". Empty for a profile with no name yet. */
+function initialsOf(name?: string | null): string {
+  if (!name) return "";
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
 const CERT_LINKS: { href: string; label: string; title?: string }[] = [
   { href: "/resources", label: "Handouts" },
   { href: "/videos", label: "Videos" },
@@ -71,6 +82,7 @@ export default function PortalHeader({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [certOpen, setCertOpen] = useState(false);
+  const [meOpen, setMeOpen] = useState(false);
 
   // Escape closes it, matching every other dismissible surface in the portal.
   useEffect(() => {
@@ -103,15 +115,6 @@ export default function PortalHeader({
               logo already goes home, which is what people try first. Back
               links stay, because those are contextual and genuinely needed. */}
           <div className="ml-auto hidden shrink-0 items-center gap-4 text-sm sm:flex">
-            {backHref && (
-              <a
-                href={backHref}
-                className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white/70 transition hover:text-white"
-              >
-                <span aria-hidden>←</span>
-                {backLabel || "Back"}
-              </a>
-            )}
             {/* One door, not four. Handouts / Videos / Books / Guide sat flat
                 beside Help and Admin, so nothing said they were a different
                 thing — and a coach inside a project could not tell the
@@ -188,15 +191,62 @@ export default function PortalHeader({
                 Admin
               </a>
             )}
-            {person?.full_name && (
-              <span className="font-medium text-white/60">{person?.full_name}</span>
-            )}
-            <button
-              onClick={onSignOut}
-              className="rounded-lg px-3 py-1.5 font-medium text-white/80 outline-none ring-1 ring-white/25 transition hover:text-white hover:ring-white/50 focus-visible:ring-2 focus-visible:ring-white"
-            >
-              Sign out
-            </button>
+
+            {/* One control for "me": the name, the account page and signing
+                out. They were three separate items in the bar, which is what
+                made it read as a row of unrelated links. The name is also now
+                a route to somewhere — /account existed but nothing linked to
+                it. */}
+            <div className="relative">
+              <button
+                onClick={() => setMeOpen((v) => !v)}
+                aria-expanded={meOpen}
+                aria-haspopup="true"
+                aria-label="Your account"
+                className="flex items-center gap-2 rounded-full p-0.5 pr-2 outline-none ring-1 ring-white/20 transition hover:ring-white/50 focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-runfree-grad text-xs font-bold text-white">
+                  {initialsOf(person?.full_name) || "?"}
+                </span>
+                <span aria-hidden className={`text-[10px] text-white/70 transition-transform ${meOpen ? "rotate-180" : ""}`}>
+                  ▾
+                </span>
+              </button>
+
+              {meOpen && (
+                <>
+                  <button
+                    aria-hidden
+                    tabIndex={-1}
+                    onClick={() => setMeOpen(false)}
+                    className="fixed inset-0 z-40 cursor-default"
+                  />
+                  <div className="animate-fade absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-black/5">
+                    <a
+                      href="/account"
+                      onClick={() => setMeOpen(false)}
+                      className="block border-b border-gray-100 px-4 py-3 outline-none transition hover:bg-runfree-pink focus-visible:bg-runfree-pink"
+                    >
+                      <span className="block text-sm font-bold text-runfree-ink">
+                        {person?.full_name || "Your account"}
+                      </span>
+                      <span className="block text-[11px] text-gray-500">
+                        View and edit your details
+                      </span>
+                    </a>
+                    <button
+                      onClick={() => {
+                        setMeOpen(false);
+                        onSignOut();
+                      }}
+                      className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-runfree-ink outline-none transition hover:bg-gray-50 focus-visible:bg-gray-50"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* 44px square: Apple's minimum comfortable tap target. */}
@@ -294,6 +344,32 @@ export default function PortalHeader({
           </nav>
         )}
 
+      </div>
+
+      {/* Back sits on its own line, below the bar and hard left.
+          Andrew: "Maybe a different place for Your Projects? not sure if that
+          should be tucked under a profile submenu, or removed from the header
+          and put directly underneath it on the top left."
+
+          Not the profile menu: this is where you ARE, not who you are, and a
+          way back that takes two clicks and a guess is not a way back. On its
+          own line it reads as a breadcrumb, which is what it always was — and
+          the bar above it is left with three things instead of six. */}
+      {backHref && (
+        <div className="border-b border-white/10 bg-runfree-navy">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <a
+              href={backHref}
+              className="inline-flex items-center gap-1.5 py-2.5 text-xs font-bold uppercase tracking-wider text-white/70 outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <span aria-hidden>←</span>
+              {backLabel || "Back"}
+            </a>
+          </div>
+        </div>
+      )}
+
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Not rendered at all when the page has its own hero. Hiding it with
             a class still left an empty <h1> in the accessibility tree, so the
             project page announced two headings — one of them blank — and its

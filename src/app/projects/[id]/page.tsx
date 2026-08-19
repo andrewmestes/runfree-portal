@@ -556,6 +556,7 @@ export default function ProjectDetailPage() {
       <ChurchHero
         detail={detail}
         logoUrl={detail.logoPath ? imageUrls[detail.logoPath] : undefined}
+        imageUrls={imageUrls}
         canManage={canManage}
         accessToken={accessToken}
         onChanged={refresh}
@@ -892,31 +893,42 @@ function ChurchTeamInfo({
               </p>
             )}
 
+            {/* Columns, not an inline flow. Andrew: "can we align the roles
+                and emails vertically in columns to clean it up?" Names, roles
+                and addresses are three different kinds of fact, and running
+                them together on one baseline made a twelve-person roster read
+                as a wall. On a phone they stack, where columns that narrow
+                would truncate all three. */}
             {contacts.length > 0 && (
               <ul className="divide-y divide-gray-100">
                 {contacts.map((c) => (
-                  <li key={c.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2.5">
-                    <span className="text-sm font-semibold text-runfree-ink">{c.full_name}</span>
-                    {c.title && (
-                      <span className="rounded-full bg-runfree-pink px-2 py-0.5 text-[11px] font-medium text-runfree-magentaDeep">
-                        {c.title}
-                      </span>
-                    )}
-                    {c.email && (
+                  <li
+                    key={c.id}
+                    className="grid grid-cols-1 items-center gap-x-4 gap-y-0.5 py-2.5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto]"
+                  >
+                    <span className="truncate text-sm font-semibold text-runfree-ink">
+                      {c.full_name}
+                    </span>
+                    <span className="truncate text-xs text-gray-500">{c.title || "—"}</span>
+                    {c.email ? (
                       <a
                         href={`mailto:${c.email}`}
-                        className="text-xs text-gray-500 hover:text-runfree-magentaDeep hover:underline"
+                        className="truncate text-xs text-gray-500 transition hover:text-runfree-magentaDeep hover:underline"
                       >
                         {c.email}
                       </a>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
                     )}
-                    {canEdit && (
+                    {canEdit ? (
                       <button
                         onClick={() => remove(c)}
-                        className="ml-auto rounded-md px-2 py-1 text-[11px] font-medium text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        className="justify-self-start rounded-md px-2 py-1.5 text-[11px] font-medium text-gray-400 transition hover:bg-red-50 hover:text-red-600 sm:justify-self-end"
                       >
                         Remove
                       </button>
+                    ) : (
+                      <span />
                     )}
                   </li>
                 ))}
@@ -1152,18 +1164,23 @@ function ProjectToolbar({
                 than a pale tint. Andrew: "the tabs themselves could be a
                 little bit more prominent and colorful." These are the primary
                 navigation of the whole page now, so they are sized like it. */}
-            <ul className="-mx-1 flex gap-1 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {/* Full width on desktop: each tab takes an equal share of the
+                bar rather than huddling at the left. Andrew asked twice for
+                these to be bigger, so they are sized as the primary
+                navigation they now are. They still scroll on a phone, where
+                five equal columns would be five unreadable slivers. */}
+            <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-1 [scrollbar-width:none] sm:gap-2 [&::-webkit-scrollbar]:hidden">
               {items.map((it) => {
                 const on = active === it.key;
                 return (
-                  <li key={it.key}>
+                  <li key={it.key} className="sm:flex-1">
                     <button
                       onClick={() => onSelect(it.key)}
                       aria-current={on ? "true" : undefined}
-                      className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition duration-200 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[42px] ${
+                      className={`inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 py-3 text-[15px] font-bold transition duration-200 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[46px] ${
                         on
-                          ? "bg-runfree-grad text-white shadow-sm"
-                          : "text-gray-600 hover:bg-white hover:text-runfree-ink hover:shadow-sm"
+                          ? "bg-runfree-grad text-white shadow-md"
+                          : "bg-white text-gray-600 shadow-sm ring-1 ring-gray-200 hover:text-runfree-ink hover:ring-runfree-magenta/40"
                       }`}
                     >
                       {it.label}
@@ -1282,7 +1299,7 @@ function TaskList({
         <li
           key={t.id}
           className={`group/task flex flex-wrap items-start gap-x-3 gap-y-1 rounded-xl px-3 py-2.5 transition ${
-            t.is_done ? "bg-emerald-50/60" : "bg-white ring-1 ring-gray-200/80"
+            t.is_done ? "bg-runfree-pink/50" : "bg-white ring-1 ring-gray-200/80"
           }`}
         >
           <button
@@ -1291,7 +1308,7 @@ function TaskList({
             aria-label={t.is_done ? `Mark "${t.title}" not done` : `Mark "${t.title}" done`}
             className={`relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition before:absolute before:-inset-2 before:content-[''] ${
               t.is_done
-                ? "border-emerald-500 bg-emerald-500 text-white"
+                ? "border-runfree-magenta bg-runfree-magenta text-white"
                 : "border-gray-300 bg-white hover:border-runfree-magenta"
             }`}
           >
@@ -1520,6 +1537,39 @@ function ProjectAccess({
         : 1
   );
 
+  const haveAccess = new Set(
+    detail.members.map((m) => m.email.trim().toLowerCase()).filter(Boolean)
+  );
+  const rosterWithoutAccess = detail.contacts.filter(
+    (c) => !c.email || !haveAccess.has(c.email.trim().toLowerCase())
+  );
+
+  /** Grant a rostered person access as a viewer, using the email we hold. */
+  async function grantFromRoster(c: ChurchContact) {
+    if (!accessToken || !c.email) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ email: c.email.trim(), role: "viewer", orgRole: c.title }),
+      });
+      const body = await res.json();
+      if (!res.ok) setMessage(body.error || `Couldn't give ${c.full_name} access`);
+      else {
+        setMessage(
+          body.invited
+            ? `Invited ${c.full_name} — they have been emailed.`
+            : `${c.full_name} now has access.`
+        );
+        onChanged();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!accessToken || !email.trim()) return;
@@ -1636,6 +1686,63 @@ function ProjectAccess({
                 </li>
               ))}
             </ul>
+
+            {/* The church's own roster, and a one-click way to let them in.
+                Andrew: "the Team for a church within a project should also
+                have access to a project. they should show up in 'manage
+                access'."
+
+                Being on the roster still grants nothing by itself — that
+                separation is the whole point of church_contacts — but the
+                person deciding who gets access should not have to retype an
+                email they already gave us. Anyone whose address already holds
+                access is filtered out, so this list is exactly "the rest of
+                the team". */}
+            {rosterWithoutAccess.length > 0 && (
+              <div className="mt-5 border-t border-gray-100 pt-4">
+                <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                  On the church roster, no access yet
+                </h4>
+                <ul className="mt-2 divide-y divide-gray-100">
+                  {rosterWithoutAccess.map((c) => (
+                    <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-runfree-indigo text-[10px] font-bold text-runfree-navy">
+                        {c.full_name
+                          .split(/\s+/)
+                          .slice(0, 2)
+                          .map((w) => w[0])
+                          .join("")
+                          .toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-runfree-ink">
+                          {c.full_name}
+                        </span>
+                        <span className="block truncate text-xs text-gray-500">
+                          {c.email || c.title || "No email on the roster"}
+                        </span>
+                      </span>
+                      {c.email ? (
+                        <button
+                          onClick={() => grantFromRoster(c)}
+                          disabled={busy}
+                          className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink disabled:opacity-50"
+                        >
+                          Give access
+                        </button>
+                      ) : (
+                        <span
+                          title="Add an email to their roster entry first"
+                          className="shrink-0 text-[11px] text-gray-400"
+                        >
+                          Needs an email
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="mt-3">
               {adding ? (
@@ -1762,12 +1869,15 @@ function Chevron({ open }: { open: boolean }) {
 function ChurchHero({
   detail,
   logoUrl,
+  imageUrls,
   canManage,
   accessToken,
   onChanged,
 }: {
   detail: ProjectDetail;
   logoUrl?: string;
+  /** Signed URLs, so the access stack can show real faces. */
+  imageUrls?: Record<string, string>;
   canManage: boolean;
   accessToken: string | null;
   onChanged: () => void;
@@ -1926,17 +2036,58 @@ function ChurchHero({
                 >
                   Edit details
                 </button>
+                {/* A stack of faces rather than a labelled button. Andrew:
+                    "can we make the 'manage access' look a little more like
+                    the screenshots I sent? We could potentially remove the
+                    name 'manage access' until it's clicked on."
+
+                    Who is on the project is the information; "manage access"
+                    is only the verb for changing it, and it earns its words
+                    inside the dialog rather than in the header. The accessible
+                    name still says what the control does, so a screen reader
+                    hears the verb a sighted user infers from the faces. */}
                 <button
                   onClick={() => setShowAccess(true)}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-runfree-ink shadow-sm ring-1 ring-gray-200 outline-none transition hover:ring-runfree-magenta/40 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+                  aria-label={`Manage access — ${detail.members.length} ${
+                    detail.members.length === 1 ? "person has" : "people have"
+                  } access`}
+                  className="group inline-flex items-center rounded-full p-0.5 outline-none transition hover:bg-white focus-visible:ring-2 focus-visible:ring-runfree-magenta"
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-runfree-magentaDeep">
-                    <rect x="4" y="10" width="16" height="10" rx="2" />
-                    <path d="M8 10V7a4 4 0 1 1 8 0v3" />
-                  </svg>
-                  Manage access
-                  <span className="rounded-full bg-gray-100 px-1.5 text-[10px] font-bold tabular-nums text-gray-600">
-                    {detail.members.length}
+                  <span className="flex -space-x-2">
+                    {detail.members.slice(0, 5).map((m) => {
+                      const url = m.avatarPath ? imageUrls?.[m.avatarPath] : undefined;
+                      return url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={m.profileId}
+                          src={url}
+                          alt=""
+                          className="h-8 w-8 rounded-full object-cover ring-2 ring-white"
+                        />
+                      ) : (
+                        <span
+                          key={m.profileId}
+                          className="grid h-8 w-8 place-items-center rounded-full bg-runfree-indigo text-[10px] font-bold text-runfree-navy ring-2 ring-white"
+                        >
+                          {(m.fullName || m.email)
+                            .split(/\s+/)
+                            .slice(0, 2)
+                            .map((w) => w[0])
+                            .join("")
+                            .toUpperCase()}
+                        </span>
+                      );
+                    })}
+                    {detail.members.length > 5 && (
+                      <span className="grid h-8 w-8 place-items-center rounded-full bg-runfree-grad text-[10px] font-bold text-white ring-2 ring-white">
+                        +{detail.members.length - 5}
+                      </span>
+                    )}
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-gray-400 ring-2 ring-white transition group-hover:text-runfree-magentaDeep">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="h-3.5 w-3.5">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    </span>
                   </span>
                 </button>
               </div>
@@ -2063,6 +2214,26 @@ function PrioritiesBanner({
   const [draft, setDraft] = useState(detail.priorities ?? "");
   const [busy, setBusy] = useState(false);
 
+  // Collapsible, and it remembers. Andrew: "as I scroll through tabs, the
+  // 'what's important now' block is pretty large and requires me to scroll a
+  // bit much... Especially in 'the process' tab, I want the process icons to
+  // be the main focus."
+  //
+  // It stays above every panel, so its height is paid on every screen — a
+  // coach who has read it this morning should be able to fold it away and
+  // have it stay folded. Open by default: a church seeing the project for the
+  // first time should not have to find it.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    setCollapsed(window.localStorage.getItem("rf-win-collapsed") === "1");
+  }, []);
+  function toggle() {
+    setCollapsed((v) => {
+      window.localStorage.setItem("rf-win-collapsed", v ? "0" : "1");
+      return !v;
+    });
+  }
+
   async function save() {
     if (!accessToken) return;
     setBusy(true);
@@ -2091,30 +2262,56 @@ function PrioritiesBanner({
   return (
     /* No top margin: the grid that pairs this with the status card owns the
        spacing, and a margin here pushed one card down relative to the other. */
-    <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-runfree-magenta/25">
+    <section className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
       <div className="h-1.5 bg-runfree-grad" />
-      <div className="p-6 sm:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
-              Coming up
-            </p>
-            <h2 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-runfree-ink">
-              What&rsquo;s Important Now
-            </h2>
-          </div>
-          {canEdit && !editing && (
+      <div className="px-6 py-5 sm:px-7">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            onClick={toggle}
+            aria-expanded={!collapsed}
+            className="group flex min-w-0 items-center gap-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          >
+            <span
+              aria-hidden
+              className={`text-white/50 transition-transform duration-200 group-hover:text-white ${
+                collapsed ? "" : "rotate-90"
+              }`}
+            >
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="M7.5 4.5 13 10l-5.5 5.5" />
+              </svg>
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
+                Coming up
+              </span>
+              <span className="block font-display text-xl font-extrabold tracking-tight sm:text-2xl">
+                What&rsquo;s Important Now
+              </span>
+            </span>
+            {collapsed && (open.length > 0 || detail.priorities) && (
+              <span className="ml-1 shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white/90">
+                {open.length > 0
+                  ? `${open.length} open`
+                  : `${detail.priorities!.split("\n").filter((l) => l.trim()).length}`}
+              </span>
+            )}
+          </button>
+          {canEdit && !editing && !collapsed && (
             <button
               onClick={() => {
                 setDraft(detail.priorities ?? "");
                 setEditing(true);
               }}
-              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink"
+              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-white/25 transition hover:bg-white/10 hover:text-white"
             >
               {detail.priorities ? "Update" : "Set priorities"}
             </button>
           )}
         </div>
+
+        {!collapsed && (
+        <>
 
         {editing ? (
           <div className="mt-4 space-y-3">
@@ -2155,18 +2352,16 @@ function PrioritiesBanner({
                   <li key={i} className="flex items-start gap-3">
                     <span
                       aria-hidden
-                      className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-runfree-magenta"
+                      className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-runfree-pink"
                     />
-                    <span className="text-[15px] leading-relaxed text-runfree-ink">{line}</span>
+                    <span className="text-[15px] leading-relaxed text-white/90">{line}</span>
                   </li>
                 ))}
             </ul>
-            {updated && (
-              <p className="mt-4 text-xs text-gray-400">Updated {updated}</p>
-            )}
+            {updated && <p className="mt-4 text-xs text-white/45">Updated {updated}</p>}
           </>
         ) : detail.tasks.length === 0 ? (
-          <p className="mt-4 rounded-xl border border-dashed border-gray-300 py-8 text-center text-sm text-gray-400">
+          <p className="mt-4 rounded-xl border border-dashed border-white/25 py-6 text-center text-sm text-white/55">
             Nothing set yet. This is the first thing your team sees — use it to
             say what matters this month.
           </p>
@@ -2188,7 +2383,7 @@ function PrioritiesBanner({
 
             {done.length > 0 && (
               <details className="group">
-                <summary className="cursor-pointer list-none text-xs font-semibold text-gray-400 hover:text-runfree-ink">
+                <summary className="cursor-pointer list-none text-xs font-semibold text-white/50 transition hover:text-white">
                   {done.length} finished
                 </summary>
                 <div className="mt-2">
@@ -2213,6 +2408,8 @@ function PrioritiesBanner({
               />
             )}
           </div>
+        )}
+        </>
         )}
       </div>
     </section>
@@ -3479,6 +3676,7 @@ function PrepCards({
   accessToken,
   fileUrls,
   onChanged,
+  asRows = false,
 }: {
   groups: PrepGroup[];
   items: PrepItem[];
@@ -3487,18 +3685,48 @@ function PrepCards({
   accessToken: string | null;
   fileUrls: Record<string, string>;
   onChanged: () => void;
+  /** Stacked collapsible rows instead of a card grid. See below. */
+  asRows?: boolean;
 }) {
   if (groups.length === 0) return null;
 
-  // Two columns only when there is something to put in both. Key Dates is the
-  // only group in its section, and a fixed two-column grid rendered it at half
-  // width with an empty half beside it — Andrew: "it just looks strange to
-  // have the card only using half of the page and the other half of the key
-  // dates as blank."
+  // Rows, stacked, when the caller asks — Preparation does.
   //
-  // Three or more get a denser grid at desktop width: the cards left over in
-  // Preparation are mostly short (a checklist with two items, an empty upload
-  // slot), so pairing them in wide columns wasted the same space differently.
+  // Side-by-side cards only work when the cards are a similar size. In
+  // Preparation they never are: Previous Vision Equity and the Preparation
+  // Checklist are usually empty while Reading & Pre-Work carries five items
+  // with paragraphs of instruction, so a three-column grid produced one very
+  // tall column beside two stubs and a screen of white space. Andrew: "the
+  // 'prepare your team' section isn't working well. try and rethink that.
+  // maybe a collapsable list of rows."
+  //
+  // As rows each group takes exactly the height it needs, and an empty one
+  // costs a single line instead of a column.
+  if (asRows) {
+    return (
+      <div className="space-y-3">
+        {groups.map((g) => (
+          <PrepCard
+            key={g.id}
+            group={g}
+            items={items.filter((i) => i.group_id === g.id)}
+            projectId={projectId}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            fileUrls={fileUrls}
+            onChanged={onChanged}
+            asRow
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Elsewhere, cards — but never a fixed column count. Key Dates is the only
+  // group in its section, and a two-column grid rendered it at half width
+  // with an empty half beside it: "it just looks strange to have the card
+  // only using half of the page and the other half of the key dates as
+  // blank."
   const cols =
     groups.length === 1
       ? "grid-cols-1"
@@ -3532,6 +3760,7 @@ function PrepCard({
   accessToken,
   fileUrls,
   onChanged,
+  asRow = false,
 }: {
   group: PrepGroup;
   items: PrepItem[];
@@ -3540,8 +3769,13 @@ function PrepCard({
   accessToken: string | null;
   fileUrls: Record<string, string>;
   onChanged: () => void;
+  /** A collapsible row rather than a card in a grid. */
+  asRow?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
+  // A row opens when it has something to show. An empty group stays shut —
+  // it is a placeholder, and three shut placeholders cost three lines.
+  const [open, setOpen] = useState(items.length > 0);
 
   // Dates read as a calendar, not as an entry log: soonest first, with
   // undated rows last rather than heading the list with blanks.
@@ -3557,6 +3791,109 @@ function PrepCard({
 
   const done = items.filter((i) => i.is_done).length;
 
+  const counter = group.kind === "checklist" && items.length > 0 && (
+    <span
+      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
+        done === items.length
+          ? "bg-runfree-pink text-runfree-magentaDeep"
+          : "bg-gray-100 text-gray-500"
+      }`}
+    >
+      {done}/{items.length}
+    </span>
+  );
+
+  if (asRow) {
+    return (
+      <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="group flex w-full items-center gap-3 px-5 py-4 text-left outline-none transition hover:bg-runfree-indigo/30 focus-visible:bg-runfree-indigo/30"
+        >
+          <span
+            aria-hidden
+            className={`shrink-0 text-gray-400 transition-transform duration-200 group-hover:text-runfree-magentaDeep ${
+              open ? "rotate-90" : ""
+            }`}
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="M7.5 4.5 13 10l-5.5 5.5" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-semibold tracking-tight text-runfree-ink">
+              {group.title}
+            </span>
+            {group.description && (
+              <span className="mt-0.5 block truncate text-xs text-gray-500">
+                {group.description}
+              </span>
+            )}
+          </span>
+          {counter}
+          {!counter && items.length > 0 && (
+            <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-gray-500">
+              {items.length}
+            </span>
+          )}
+        </button>
+
+        {open && (
+          <div className="border-t border-gray-100 px-5 py-4">
+            {ordered.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
+                {canEdit ? "Nothing here yet — add the first one." : "Nothing here yet."}
+              </p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {ordered.map((item) => (
+                  <PrepRow
+                    key={item.id}
+                    item={item}
+                    group={group}
+                    projectId={projectId}
+                    canEdit={canEdit}
+                    accessToken={accessToken}
+                    fileUrl={item.file_path ? fileUrls[item.file_path] : undefined}
+                    onChanged={onChanged}
+                  />
+                ))}
+              </ul>
+            )}
+
+            {canEdit &&
+              (adding ? (
+                <div className="mt-3">
+                  <PrepItemForm
+                    group={group}
+                    projectId={projectId}
+                    accessToken={accessToken}
+                    siblings={items}
+                    onDone={() => {
+                      setAdding(false);
+                      onChanged();
+                    }}
+                    onCancel={() => setAdding(false)}
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setAdding(true);
+                    setOpen(true);
+                  }}
+                  className="mt-3 w-full rounded-xl border border-dashed border-gray-300 py-2.5 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
+                >
+                  + Add {prepNoun(group.kind)}
+                </button>
+              ))}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section className="flex flex-col rounded-2xl bg-white p-5 ring-1 ring-gray-200/80 transition hover:ring-gray-300 sm:p-6">
       <header className="flex items-start justify-between gap-3">
@@ -3568,17 +3905,7 @@ function PrepCard({
             <p className="mt-1 text-xs leading-relaxed text-gray-500">{group.description}</p>
           )}
         </div>
-        {group.kind === "checklist" && items.length > 0 && (
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
-              done === items.length
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-gray-100 text-gray-500"
-            }`}
-          >
-            {done}/{items.length}
-          </span>
-        )}
+        {counter}
       </header>
 
       <div className="mt-4 flex-1">
@@ -3723,7 +4050,7 @@ function PrepRow({
           aria-label={item.is_done ? `Mark "${item.title}" not done` : `Mark "${item.title}" done`}
           className={`relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition before:absolute before:-inset-2 before:content-[''] ${
             item.is_done
-              ? "border-emerald-500 bg-emerald-500 text-white"
+              ? "border-runfree-magenta bg-runfree-magenta text-white"
               : "border-gray-300 bg-white hover:border-runfree-magenta"
           } ${canEdit ? "" : "cursor-default opacity-70"}`}
         >
@@ -3794,7 +4121,7 @@ function PrepRow({
             </a>
           )}
           {item.is_private && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+            <span className="inline-flex items-center gap-1 rounded-full bg-runfree-indigo px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-runfree-navy">
               Private
             </span>
           )}
@@ -4159,6 +4486,7 @@ function PrepareSection({
             accessToken={accessToken}
             fileUrls={fileUrls}
             onChanged={onChanged}
+            asRows
           />
         </div>
       )}

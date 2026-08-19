@@ -104,6 +104,7 @@ export default function CertificationHubPage() {
         onSignOut={handleSignOut}
         certificationAccess
         section="certification"
+        badge
         backHref="/"
         backLabel="Your projects"
         eyebrow={firstName ? `Welcome back, ${firstName}` : undefined}

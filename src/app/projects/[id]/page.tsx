@@ -254,25 +254,7 @@ export default function ProjectDetailPage() {
       // Real Loom stills, resolved server-side. Fired after the render like
       // the handouts: a video card is usable without its picture, and waiting
       // on an external provider before showing anything is the wrong trade.
-      const videoUrls = result.resources
-        .filter((r) => r.kind === "video" && r.external_url)
-        .map((r) => r.external_url!)
-        .concat(
-          result.sessions.map((x) => x.recording_url).filter((u): u is string => !!u)
-        );
-      if (videoUrls.length > 0) {
-        fetch("/api/loom-thumbnails", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ urls: videoUrls }),
-        })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d) => d?.thumbnails && setThumbs(d.thumbnails))
-          .catch(() => {});
-      }
+      loadThumbs(result, session.access_token);
 
       // Handouts come from Drive and are the slowest part of the page, so
       // they load after the render rather than blocking it — a module shows
@@ -375,12 +357,42 @@ export default function ProjectDetailPage() {
     router.replace("/auth/login");
   }
 
+  /**
+   * Loom stills for every video on the page, resolved server-side.
+   *
+   * Shared by load() and refresh() on purpose. It used to live inside load()
+   * only, so a recording added through the session form had no thumbnail
+   * until the page was reloaded — the same drift that once left prep-item
+   * files unsigned, and the reason signablePaths() exists. Anything both
+   * paths need belongs in a function both paths call.
+   */
+  async function loadThumbs(result: ProjectDetail, token: string) {
+    const videoUrls = result.resources
+      .filter((r) => r.kind === "video" && r.external_url)
+      .map((r) => r.external_url!)
+      .concat(result.sessions.map((x) => x.recording_url).filter((u): u is string => !!u));
+    if (videoUrls.length === 0) return;
+    try {
+      const res = await fetch("/api/loom-thumbnails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ urls: videoUrls }),
+      });
+      if (!res.ok) return;
+      const d = await res.json();
+      if (d?.thumbnails) setThumbs((prev) => ({ ...prev, ...d.thumbnails }));
+    } catch {
+      // A card is usable without its picture.
+    }
+  }
+
   async function refresh() {
     if (!accessToken) return;
     const result = await getProjectDetail(accessToken, projectId);
     if (!result) return;
     setDetail(result);
     setImageUrls(await getSignedImageUrls(accessToken, signablePaths(result)));
+    loadThumbs(result, accessToken);
   }
 
   if (status === "checking") return <PageLoader label="Loading your project…" />;
@@ -857,9 +869,9 @@ function ChurchTeamInfo({
             collapsible. Let's just go ahead and... when they click on the
             team tab, it just shows everybody in the team." Behind a fold it
             was one more click on a tab that exists to show these people. */}
-        <div className="flex w-full items-center gap-3.5 border-b border-gray-100 px-5 py-4">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-runfree-indigo text-runfree-navy">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-[18px] w-[18px]" strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex w-full items-center gap-3.5 bg-runfree-indigo/50 px-5 py-4">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-runfree-grad text-white shadow-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-5 w-5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 19v-1.5a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3V19" />
               <circle cx="10" cy="8" r="3" />
               <path d="M20 19v-1.5a3 3 0 0 0-2.25-2.9M15.5 5.2a3 3 0 0 1 0 5.6" />
@@ -867,11 +879,11 @@ function ChurchTeamInfo({
           </span>
 
           <span className="min-w-0 flex-1">
-            <span className="block font-display text-base font-bold text-runfree-ink">
-              Church Team
+            <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
+              Who you&rsquo;re working with
             </span>
-            <span className="block text-xs text-gray-500">
-              Names and titles. Portal access is granted separately.
+            <span className="block font-display text-xl font-extrabold tracking-tight text-runfree-ink">
+              Church Team
             </span>
           </span>
 
@@ -4109,13 +4121,13 @@ function PrepRow({
         )}
 
         {group.kind === "checklist" && item.due_on && (
-          <p className="mt-1 text-[11px] font-medium text-gray-400">
+          <p className="mt-1 text-[11px] font-semibold text-runfree-magentaDeep">
             Due {formatSessionDate(item.due_on)}
           </p>
         )}
 
         {group.kind === "dates" && item.end_on && item.end_on !== item.due_on && (
-          <p className="mt-1 text-[11px] font-medium text-gray-400">
+          <p className="mt-1 text-[11px] font-semibold text-runfree-navy">
             through {formatSessionDate(item.end_on)}
           </p>
         )}
@@ -4211,15 +4223,17 @@ function DateTile({ date }: { date: string | null }) {
 
   return (
     <div
-      className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-center leading-none ${
-        past ? "bg-gray-100 text-gray-400" : "bg-runfree-grad-deep text-white"
+      className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-center leading-none ${
+        past
+          ? "bg-runfree-indigo text-runfree-navy ring-1 ring-runfree-navy/10"
+          : "bg-runfree-grad text-white shadow-sm"
       }`}
     >
       <div>
-        <div className="text-[9px] font-bold uppercase tracking-wider opacity-80">
+        <div className="text-[9px] font-extrabold uppercase tracking-wider">
           {parsed?.toLocaleDateString(undefined, { month: "short" })}
         </div>
-        <div className="text-sm font-bold tabular-nums">{d}</div>
+        <div className="text-base font-extrabold tabular-nums">{d}</div>
       </div>
     </div>
   );
@@ -4905,7 +4919,7 @@ function SessionRow({
             <img
               src={thumb}
               alt=""
-              className="hidden h-11 w-20 shrink-0 rounded-lg object-cover ring-1 ring-gray-200 sm:block"
+              className="hidden h-14 w-24 shrink-0 rounded-lg object-cover ring-1 ring-gray-200 sm:block"
             />
           ) : session.recording_url ? (
             <span className="rounded-full bg-runfree-pink px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
@@ -5280,8 +5294,13 @@ function TeamSection({
           template "team_bio" rows are gone (migration 019): they duplicated
           anyone who was also a member, and a string in a resources table has
           no face, no address and nothing to click. */}
-      <h3 className="mt-12 font-display text-base font-bold text-runfree-ink">Your RunFree Team</h3>
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Same heading style as "Your Team" above it. Andrew: "I like the size
+          of the title, your team. I want you to make the... your run free
+          team the same style of header." */}
+      <div className="mt-14">
+        <SectionHeading eyebrow="Working alongside you" title="Your RunFree Team" />
+      </div>
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {runfree.map((m) => (
           <div key={m.profileId}>
             <PersonCard

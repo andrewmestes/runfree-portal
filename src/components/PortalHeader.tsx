@@ -83,6 +83,7 @@ export default function PortalHeader({
   showTitleBlock = true,
   certificationAccess = false,
   section = "projects",
+  badge = false,
 }: Props) {
   // One shape from here down, whichever prop the caller used.
   const person = profile ?? (framer ? { full_name: framer.name ?? null, is_staff: !!framer.is_admin } : null);
@@ -371,6 +372,21 @@ export default function PortalHeader({
               <p className="mt-2 max-w-xl text-white/70">{subtitle}</p>
             )}
           </div>
+
+          {/* The Pivvot mark, back where it was. The `badge` prop survived the
+              merge but rendered nothing, because the asset it pointed at was
+              left behind in the old repo — so every certification page had
+              been asking for it and silently getting nothing since. */}
+          {badge && (
+            <Image
+              src="/brand/pivvot-badge-white.svg"
+              alt="Pivvot Vision Framing"
+              width={280}
+              height={280}
+              priority
+              className="hidden h-20 w-auto shrink-0 opacity-95 sm:block sm:h-24"
+            />
+          )}
         </div>
         )}
       </div>

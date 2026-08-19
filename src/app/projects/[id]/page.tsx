@@ -1556,8 +1556,6 @@ function ProjectSidebar({
   profile: Profile;
   onSignOut: () => void;
 }) {
-  const [showStarred, setShowStarred] = useState(true);
-  const [showAll, setShowAll] = useState(true);
 
   const others = projects.filter((p) => p.id !== currentProjectId);
   const starred = others.filter((p) => p.pinned);
@@ -1593,70 +1591,45 @@ function ProjectSidebar({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 lg:px-3.5">
         <ProjectToolbar items={items} active={active} onSelect={onSelect} />
 
+        {/* Both lists, always on show. Andrew: "i want to see both 'starred'
+            and 'all projects' at all times." Folding them saved a little
+            height and cost the thing the column is for — seeing at a glance
+            what you can switch to. The middle band scrolls, so a long list
+            costs nothing that matters. */}
         {starred.length > 0 && (
           <div className="mt-8 border-t border-white/10 pt-5">
-            <button
-              onClick={() => setShowStarred((v) => !v)}
-              aria-expanded={showStarred}
-              className="flex w-full items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 outline-none transition hover:text-white/85 focus-visible:ring-2 focus-visible:ring-white/60"
-            >
-              <span
-                aria-hidden
-                className={`transition-transform duration-200 ${showStarred ? "rotate-90" : ""}`}
-              >
-                ›
-              </span>
+            <p className="px-3.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
               Starred
-              <span className="ml-auto tabular-nums text-white/30">{starred.length}</span>
-            </button>
-
-            {showStarred && (
-              <ul className="animate-fade mt-1 space-y-0.5">
-                {starred.map((p) => (
-                  <li key={p.id}>
-                    <a href={`/projects/${p.id}`} className={projectLink}>
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 shrink-0 text-runfree-magenta" aria-hidden="true">
-                        <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
-                      </svg>
-                      <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
+            </p>
+            <ul className="space-y-0.5">
+              {starred.map((p) => (
+                <li key={p.id}>
+                  <a href={`/projects/${p.id}`} className={projectLink}>
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 shrink-0 text-runfree-magenta" aria-hidden="true">
+                      <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
+                    </svg>
+                    <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
-        {/* Every other project, alphabetical. Open by default — Andrew wants
-            to see them all from inside a project, not go hunting. */}
         {rest.length > 0 && (
-          <div className="mt-6">
-            <button
-              onClick={() => setShowAll((v) => !v)}
-              aria-expanded={showAll}
-              className="flex w-full items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 outline-none transition hover:text-white/85 focus-visible:ring-2 focus-visible:ring-white/60"
-            >
-              <span
-                aria-hidden
-                className={`transition-transform duration-200 ${showAll ? "rotate-90" : ""}`}
-              >
-                ›
-              </span>
+          <div className={starred.length > 0 ? "mt-6" : "mt-8 border-t border-white/10 pt-5"}>
+            <p className="px-3.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
               All projects
-              <span className="ml-auto tabular-nums text-white/30">{rest.length}</span>
-            </button>
-
-            {showAll && (
-              <ul className="animate-fade mt-1 space-y-0.5">
-                {rest.map((p) => (
-                  <li key={p.id}>
-                    <a href={`/projects/${p.id}`} className={projectLink}>
-                      <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
+            </p>
+            <ul className="space-y-0.5">
+              {rest.map((p) => (
+                <li key={p.id}>
+                  <a href={`/projects/${p.id}`} className={projectLink}>
+                    <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

@@ -17,9 +17,18 @@ export default function AuthShell({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-runfree-indigo/40 px-4 py-12">
       <div className="w-full max-w-md">
-        {/* Logo sits on white, per brand guidance for the dark-inked mark */}
+        {/* Logo sits on white, per brand guidance for the dark-inked mark.
+            Linked to runfree.co: these five pages carry no PortalFooter, so
+            this is the only mark on them, and someone who lands on a sign-in
+            screen unsure what this is has nowhere else to click. */}
         <div className="mb-6 flex justify-center">
-          <div className="rounded-xl bg-white px-6 py-4 shadow-sm">
+          <a
+            href="https://runfree.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="RunFree — visit runfree.co"
+            className="rounded-xl bg-white px-6 py-4 shadow-sm outline-none transition hover:opacity-80 focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-2"
+          >
             <Image
               src="/brand/runfree-logo.png"
               alt="RunFree"
@@ -28,7 +37,7 @@ export default function AuthShell({
               priority
               className="h-9 w-auto"
             />
-          </div>
+          </a>
         </div>
 
         <div className="overflow-hidden rounded-2xl bg-white shadow-xl">

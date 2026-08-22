@@ -110,28 +110,50 @@ export default function HelpPage() {
         {(hasProjects || profile.is_staff) && (
         <Section title="Using your portal">
           <Faq q="Where do I find the materials for our next session?">
-            Open your project and stay on <strong>The Process</strong>, the first tab.
-            The six icons across it are the six tools of the process — click one and
+            Open your project and choose <strong>The Process</strong> in the column down
+            the left. The six icons are the six tools of the process — click one and
             everything for it appears underneath: the handouts, the videos to watch
             beforehand, photos from our working sessions, and what that module
             produces. Nothing loads a new page, so you can move between them freely.
             <br />
             <br />
-            The work to do before we start is in the <strong>Prepare Your Team</strong>
-            row just above those icons — click it to open it.
+            The work to do before we start has its own section, <strong>Preparation</strong>,
+            at the top of that column.
           </Faq>
-          <Faq q="What are the tabs across the top of my project?">
-            Five, and they hold different things:
+          <Faq q="What is the dark column down the left?">
+            Your way around. The sections of the project sit at the top of it:
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li><strong>The Process</strong> — the six tools, their handouts and videos, and the preparation work.</li>
+              <li><strong>Preparation</strong> — what to gather and set up before we begin.</li>
+              <li><strong>The Process</strong> — the six tools, with their handouts and videos.</li>
               <li><strong>Team</strong> — your church&rsquo;s team, and the RunFree people working with you.</li>
               <li><strong>Key Dates</strong> — everything already in the diary.</li>
               <li><strong>Session Recordings</strong> — every session we have held, with its recording and the charts from the room.</li>
               <li><strong>Deliverables</strong> — the finished work, in the Vision Stack.</li>
             </ul>
-            Above them, <strong>What&rsquo;s Important Now</strong> is what your team owes
-            before we next meet, and the card beside it says when that is. That pair stays
-            on screen whichever tab you are on, and you can fold the first one away.
+            A project only shows the sections it actually has, so you may see fewer than six.
+            <br />
+            <br />
+            Underneath them are your other projects — <strong>Starred</strong> first if you
+            have starred any, then <strong>All projects</strong> alphabetically. At the very
+            bottom, always in view, are Help, Admin if you are RunFree staff, and your own
+            account with the way to sign out.
+            <br />
+            <br />
+            To the right of the column, <strong>What&rsquo;s Important Now</strong> is what
+            your team owes before we next meet, and the card beside it says when that is.
+            That pair stays on screen whichever section you are in, and you can fold the
+            first one away.
+          </Faq>
+          <Faq q="How does this work on my phone?">
+            The column would leave almost nothing for the content on a narrow screen, so
+            it tucks away. Tap the <strong>☰</strong> button at the top left to slide it
+            out, and tap anywhere outside it — or the ✕ — to put it back. Choosing a
+            section closes it for you.
+            <br />
+            <br />
+            You do not need the drawer just to move between sections: they also run across
+            the top as a row of buttons you can swipe sideways, and that row stays put as
+            you scroll.
           </Faq>
           <Faq q="What is the Vision Stack?">
             It is the finished work — everything your team builds across the whole

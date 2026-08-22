@@ -54,6 +54,12 @@ type Props = {
    * top of the screen that they are no longer in the projects portal.
    */
   section?: "projects" | "certification";
+  /**
+   * Open the mobile navigation drawer. Supplied only by pages that have a
+   * sidebar, which below `lg` is off-canvas and needs something to summon it.
+   * Absent on every other page, and the button does not render.
+   */
+  onMenuClick?: () => void;
 };
 
 
@@ -95,6 +101,7 @@ export default function PortalHeader({
   section = "projects",
   badge = false,
   chromeInSidebar = false,
+  onMenuClick,
 }: Props) {
   // One shape from here down, whichever prop the caller used.
   const person = profile ?? (framer ? { full_name: framer.name ?? null, is_staff: !!framer.is_admin } : null);
@@ -119,7 +126,25 @@ export default function PortalHeader({
       <div
         className={`px-4 sm:px-6 lg:px-8 ${chromeInSidebar ? "" : "mx-auto max-w-7xl"}`}
       >
-        <div className="flex items-center gap-x-8 border-b border-white/10 py-3 sm:py-4">
+        <div className="flex items-center gap-x-4 border-b border-white/10 py-3 sm:gap-x-8 sm:py-4">
+          {/* The way into the sidebar on a phone. Andrew: "on mobile ... i'm
+              not sure how the column idea is getting implemented. probably a
+              hamburger menu?" — yes, because the column carries the project
+              switcher and the account, and a 375px screen has no room to
+              show it beside the content. */}
+          {onMenuClick && (
+            <button
+              type="button"
+              onClick={onMenuClick}
+              aria-label="Open navigation"
+              className="-ml-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white/80 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 lg:hidden"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5" aria-hidden="true">
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+          )}
+
           <a href="/" className="flex shrink-0 items-center">
             <Image
               src="/brand/runfree-logo-white.png"

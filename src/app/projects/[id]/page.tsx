@@ -221,6 +221,8 @@ export default function ProjectDetailPage() {
   >([]);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<PreviewFile | null>(null);
+  /** Below `lg` the sidebar is a drawer. Closed on arrival, every time. */
+  const [navOpen, setNavOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -583,6 +585,7 @@ export default function ProjectDetailPage() {
         showTitleBlock={false}
         certificationAccess={profile.certification_access || profile.is_staff}
         chromeInSidebar
+        onMenuClick={() => setNavOpen(true)}
       />
 
       {/* An app shell, not a stack of bands.
@@ -603,7 +606,7 @@ export default function ProjectDetailPage() {
           the header of the page." The column keeps the navigation; identity
           belongs across the top, where a client opens the page and sees
           themselves. */}
-      <div className="lg:flex lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
         <ProjectSidebar
           items={panelItems}
           active={activePanel}
@@ -612,9 +615,14 @@ export default function ProjectDetailPage() {
           currentProjectId={projectId}
           profile={profile}
           onSignOut={handleSignOut}
+          open={navOpen}
+          onClose={() => setNavOpen(false)}
         />
 
-      <main className="min-w-0 flex-1 lg:overflow-y-auto">
+      <main className="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
+        {/* The sections, as a strip. Above ChurchHero so it is the first
+            thing under the header on a phone and can stick there. */}
+        <PanelStrip items={panelItems} active={activePanel} onSelect={goPanel} />
         {/* Inside the content column, not above the whole shell — so the
             church's mark shares a left edge with everything under it.
             Andrew: "the church logo should probably be lined up with the
@@ -629,7 +637,7 @@ export default function ProjectDetailPage() {
           onChanged={refresh}
         />
 
-        <div className="px-4 sm:px-6 lg:px-8">
+        <div className="flex-1 px-4 sm:px-6 lg:px-8">
         {/* Orientation sits above the tabs, on every panel, rather than
             inside one you have to navigate to. Andrew: "let's do a side by
             side with the 'coming up' and the 'where you are / next together'
@@ -1539,6 +1547,8 @@ function ProjectSidebar({
   currentProjectId,
   profile,
   onSignOut,
+  open,
+  onClose,
 }: {
   items: { key: string; label: string }[];
   active: string;
@@ -1548,6 +1558,9 @@ function ProjectSidebar({
   currentProjectId: string;
   profile: Profile;
   onSignOut: () => void;
+  /** Below `lg` the column is off-canvas; this is whether it is showing. */
+  open: boolean;
+  onClose: () => void;
 }) {
 
   const others = projects.filter((p) => p.id !== currentProjectId);
@@ -1559,17 +1572,27 @@ function ProjectSidebar({
   const projectLink =
     "flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white/65 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60";
 
-  return (
-    /**
-     * Three bands: a fixed head, a scrolling middle, a fixed foot.
+  // Escape closes the drawer, the same as tapping away from it.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  /**
+   * Three bands: a fixed head, a scrolling middle, a fixed foot.
      *
      * Andrew: "i had to scroll a little to get the 'help' 'admin' and user to
      * show up. that should stay visible at all times." The whole column used
      * to scroll as one, so a long project list pushed the account off the
      * bottom. Only the middle scrolls now, which is also what lets the list
      * grow without the column growing with it.
-     */
-    <aside className="flex shrink-0 flex-col bg-runfree-navyDeep lg:h-full lg:w-64 lg:overflow-hidden">
+   */
+  const bands = (
+    <>
       <div className="shrink-0 px-4 pt-4 sm:px-6 lg:px-3.5 lg:pt-5">
         <a
           href="/"
@@ -1582,7 +1605,16 @@ function ProjectSidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 lg:px-3.5">
-        <ProjectToolbar items={items} active={active} onSelect={onSelect} />
+        <PanelRail
+          items={items}
+          active={active}
+          // Choosing a section closes the drawer. On desktop there is no
+          // drawer and this is a no-op.
+          onSelect={(k) => {
+            onSelect(k);
+            onClose();
+          }}
+        />
 
         {/* Both lists, always on show. Andrew: "i want to see both 'starred'
             and 'all projects' at all times." Folding them saved a little
@@ -1670,10 +1702,62 @@ function ProjectSidebar({
           </span>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  /**
+   * Two shells for one column.
+   *
+   * On desktop it is the static rail it has always been. Below `lg` it is
+   * off-canvas: a 375px screen cannot spare 256px of chrome, and the previous
+   * arrangement — no `lg:` guard on the aside — rendered the whole navy
+   * column, project list and all, as a full-width block stacked above the
+   * church's own name. Andrew never saw it because he works on a laptop.
+   */
+  return (
+    <>
+      <aside className="hidden shrink-0 flex-col bg-runfree-navyDeep lg:flex lg:h-full lg:w-64 lg:overflow-hidden">
+        {bands}
+      </aside>
+
+      {/* The drawer, and the scrim that dismisses it. Both animate, and both
+          are inert to pointers when closed so they cannot swallow taps. */}
+      <div
+        className={`fixed inset-0 z-50 lg:hidden ${open ? "" : "pointer-events-none"}`}
+        aria-hidden={!open}
+      >
+        <div
+          onClick={onClose}
+          className={`absolute inset-0 bg-runfree-ink/60 transition-opacity duration-200 ${
+            open ? "opacity-100" : "opacity-0"
+          }`}
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation"
+          className={`absolute inset-y-0 left-0 flex w-[17rem] max-w-[85vw] flex-col bg-runfree-navyDeep shadow-2xl transition-transform duration-200 ease-out ${
+            open ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="flex shrink-0 items-center justify-end px-3 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close navigation"
+              className="grid h-10 w-10 place-items-center rounded-xl text-white/70 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+          {bands}
+        </div>
+      </div>
+    </>
   );
 }
-
 /** "Christ Chapel - Pivvot Vision Framing" -> "Christ Chapel". */
 function churchNameOf(name: string): string {
   return name.split(/\s+-\s+/)[0].trim() || name;
@@ -1698,7 +1782,7 @@ function churchNameOf(name: string): string {
  * content about 200px wide, so below `lg` this stays the horizontal strip it
  * was — which is also the pattern every mobile app uses for the same reason.
  */
-function ProjectToolbar({
+function PanelRail({
   items,
   active,
   onSelect,
@@ -1710,36 +1794,59 @@ function ProjectToolbar({
   if (items.length === 0) return null;
 
   return (
-    <>
-      {/* Phone and tablet: the strip, sticky under the header. */}
-      <div className="sticky top-0 z-30 -mx-4 mt-5 border-b border-gray-200/70 bg-gray-50/90 backdrop-blur-md sm:-mx-6 lg:hidden">
-        <nav aria-label="Project sections" className="px-4 py-2 sm:px-6">
-          <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {items.map((it) => {
-              const on = active === it.key;
-              return (
-                <li key={it.key}>
-                  <button
-                    onClick={() => onSelect(it.key)}
-                    aria-current={on ? "true" : undefined}
-                    className={`inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold transition outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
-                      on
-                        ? "bg-runfree-grad text-white shadow-sm"
-                        : "bg-white text-gray-600 shadow-sm ring-1 ring-gray-200"
-                    }`}
-                  >
-                    {it.label}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-      </div>
+    <nav aria-label="Project sections">
+      <ul className="space-y-1">
+        {items.map((it) => {
+          const on = active === it.key;
+          return (
+            <li key={it.key}>
+              <button
+                onClick={() => onSelect(it.key)}
+                aria-current={on ? "true" : undefined}
+                className={`group flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-bold transition duration-150 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
+                  on
+                    ? "bg-runfree-grad text-white shadow-sm"
+                    : "text-white/75 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate">{it.label}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
 
-      {/* Desktop: the rail. Sticky, so it stays with you down a long panel. */}
-      <nav aria-label="Project sections" className="sticky top-6 hidden lg:block">
-        <ul className="space-y-1">
+/**
+ * The same sections as a horizontal strip, for phones and tablets.
+ *
+ * This used to render inside the sidebar alongside the rail, which put a
+ * light-grey strip inside the navy column on every screen below `lg` — and
+ * made the strip's `sticky` useless, because sticky resolves against the
+ * nearest scrolling ancestor and the sidebar's middle band is one.
+ *
+ * It belongs in the content column instead: it is the content's navigation,
+ * and only there can it actually stick beneath the header. Switching panels
+ * is the common action, so it stays out here rather than behind the drawer —
+ * the drawer is for changing project or reaching your account.
+ */
+function PanelStrip({
+  items,
+  active,
+  onSelect,
+}: {
+  items: { key: string; label: string }[];
+  active: string;
+  onSelect: (key: string) => void;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="sticky top-0 z-30 border-b border-gray-200/70 bg-gray-50/90 backdrop-blur-md lg:hidden">
+      <nav aria-label="Project sections" className="px-4 py-2 sm:px-6">
+        <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {items.map((it) => {
             const on = active === it.key;
             return (
@@ -1747,20 +1854,20 @@ function ProjectToolbar({
                 <button
                   onClick={() => onSelect(it.key)}
                   aria-current={on ? "true" : undefined}
-                  className={`group flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-bold transition duration-150 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
+                  className={`inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold transition outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
                     on
                       ? "bg-runfree-grad text-white shadow-sm"
-                      : "text-white/75 hover:bg-white/10 hover:text-white"
+                      : "bg-white text-gray-600 shadow-sm ring-1 ring-gray-200"
                   }`}
                 >
-                  <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                  {it.label}
                 </button>
               </li>
             );
           })}
         </ul>
       </nav>
-    </>
+    </div>
   );
 }
 

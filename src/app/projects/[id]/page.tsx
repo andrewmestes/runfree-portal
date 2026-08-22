@@ -1662,6 +1662,17 @@ function ProjectSidebar({
       {/* Always in view: the account, and the two portal-wide destinations.
           Stacked rather than side by side, per Andrew. */}
       <div className="shrink-0 border-t border-white/10 px-4 py-3 sm:px-6 lg:px-3.5">
+        {/* Only in the drawer. On desktop the header carries this as a pill,
+            and below `sm` the header hides its chrome entirely — so without
+            this line Certification is unreachable on a phone. */}
+        {(profile.certification_access || profile.is_staff) && (
+          <a
+            href="/certification"
+            className="block rounded-lg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-runfree-pink outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 lg:hidden"
+          >
+            Certification
+          </a>
+        )}
         <a
           href="/help"
           className="block rounded-lg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white/55 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"

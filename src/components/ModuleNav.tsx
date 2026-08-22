@@ -57,11 +57,20 @@ export default function ModuleNav({
   return (
     <nav aria-label="Process modules">
       <div className="relative">
-        {/* Track — inset so it starts and ends under the outer icons. */}
+        {/* Track — it must start and end at the CENTRE of the outer icons.
+            The items are flex-1, so with n of them each centre sits half an
+            item in from its edge: 50/n percent. The old version hardcoded
+            70px, which is only right when the items happen to be 140px wide
+            — true for the six-module process track it was written for, and
+            wrong for the nine-entry certification one, where the line
+            visibly stopped short at both ends. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute left-0 right-0 top-10 mx-auto hidden h-[3px] sm:block"
-          style={{ width: "calc(100% - 140px)", marginLeft: 70 }}
+          className="pointer-events-none absolute top-10 hidden h-[3px] sm:block"
+          style={{
+            left: `${50 / Math.max(process.length, 1)}%`,
+            right: `${50 / Math.max(process.length, 1)}%`,
+          }}
         >
           <div className="h-full w-full rounded-full bg-gray-200" />
           <div
@@ -73,7 +82,7 @@ export default function ModuleNav({
         <ul className="relative flex flex-wrap items-start justify-center gap-x-1 gap-y-8 sm:flex-nowrap sm:gap-x-2">
           {process.map((m) => {
             const isActive = active === m.section;
-            const words = (m.label ?? moduleLabel(m.section)).split(/\s+/);
+            const label = m.label ?? moduleLabel(m.section);
 
             return (
               <li key={m.section} className="flex-1">
@@ -143,14 +152,20 @@ export default function ModuleNav({
                     )}
                   </span>
 
+                  {/* Wrap naturally inside a narrow column rather than
+                      forcing one word per line. The per-word split kept the
+                      six two-word tool names tidy, but "Vision Frame Field
+                      Guide" became four stacked lines inside a fixed 40px
+                      box — overflowing it and running into the mantra below.
+                      That is the glitch. A min height keeps the shorter
+                      labels on a common baseline without capping the long
+                      ones. */}
                   <span
-                    className={`mt-3 flex h-10 flex-col justify-start text-center text-[15px] font-semibold leading-[1.15] transition-colors ${
+                    className={`mt-3 block min-h-10 max-w-[11ch] text-balance text-center text-[15px] font-semibold leading-[1.15] transition-colors ${
                       isActive ? "text-runfree-ink" : "text-gray-500 group-hover:text-runfree-ink"
                     }`}
                   >
-                    {words.map((w) => (
-                      <span key={w}>{w}</span>
-                    ))}
+                    {label}
                   </span>
                 </button>
               </li>

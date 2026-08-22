@@ -259,7 +259,14 @@ export default function PortalHeader({
             )}
           </div>
 
-          {/* 44px square: Apple's minimum comfortable tap target. */}
+          {/* 44px square: Apple's minimum comfortable tap target.
+
+              Suppressed on pages that supply `onMenuClick`: those have a
+              sidebar drawer, and it already carries Help, Admin, the account
+              and Certification. Two hamburgers in one bar — mine on the left,
+              this one on the right — is what shipping the drawer without
+              checking here would have produced. */}
+          {!onMenuClick && (
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
@@ -284,10 +291,11 @@ export default function PortalHeader({
               )}
             </svg>
           </button>
+          )}
         </div>
 
         {/* Expands in place rather than covering the page. */}
-        {menuOpen && (
+        {!onMenuClick && menuOpen && (
           <nav
             id="portal-mobile-menu"
             className="animate-fade border-b border-white/10 py-2 sm:hidden"

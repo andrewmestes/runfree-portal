@@ -4690,8 +4690,12 @@ function PrepCard({
               onClick={() => setAdding(true)}
               className="w-full rounded-xl border border-dashed border-gray-300 py-2.5 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
             >
-              + Add {ordered.length === 0 ? "the first " : ""}
-              {prepNoun(group.kind)}
+              {/* prepNoun already carries its article ("a document"), so
+                  prefixing "the first" naively produced "Add the first a
+                  document". Drop the article when we supply our own. */}
+              {ordered.length === 0
+                ? `+ Add the first ${prepNoun(group.kind).replace(/^an? /, "")}`
+                : `+ Add ${prepNoun(group.kind)}`}
             </button>
           )}
         </div>

@@ -3169,7 +3169,9 @@ function LatestSessionCard({
           onClick={onGoToSessions}
           className="group inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-runfree-pink px-3.5 py-2 text-xs font-bold text-runfree-magentaDeep outline-none transition hover:bg-runfree-magenta hover:text-white focus-visible:ring-2 focus-visible:ring-runfree-magenta"
         >
-          {total > 1 ? `All ${total} recordings` : "Open recording"}
+          {/* "All 5 recordings" would be a false statement on a project with
+              five sessions and two recordings — not every session has one. */}
+          {total > 1 ? `All ${total} sessions` : "Open session"}
           <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
             &rarr;
           </span>

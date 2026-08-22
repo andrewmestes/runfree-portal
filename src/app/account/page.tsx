@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, hasCertificationAccess, logout, updatePassword } from "@/lib/auth";
+import { getCurrentFramer, getCurrentProfile, logout, updatePassword } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import AccessError from "@/components/AccessError";
 import { Field, FormError, FormNotice } from "@/components/AuthShell";
@@ -15,8 +15,36 @@ type Framer = {
   is_admin: boolean;
 };
 
+type Profile = {
+  full_name: string | null;
+  email: string | null;
+  account_role: string | null;
+  is_owner: boolean | null;
+  is_staff: boolean | null;
+};
+
+/** How to describe this account to the person holding it. */
+function roleLabel(profile: Profile | null, framer: Framer | null): string {
+  if (profile?.is_owner) return "Owner";
+  if (framer?.is_admin) return "Admin";
+  switch (profile?.account_role) {
+    case "admin":
+      return "Admin";
+    case "runfree_team":
+      return "RunFree team";
+    case "framer":
+    case "framer_subscribed":
+      return "Certified Vision Framer";
+    case "client":
+      return "Client";
+    default:
+      return framer ? "Certified Vision Framer" : "Client";
+  }
+}
+
 export default function AccountPage() {
   const [framer, setFramer] = useState<Framer | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   // Set when init() throws outright, so the page stops on a retry screen
   // instead of sitting on its loader with nothing left to set it false.
@@ -49,13 +77,22 @@ export default function AccountPage() {
 
       setIsPasswordUser(providers.includes("email") || providers.length === 0);
 
-      const current = (await getCurrentFramer()) as Framer | null;
-      if (!(await hasCertificationAccess())) {
-        router.replace("/");
-        return;
-      }
+      // No certification gate. This page is every signed-in person's account
+      // — both the sidebar and the header profile menu link here for
+      // everyone — and the password form on it is universal.
+      //
+      // It used to bounce anyone without certification access to "/", which
+      // for a church client is a silent round trip: "/" sends a non-staff
+      // user with one project straight back into that project, so tapping
+      // your own name returned you to where you started and there was no
+      // route to changing your password at all.
+      const [current, prof] = await Promise.all([
+        getCurrentFramer() as Promise<Framer | null>,
+        getCurrentProfile() as Promise<Profile | null>,
+      ]);
 
       setFramer(current);
+      setProfile(prof);
       setLoading(false);
     }
 
@@ -135,16 +172,24 @@ export default function AccountPage() {
           <dl className="divide-y divide-gray-100">
             <div className="flex justify-between px-6 py-4 text-sm">
               <dt className="text-gray-500">Name</dt>
-              <dd className="font-medium text-runfree-ink">{framer?.name}</dd>
+              <dd className="font-medium text-runfree-ink">
+                {profile?.full_name || framer?.name || "—"}
+              </dd>
             </div>
             <div className="flex justify-between px-6 py-4 text-sm">
               <dt className="text-gray-500">Email</dt>
-              <dd className="font-medium text-runfree-ink">{framer?.email}</dd>
+              <dd className="font-medium text-runfree-ink">
+                {profile?.email || framer?.email || "—"}
+              </dd>
             </div>
             <div className="flex justify-between px-6 py-4 text-sm">
               <dt className="text-gray-500">Role</dt>
+              {/* Was `framer?.is_admin ? "Admin" : "Certified Vision Framer"`,
+                  which called everyone without a certified_framers row a
+                  Certified Vision Framer — including RunFree admins, who by
+                  design have no such row, and every church client. */}
               <dd className="font-medium text-runfree-ink">
-                {framer?.is_admin ? "Admin" : "Certified Vision Framer"}
+                {roleLabel(profile, framer)}
               </dd>
             </div>
           </dl>

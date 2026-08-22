@@ -1050,6 +1050,57 @@ async function main() {
       await supabaseAdmin.from("profiles").update({ account_role: "client" }).eq("id", viewerA.id);
     }
 
+    // -----------------------------------------------------------------
+    // 23. listMyProjects' embed must be a LEFT join.
+    //
+    // A query shape rather than a policy, but exactly the regression this
+    // suite exists to catch: every policy says "yes" and the row still
+    // vanishes. PostgREST's `!inner` drops parent rows whose embedded child
+    // was filtered away, and a plain embed is ALSO promoted to an inner join
+    // as soon as you filter on an embedded column — only an explicit `!left`
+    // keeps the parent.
+    //
+    // projectTeam is the case that matters: visibility 'team', so
+    // can_see_project lets staff and the owner read it (032), but the owner
+    // has no project_members row on it. With `!inner` it disappeared from the
+    // home page and the sidebar switcher entirely.
+    //
+    // Note this is NOT about private projects. Migration 032
+    // ("admins powerful not omniscient") deliberately removed the blanket
+    // owner bypass, so the owner cannot see someone else's private project
+    // and is not supposed to.
+    // -----------------------------------------------------------------
+    {
+      const asOwner = createUserClient(owner.accessToken);
+
+
+      const { data: mine, error: mineErr } = await asOwner
+        .from("projects")
+        .select("*, project_members!left(pinned_at, profile_id)")
+        .is("archived_at", null)
+        .eq("project_members.profile_id", owner.id);
+
+      const ids = (mine ?? []).map((r) => r.id);
+      record(
+        "23a. the owner sees a project they are not a member of",
+        !mineErr && ids.includes(projectTeam.id),
+        mineErr?.message ??
+          `returned ${ids.length} projects, team project present=${ids.includes(projectTeam.id)}`
+      );
+
+      // And the embed still holds only the caller's own membership, which is
+      // what `project_members[0]` in listMyProjects relies on.
+      const rowA = (mine ?? []).find((r) => r.id === projectTeam.id) as
+        | { project_members?: { profile_id: string }[] }
+        | undefined;
+      const others = (rowA?.project_members ?? []).filter((m) => m.profile_id !== owner.id);
+      record(
+        "23b. the embed carries no one else's membership rows",
+        others.length === 0,
+        `foreign membership rows embedded: ${others.length}`
+      );
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

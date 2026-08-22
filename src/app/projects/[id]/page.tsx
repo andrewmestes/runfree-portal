@@ -1877,7 +1877,7 @@ function PanelStrip({
   return (
     <div className="sticky top-0 z-30 hidden border-b border-gray-200/70 bg-gray-50/90 backdrop-blur-md md:block lg:hidden">
       <nav aria-label="Project sections" className="px-4 py-2 sm:px-6">
-        <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <ul className="-mx-1 flex flex-wrap gap-1.5 px-1 py-0.5">
           {items.map((it) => {
             const on = active === it.key;
             return (

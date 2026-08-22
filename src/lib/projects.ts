@@ -772,13 +772,28 @@ export async function setProjectArchived(
 export async function deleteProject(accessToken: string, projectId: string) {
   const client = createUserClient(accessToken);
 
-  const { data: files } = await client.storage.from("deliverable-images").list(projectId, {
-    limit: 1000,
-  });
-  if (files && files.length > 0) {
-    await client.storage
+  // Both levels. Storage `list()` is not recursive: it returns the immediate
+  // children of a prefix, so listing `{projectId}` yields the project's own
+  // files plus a folder-shaped entry called "private" — never the files
+  // inside it. Private prep documents live at `{projectId}/private/…` (see
+  // isPrivatePath and migration 036), so they were surviving the delete
+  // entirely. Those are the most sensitive things in the bucket: Insights
+  // Discovery profiles and guest perspective write-ups.
+  const prefixes = [projectId, `${projectId}/private`];
+  const paths: string[] = [];
+  for (const prefix of prefixes) {
+    const { data: files } = await client.storage
       .from("deliverable-images")
-      .remove(files.map((f) => `${projectId}/${f.name}`));
+      .list(prefix, { limit: 1000 });
+    for (const f of files ?? []) {
+      // Folder entries come back with no metadata; only real objects can be
+      // removed, and `private` itself is one of these.
+      if (f.id === null || f.metadata == null) continue;
+      paths.push(`${prefix}/${f.name}`);
+    }
+  }
+  if (paths.length > 0) {
+    await client.storage.from("deliverable-images").remove(paths);
   }
 
   const { error } = await client.from("projects").delete().eq("id", projectId);

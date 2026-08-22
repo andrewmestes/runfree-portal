@@ -102,7 +102,18 @@ export default function AdminVideosPage() {
     setError("");
     setNotice("");
 
-    if (!framer) return;
+    // training_videos.created_by is a foreign key into certified_framers,
+    // which is CVF's table and not ours to migrate — so this genuinely cannot
+    // insert without a framer row. isPortalAdmin() lets in anyone with
+    // account_role "admin" or is_owner, and auth.ts says plainly that "a
+    // RunFree admin has no framer row", so this is reachable. It used to be a
+    // bare `return`: the button did nothing at all and said nothing about it.
+    if (!framer) {
+      setError(
+        "Adding videos needs a Certified Vision Framer record, and your account doesn't have one. Ask Andrew to link it, or add the video from a framer account."
+      );
+      return;
+    }
 
     if (parsed && !parsed.embedUrl) {
       setError(

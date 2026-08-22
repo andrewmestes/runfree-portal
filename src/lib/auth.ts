@@ -132,7 +132,7 @@ export async function listMyProjects() {
   const client = createUserClient(session.access_token);
   const { data, error } = await client
     .from("projects")
-    .select("*, templates(name, slug), project_members!inner(pinned_at, profile_id)")
+    .select("*, templates(name, slug), project_members!left(pinned_at, profile_id)")
     .is("archived_at", null)
     .eq("project_members.profile_id", session.user.id)
     .order("created_at", { ascending: false });
@@ -145,13 +145,27 @@ export async function listMyProjects() {
    *
    * The sort is here rather than in the query because pinned_at lives on the
    * caller's own membership row, and PostgREST cannot order a parent by an
-   * embedded child's column. The inner join is what limits that embed to one
-   * row — the caller's — so `project_members[0]` is unambiguous.
+   * embedded child's column.
    *
-   * Note the owner sees projects they are not a member of (am_owner bypasses
-   * RLS), and the inner join would hide those. That is why this is a LEFT
-   * join in effect: rows with no membership come back with an empty array and
-   * simply sort as unpinned.
+   * The embed must be `!left`, explicitly. Two PostgREST behaviours combine
+   * here: `!inner` drops parent rows whose embedded child was filtered away,
+   * AND a plain embed is promoted to an inner join the moment you filter on
+   * an embedded column. So both `project_members(...)` and
+   * `project_members!inner(...)` lose parents; only `!left` keeps them.
+   *
+   * That matters because a person can be able to read a project without
+   * having a membership row on it: `can_see_project` (032) grants staff and
+   * the owner any project with `visibility = 'team'`. Those came back with no
+   * embedded row and the join threw the whole project away — gone from the
+   * home page and the sidebar switcher while every policy still said yes.
+   * tests/rls.test.ts 23a covers exactly this, and fails with `!inner`.
+   *
+   * The one-row guarantee comes from the FILTER, not the join type, so
+   * `project_members[0]` is still unambiguously the caller's own row.
+   *
+   * (This is not about private projects. 032 — "admins powerful not
+   * omniscient" — deliberately removed the blanket owner bypass, so the owner
+   * cannot see someone else's private project and should not.)
    */
   const rows = (data ?? []) as (Record<string, unknown> & {
     project_members?: { pinned_at: string | null }[];

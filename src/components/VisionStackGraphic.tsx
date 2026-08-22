@@ -39,6 +39,11 @@ type Plate = {
  * Top of the stack first, which is the order the eye reads them in — and the
  * reverse of `vision_stack_layers.position`, where the foundation is first.
  */
+/** Plate size and the vertical gap between them, in px. The composition's
+ *  height is a function of these and the plate count — not a guess. */
+const PLATE_PX = 190;
+const PLATE_GAP_PX = 76;
+
 const PLATES: Plate[] = [
   { slug: "application-toolbox", name: "Application Toolbox", face: "#1F378C", edge: "#16276A", motif: "gear" },
   { slug: "horizon-storyline", name: "The Horizon Storyline", face: "#3A55B0", edge: "#293D85", motif: "bars" },
@@ -141,11 +146,20 @@ export default function VisionStackGraphic({
       className={`relative mx-auto ${className}`}
       style={{ perspective: "1400px", perspectiveOrigin: "50% 40%" }}
     >
-      <div className="relative mx-auto aspect-[3/4] w-full max-w-[340px]">
+      {/* Height derived, not guessed. This was `aspect-[3/4]`, which at the
+          300px width the vision-stack hero asks for is 400px tall — while the
+          four plates need (4-1) x 76 + 190 = 418px. The last plate overflowed
+          by 18px and the hero's `overflow-hidden` sliced its bottom corner
+          off, which is the glitch Andrew reported. The plates are a fixed
+          pixel size, so the container has to be too. */}
+      <div
+        className="relative mx-auto w-full max-w-[340px]"
+        style={{ height: (PLATES.length - 1) * PLATE_GAP_PX + PLATE_PX }}
+      >
         {PLATES.map((p, i) => {
           const lift = hovered === p.slug;
-          // Plates are 76px apart vertically; hovering pulls one 26px clear.
-          const y = i * 76 - (lift ? 26 : 0);
+          // Hovering pulls one plate 26px clear of the stack.
+          const y = i * PLATE_GAP_PX - (lift ? 26 : 0);
           const dark = p.face !== "#FFFFFF";
 
           return (
@@ -158,8 +172,10 @@ export default function VisionStackGraphic({
               onBlur={() => setHovered(null)}
               onClick={() => onSelect?.(p.slug)}
               aria-label={p.name}
-              className="group absolute left-1/2 top-0 h-[190px] w-[190px] cursor-pointer border-0 bg-transparent p-0 outline-none"
+              className="group absolute left-1/2 top-0 cursor-pointer border-0 bg-transparent p-0 outline-none"
               style={{
+                height: PLATE_PX,
+                width: PLATE_PX,
                 transformStyle: "preserve-3d",
                 transform: `translate(-50%, ${y}px) rotateX(55deg) rotateZ(-45deg) translateZ(${
                   shown ? 0 : -260

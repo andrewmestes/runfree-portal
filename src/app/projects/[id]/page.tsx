@@ -209,7 +209,7 @@ export default function ProjectDetailPage() {
     window.history.pushState(null, "", url);
     // A panel swap replaces the whole screen; landing halfway down the new
     // one because the old one was scrolled is disorienting.
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollPageToTop();
   }, []);
 
   const [status, setStatus] = useState<"checking" | "ready" | "not_found" | "error">("checking");
@@ -1743,9 +1743,14 @@ function ProjectSidebar({
 
       {/* The drawer, and the scrim that dismisses it. Both animate, and both
           are inert to pointers when closed so they cannot swallow taps. */}
+      {/* `inert` when closed. pointer-events-none stopped taps landing on it
+          but left roughly fifteen links and buttons in the tab order, so on a
+          phone you could tab straight into a drawer that is not on screen —
+          and aria-hidden over focusable content is itself invalid. `inert`
+          removes it from focus and the accessibility tree together. */}
       <div
         className={`fixed inset-0 z-50 lg:hidden ${open ? "" : "pointer-events-none"}`}
-        aria-hidden={!open}
+        inert={!open}
       >
         <div
           onClick={onClose}
@@ -2566,20 +2571,47 @@ function ProjectAccess({
   );
 }
 
+/**
+ * Scroll the page back to the top — whichever element is actually scrolling.
+ *
+ * This page has two scroll containers depending on width. At `lg` and up the
+ * shell is `h-screen lg:overflow-hidden` and `<main>` carries
+ * `lg:overflow-y-auto`, so <main> scrolls and the window never does. Below
+ * `lg` the shell is a normal tall page and the window scrolls.
+ *
+ * `window.scrollTo` alone therefore did nothing on desktop, which is why
+ * switching panels kept the previous panel's scroll position, and why the
+ * back-to-top button never appeared at all — `window.scrollY` is permanently
+ * 0 up there. Asking both is safe: scrollTo on an element that is not a
+ * scroll container is a no-op.
+ */
+function scrollPageToTop() {
+  document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 /** Appears once you are far enough down to want it. */
 
 function BackToTop() {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const onScroll = () => setShow(window.scrollY > 700);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    // Both containers, for the reason in scrollPageToTop: on desktop the
+    // window's scrollY never moves, so listening only to it left this button
+    // permanently hidden on exactly the screens with the longest panels.
+    const main = document.querySelector("main");
+    const read = () => setShow((main?.scrollTop ?? 0) > 700 || window.scrollY > 700);
+    read();
+    window.addEventListener("scroll", read, { passive: true });
+    main?.addEventListener("scroll", read, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", read);
+      main?.removeEventListener("scroll", read);
+    };
   }, []);
 
   return (
     <button
-      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      onClick={scrollPageToTop}
       aria-label="Back to top"
       className={`fixed bottom-6 right-6 z-40 grid h-11 w-11 place-items-center rounded-full bg-runfree-grad text-white shadow-lg transition-all duration-200 hover:opacity-90 ${
         show ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"
@@ -2708,7 +2740,7 @@ function PrioritiesBanner({
 
   const open = detail.tasks.filter((t) => !t.is_done);
   const done = detail.tasks.filter((t) => t.is_done);
-  if (detail.tasks.length === 0 && !canEdit) return null;
+  if (!hasPriorities(detail, canEdit)) return null;
 
   return (
     <section className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
@@ -2979,6 +3011,19 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
  * raises next is almost always "what else is coming?"
  */
 /**
+ * Whether PrioritiesBanner will render anything.
+ *
+ * It returns null for a viewer on a project with no tasks yet — a real case
+ * early in an engagement. Overview lays it out in a two-column grid, so it
+ * has to know, or the next session card is stranded in column two with an
+ * empty column beside it. Shared rather than duplicated so the two cannot
+ * drift apart.
+ */
+function hasPriorities(detail: ProjectDetail, canEdit: boolean) {
+  return detail.tasks.length > 0 || canEdit;
+}
+
+/**
  * The landing panel: what is happening, before anything you have to go and
  * look for.
  *
@@ -3034,9 +3079,16 @@ function OverviewPanel({
       ? held[held.length - 1]
       : (undated[undated.length - 1] ?? null);
 
+  const showPriorities = hasPriorities(detail, canEdit);
+  const showStatus = Boolean(nextDate?.due_on);
+
   return (
     <section id="overview" className="space-y-4">
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div
+        className={`grid items-start gap-4 ${
+          showPriorities && showStatus ? "lg:grid-cols-[minmax(0,1fr)_18rem]" : ""
+        }`}
+      >
         <PrioritiesBanner
           detail={detail}
           canEdit={canEdit}

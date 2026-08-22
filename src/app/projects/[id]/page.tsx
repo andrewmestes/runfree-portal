@@ -672,6 +672,7 @@ export default function ProjectDetailPage() {
                 projectId={projectId}
                 nextDate={nextDateItem}
                 thumbs={thumbs}
+                modules={modules}
                 onGoTo={goPanel}
                 onChanged={refresh}
               />
@@ -2557,7 +2558,7 @@ function ProjectAccess({
                   onClick={() => setAdding(true)}
                   className="min-h-[44px] w-full rounded-xl border border-dashed border-gray-300 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
                 >
-                  + Give someone access
+                  + Add a person to the project
                 </button>
               )}
               {message && (
@@ -3011,6 +3012,44 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
  * raises next is almost always "what else is coming?"
  */
 /**
+ * A session thumbnail with a play mark over it.
+ *
+ * Loom serves the video's first frame, and a recording that opens on a black
+ * slide gives a perfectly-loaded, perfectly-black rectangle. On the portal it
+ * read as a broken image — Andrew flagged it twice ("make sure the session
+ * recordings thumbnail is good"), and the image was fine every time: 1152x720,
+ * complete, just black.
+ *
+ * Nothing can be done about the frame itself, so the fix is to make it
+ * unmistakably a video. The play mark and the ring say "recording" even when
+ * the picture behind them says nothing at all.
+ */
+function SessionThumb({
+  src,
+  className = "",
+}: {
+  src: string;
+  className?: string;
+}) {
+  return (
+    <span className={`relative block shrink-0 overflow-hidden rounded-xl ring-1 ring-gray-200 ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" className="h-full w-full object-cover" />
+      <span
+        aria-hidden
+        className="absolute inset-0 grid place-items-center bg-runfree-ink/25 transition group-hover:bg-runfree-ink/10"
+      >
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-white/90 shadow-sm">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-3.5 w-3.5 text-runfree-magentaDeep">
+            <path d="M8 5.5v13l11-6.5z" />
+          </svg>
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/**
  * Whether PrioritiesBanner will render anything.
  *
  * It returns null for a viewer on a project with no tasks yet — a real case
@@ -3048,6 +3087,7 @@ function OverviewPanel({
   projectId,
   nextDate,
   thumbs,
+  modules,
   onGoTo,
   onChanged,
 }: {
@@ -3057,6 +3097,7 @@ function OverviewPanel({
   projectId: string;
   nextDate: PrepItem | null;
   thumbs: Record<string, string>;
+  modules: NavModule[];
   onGoTo: (key: string) => void;
   onChanged: () => void;
 }) {
@@ -3106,7 +3147,88 @@ function OverviewPanel({
         total={detail.sessions.length}
         onGoToSessions={() => onGoTo("sessions")}
       />
+
+      <ProcessGlanceCard
+        modules={modules}
+        currentSection={latest?.section ?? null}
+        onOpen={() => onGoTo("process")}
+      />
     </section>
+  );
+}
+
+/**
+ * The six tools, and which one we were last in.
+ *
+ * Overview opens the project and, with only the two orientation cards and the
+ * last session on it, left most of the screen empty. This is the piece that
+ * was missing: a church leader landing here can see the shape of the whole
+ * engagement and where inside it they are, without opening anything.
+ *
+ * It marks ONE module — the one the most recent session was tagged with — and
+ * deliberately does not mark the earlier ones as finished. Order of delivery
+ * is not order of completion; coaches run parts of the process, and Andrew
+ * has been explicit that a progress read which implies "3 of 6 done" turns a
+ * deliberately partial engagement into a failing one.
+ */
+function ProcessGlanceCard({
+  modules,
+  currentSection,
+  onOpen,
+}: {
+  modules: NavModule[];
+  currentSection: string | null;
+  onOpen: () => void;
+}) {
+  if (modules.length === 0) return null;
+
+  return (
+    <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
+      <div className="h-1.5 bg-runfree-grad" />
+      <div className="px-5 py-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
+            The process
+          </p>
+          <button
+            onClick={onOpen}
+            className="group inline-flex items-center gap-1.5 text-xs font-bold text-runfree-magentaDeep outline-none transition hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+          >
+            Open the process
+            <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+              &rarr;
+            </span>
+          </button>
+        </div>
+
+        <ul className="mt-3 flex flex-wrap gap-1.5">
+          {modules.map((m) => {
+            const here = currentSection != null && m.section === currentSection;
+            return (
+              <li key={m.section}>
+                <button
+                  onClick={onOpen}
+                  aria-current={here ? "true" : undefined}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
+                    here
+                      ? "bg-runfree-grad text-white shadow-sm"
+                      : "bg-gray-50 text-gray-600 ring-1 ring-gray-200 hover:text-runfree-ink"
+                  }`}
+                >
+                  {moduleLabel(m.section)}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        {currentSection && (
+          <p className="mt-3 text-xs text-gray-500">
+            Most recently in <strong className="font-semibold text-runfree-ink">{moduleLabel(currentSection)}</strong>.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -3143,14 +3265,7 @@ function LatestSessionCard({
     <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
       <div className="h-1.5 bg-runfree-grad" />
       <div className="flex flex-wrap items-center gap-x-5 gap-y-4 px-5 py-4">
-        {thumb ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={thumb}
-            alt=""
-            className="h-20 w-36 shrink-0 rounded-xl object-cover ring-1 ring-gray-200"
-          />
-        ) : null}
+        {thumb ? <SessionThumb src={thumb} className="h-20 w-36" /> : null}
 
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
@@ -4297,22 +4412,31 @@ function PrepCards({
   }
 
   // Full width, one per row, where the groups differ wildly in length.
+  //
+  // Numbered, because in Preparation these ARE a sequence. Andrew: "we could
+  // probably make this more of a learning portal style thing, where it's
+  // just, hey, do step one, watch this video, do this thing, read this
+  // chapter. Step two is do your preparation checklist." The template already
+  // orders the groups; the numbers just say out loud that the order means
+  // something.
   if (stacked) {
     return (
-      <div className="space-y-5">
-        {groups.map((g) => (
-          <PrepCard
-            key={g.id}
-            group={g}
-            items={items.filter((i) => i.group_id === g.id)}
-            projectId={projectId}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            fileUrls={fileUrls}
-            onChanged={onChanged}
-          />
+      <ol className="space-y-5">
+        {groups.map((g, i) => (
+          <li key={g.id}>
+            <PrepCard
+              group={g}
+              items={items.filter((x) => x.group_id === g.id)}
+              projectId={projectId}
+              canEdit={canEdit}
+              accessToken={accessToken}
+              fileUrls={fileUrls}
+              onChanged={onChanged}
+              step={i + 1}
+            />
+          </li>
         ))}
-      </div>
+      </ol>
     );
   }
 
@@ -4355,6 +4479,7 @@ function PrepCard({
   fileUrls,
   onChanged,
   asRow = false,
+  step,
 }: {
   group: PrepGroup;
   items: PrepItem[];
@@ -4365,6 +4490,8 @@ function PrepCard({
   onChanged: () => void;
   /** A collapsible row rather than a card in a grid. */
   asRow?: boolean;
+  /** Position in the sequence, when the caller is presenting one. */
+  step?: number;
 }) {
   const [adding, setAdding] = useState(false);
   // A row opens when it has something to show. An empty group stays shut —
@@ -4491,26 +4618,41 @@ function PrepCard({
   return (
     <section className="flex flex-col rounded-2xl bg-white p-5 ring-1 ring-gray-200/80 transition hover:ring-gray-300 sm:p-6">
       <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="flex min-w-0 gap-3">
+          {step != null && (
+            <span
+              aria-hidden
+              className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-runfree-pink text-[11px] font-bold tabular-nums text-runfree-magentaDeep"
+            >
+              {step}
+            </span>
+          )}
+          <div className="min-w-0">
           <h4 className="text-base font-semibold tracking-tight text-runfree-ink">
             {group.title}
           </h4>
           {group.description && (
             <p className="mt-1 text-xs leading-relaxed text-gray-500">{group.description}</p>
           )}
+          </div>
         </div>
         {counter}
       </header>
 
-      <div className="mt-4 flex-1">
+      <div className={ordered.length === 0 && canEdit ? "" : "mt-4 flex-1"}>
         {ordered.length === 0 ? (
-          /* Compact. Andrew, on Previous Vision Equity and the Preparation
-             Checklist: "Both of those cards, I think, can be quite a bit
-             smaller." An empty card was reserving as much height as a full
-             one, so two empty slots dominated the panel. */
-          <p className="rounded-xl border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
-            {canEdit ? "Nothing here yet — add the first one." : "Nothing here yet."}
-          </p>
+          /* An editor sees only the add control: the dashed "Nothing here yet
+             — add the first one" box sat directly above a dashed "+ Add a
+             document" box, two outlines saying one thing and costing ~100px
+             per empty group. With four of them that was most of the panel.
+             Andrew: "it has a huge spot for previous vision equity, but I'd
+             just like a little space." A reader, who has no add button, still
+             needs to be told the group is empty. */
+          canEdit ? null : (
+            <p className="rounded-xl border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
+              Nothing here yet.
+            </p>
+          )
         ) : (
           <ul className="divide-y divide-gray-100">
             {ordered.map((item) => (
@@ -4548,7 +4690,8 @@ function PrepCard({
               onClick={() => setAdding(true)}
               className="w-full rounded-xl border border-dashed border-gray-300 py-2.5 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
             >
-              + Add {prepNoun(group.kind)}
+              + Add {ordered.length === 0 ? "the first " : ""}
+              {prepNoun(group.kind)}
             </button>
           )}
         </div>
@@ -5478,12 +5621,7 @@ function SessionRow({
               thumbnail there, and then you can click on it and it will drop
               down with any additional information." */}
           {session.recording_url && thumb ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={thumb}
-              alt=""
-              className="hidden h-16 w-28 shrink-0 rounded-lg object-cover ring-1 ring-gray-200 sm:block"
-            />
+            <SessionThumb src={thumb} className="hidden h-16 w-28 sm:block" />
           ) : session.recording_url ? (
             <span className="rounded-full bg-runfree-pink px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
               Recording

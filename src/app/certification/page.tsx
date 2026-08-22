@@ -129,7 +129,7 @@ export default function CertificationHubPage() {
         backLabel="Your projects"
         eyebrow={firstName ? `Welcome back, ${firstName}` : undefined}
         title="Certified Vision Framer Hub"
-        subtitle="Helping leaders run free into what Jesus started"
+        subtitle="Helping teams run free into what Jesus started"
       />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">

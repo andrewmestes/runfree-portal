@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, hasCertificationAccess, logout } from "@/lib/auth";
+import { getCurrentFramer, hasCertificationAccess, isPortalAdmin, logout } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
@@ -43,6 +43,8 @@ function prettySize(bytes: number | null) {
 
 export default function ResourcesPage() {
   const [framer, setFramer] = useState<Framer | null>(null);
+  /** Refresh from Drive is a maintenance action, not a reader's control. */
+  const [canRefresh, setCanRefresh] = useState(false);
   const [modules, setModules] = useState<PortalModule[]>([]);
   const [status, setStatus] = useState<
     "checking" | "denied" | "ready" | "error"
@@ -103,6 +105,7 @@ export default function ResourcesPage() {
       }
 
       setFramer(current);
+      setCanRefresh(await isPortalAdmin());
       await loadLibrary();
       setStatus("ready");
     }
@@ -277,13 +280,20 @@ export default function ResourcesPage() {
             {total} {total === 1 ? "handout" : "handouts"}
             {needle && " matching"}
           </span>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="ml-auto rounded-lg px-3 py-2 text-sm font-medium text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-magentaDeep hover:ring-runfree-magenta/40 disabled:opacity-50"
-          >
-            {refreshing ? "Refreshing…" : "Refresh from Drive"}
-          </button>
+          {/* Andrew, walking a framer through this page: "I'm not sure why
+              it has a refresh drive thing on here. That should probably only
+              be for us internally." It re-reads the Drive folder — useful
+              when we have just changed the handouts, meaningless and slightly
+              alarming to a framer who only wants to download one. */}
+          {canRefresh && (
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="ml-auto rounded-lg px-3 py-2 text-sm font-medium text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-magentaDeep hover:ring-runfree-magenta/40 disabled:opacity-50"
+            >
+              {refreshing ? "Refreshing…" : "Refresh from Drive"}
+            </button>
+          )}
         </div>
 
         {visible.length === 0 ? (

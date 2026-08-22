@@ -181,37 +181,80 @@ against the live database instead of reasoning about the policy on paper.
 
 ## The project page is panels, not a long scroll
 
-`/projects/[id]` shows **one panel at a time**, selected by `?panel=<key>`
-(`process` | `team` | `dates` | `sessions` | `deliverables`). Andrew: "it
-should be VERY easy for someone to navigate even if they have no idea what is
-all included in the project."
+`/projects/[id]` shows **one panel at a time**, selected by `?panel=<key>`:
+`overview` | `prepare` | `process` | `team` | `dates` | `sessions` |
+`deliverables`. Andrew: "it should be VERY easy for someone to navigate even
+if they have no idea what is all included in the project."
 
-There is no `overview`, `prepare` or `access` panel, and each absence is
-deliberate. Orientation moved *above* the tabs — the priorities card and the
-navy status card render on every panel, which is what the Overview existed to
-do. Preparation is the first block inside The Process, because it is step zero
-of that process rather than a parallel section. Access is a dialog in the
-header, since who can sign in is a property of the project, not a section of
-it. Old `?panel=overview` links still work: an unknown key falls back to the
-first available panel.
+**Overview is the landing panel** and the fallback for any unrecognised key.
+It is the only entry that does not depend on the project having particular
+content, which is why it can be the fallback at all — every other panel is
+conditional on there being something in it, and a Younique project (no module
+track) has no `process` panel to fall back to.
+
+Overview carries What's Important Now, the next session date, and the most
+recent session recording. It was **removed once and brought back**, and the
+history matters because the arguments are symmetrical:
+
+- Removed, because it was a landing pad whose only job was pointing at other
+  panels. Its two orientation cards were floated *above* the tabs instead, so
+  they showed on every panel.
+- Brought back (22 Aug 2026), because the page has since gained a left column
+  — and on a phone a header and a section strip too. Those two ever-present
+  cards had become ~120px of furniture on top of all six other panels. One
+  place to put them buys that height back everywhere else, and the panel now
+  holds real content rather than signposts.
+
+Do not "simplify" this by floating the cards above the panels again without
+reading that trade — it has been made in both directions deliberately.
+
+`access` is still not a panel: who can sign in is a property of the project,
+so it is a dialog in the header.
 
 Two consequences that are easy to get wrong:
 
-- **An unknown `?panel=` falls back to Overview**, and the fallback is
-  computed from `panelItems` — which is itself built from what the project
-  actually has. A Younique project has no module track, so `?panel=process`
-  lands on Overview rather than rendering an empty section. If you add a
-  panel, add it to `panelItems` or it will be unreachable *and* silently
-  redirect.
+- **If you add a panel, add it to `panelItems`** or it will be unreachable
+  *and* silently redirect to Overview.
 - **Condensed view still renders everything at once** and deliberately keeps
-  its `{ready}/{total}` counters. Don't "fix" those to match the Overview:
+  its `{ready}/{total}` counters. Don't "fix" those to match Overview:
   Condensed is the coach's scan-everything mode, where a ratio is the point.
 
-The Overview deliberately shows **no completion ratio**. Andrew: "sometimes
-coaches don't finish all 23 based on what they're delivering. sometimes we do
-portions of the process." A denominator turns a deliberately partial
-engagement into one that reads as mostly failed. `VisionStackCard` takes
-`ready` and has no `total` prop for this reason — don't add one back.
+The panel rail shows **labels only, no counts** — see the note in
+`ProjectToolbar`'s successors. And Overview shows **no completion ratio**.
+Andrew: "sometimes coaches don't finish all 23 based on what they're
+delivering. sometimes we do portions of the process." A denominator turns a
+deliberately partial engagement into one that reads as mostly failed.
+`VisionStackCard` takes `ready` and has no `total` prop for this reason —
+don't add one back.
+
+## Navigation is a rail on desktop and a drawer on a phone
+
+One set of markup, two shells, in `ProjectSidebar`:
+
+- **`lg` and up** — the static navy column, always visible.
+- **below `lg`** — off-canvas drawer, opened by the ☰ in `PortalHeader`
+  (which only renders when the page passes `onMenuClick`).
+
+`PanelStrip` — the horizontal section strip — renders **only between `md` and
+`lg`**. Not on a phone: seven labels do not fit 375px, and the earlier version
+scrolled sideways with "Key Dates" cut in half. It wraps rather than scrolls,
+so nothing is ever hidden off the edge.
+
+Two traps here, both of which have already been hit once:
+
+- **`PortalHeader` has its own `sm:hidden` mobile menu.** It is suppressed
+  when `onMenuClick` is supplied. Without that guard the project page renders
+  two hamburgers below 640px. That old menu is also the only route to
+  Certification below `sm`, which is why Certification is repeated at the foot
+  of the drawer under `lg:hidden`.
+- **`sticky` resolves against the nearest scrolling ancestor.** The strip used
+  to live inside the sidebar's `overflow-y-auto` middle band, so its `sticky`
+  did nothing. It has to be in the content column to stick under the header.
+
+`PanelRail` (desktop) and `PanelStrip` (tablet) are separate components on
+purpose. They were one component rendering both layouts, and that is exactly
+how they drifted apart — and why removing the count badges from "the rail"
+silently left them in the strip.
 
 ## Never run `next build` while `next dev` is running
 

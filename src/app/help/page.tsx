@@ -110,8 +110,8 @@ export default function HelpPage() {
         {(hasProjects || profile.is_staff) && (
         <Section title="Using your portal">
           <Faq q="Where do I find the materials for our next session?">
-            Open your project and choose <strong>The Process</strong> in the column down
-            the left. The six icons are the six tools of the process — click one and
+            A project opens on <strong>Overview</strong>. For the session materials,
+            choose <strong>The Process</strong> in the column down the left. The six icons are the six tools of the process — click one and
             everything for it appears underneath: the handouts, the videos to watch
             beforehand, photos from our working sessions, and what that module
             produces. Nothing loads a new page, so you can move between them freely.
@@ -123,6 +123,7 @@ export default function HelpPage() {
           <Faq q="What is the dark column down the left?">
             Your way around. The sections of the project sit at the top of it:
             <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li><strong>Overview</strong> — where you land: what your team owes before we next meet, when that is, and the last session we held.</li>
               <li><strong>Preparation</strong> — what to gather and set up before we begin.</li>
               <li><strong>The Process</strong> — the six tools, with their handouts and videos.</li>
               <li><strong>Team</strong> — your church&rsquo;s team, and the RunFree people working with you.</li>
@@ -130,7 +131,8 @@ export default function HelpPage() {
               <li><strong>Session Recordings</strong> — every session we have held, with its recording and the charts from the room.</li>
               <li><strong>Deliverables</strong> — the finished work, in the Vision Stack.</li>
             </ul>
-            A project only shows the sections it actually has, so you may see fewer than six.
+            A project only shows the sections it actually has, so you may see fewer than
+            seven. Overview is always there.
             <br />
             <br />
             Underneath them are your other projects — <strong>Starred</strong> first if you
@@ -139,10 +141,11 @@ export default function HelpPage() {
             account with the way to sign out.
             <br />
             <br />
-            To the right of the column, <strong>What&rsquo;s Important Now</strong> is what
-            your team owes before we next meet, and the card beside it says when that is.
-            That pair stays on screen whichever section you are in, and you can fold the
-            first one away.
+            <strong>What&rsquo;s Important Now</strong> — the list of what your team owes
+            before we next meet — lives on <strong>Overview</strong>, along with the next
+            date and the most recent recording. It used to sit above every section, which
+            meant the same two cards took up the top of the screen no matter what you had
+            come to look at. Everything is one click away in the column instead.
           </Faq>
           <Faq q="How does this work on my phone?">
             The column would leave almost nothing for the content on a narrow screen, so
@@ -151,9 +154,14 @@ export default function HelpPage() {
             section closes it for you.
             <br />
             <br />
-            You do not need the drawer just to move between sections: they also run across
-            the top as a row of buttons you can swipe sideways, and that row stays put as
-            you scroll.
+            On a phone the drawer is the only way between sections, and that is deliberate:
+            seven labels will not fit across a phone screen, so the row we used to show ran
+            off the edge and cut the last few in half. Nothing is hidden in the drawer.
+            <br />
+            <br />
+            On a tablet there is room, so the sections also appear as a row of buttons
+            beneath the header — wrapping onto a second line rather than scrolling, so you
+            can see all of them at once.
           </Faq>
           <Faq q="What is the Vision Stack?">
             It is the finished work — everything your team builds across the whole

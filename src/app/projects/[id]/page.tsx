@@ -551,6 +551,11 @@ export default function ProjectDetailPage() {
   // Access is absent for the same class of reason: who can get in is a
   // property of the project, and it lives in the header beside the logo.
   const panelItems = [
+    // Always present, and always first: it is the landing panel, and unlike
+    // every other entry it does not depend on the project having any
+    // particular content — an engagement with nothing in it yet still has a
+    // "here is what happens next".
+    { key: "overview", label: "Overview" },
     prepareGroups.length > 0 || prepResources.length > 0
       ? { key: "prepare", label: "Preparation" }
       : null,
@@ -561,12 +566,16 @@ export default function ProjectDetailPage() {
     hasDeliverables ? { key: "deliverables", label: "Deliverables" } : null,
   ].filter((x): x is { key: string; label: string } => x !== null);
 
-  // Landing on The Process, not on whatever happens to lead the rail.
-  // Preparation is first in the list because it comes first in the
-  // engagement, but the tools are what someone opens a project to see.
-  const fallbackPanel = panelItems.some((p) => p.key === "process")
-    ? "process"
-    : (panelItems[0]?.key ?? "team");
+  // Landing on Overview. Andrew: "when someone logs in to their project, it
+  // shows that type of information first, and then it has all the other tabs
+  // where they can click into the process."
+  //
+  // This replaces an earlier instruction of his — "i want the default opening
+  // of a project to go to the process" — which was right when the alternative
+  // was a signpost page. Overview now carries the work owed, the next date
+  // and the last session, so it answers the question someone opens a project
+  // with instead of deferring it.
+  const fallbackPanel = "overview";
   const activePanel = panelItems.some((p) => p.key === panel) ? panel : fallbackPanel;
 
   const nextDateItem =
@@ -620,8 +629,10 @@ export default function ProjectDetailPage() {
         />
 
       <main className="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
-        {/* The sections, as a strip. Above ChurchHero so it is the first
-            thing under the header on a phone and can stick there. */}
+        {/* The sections, as a strip — tablet and up only. Seven labels do
+            not fit 375px: they scrolled sideways and cut "Key Dates" in half,
+            which is what Andrew saw. On a phone the drawer is the navigation,
+            which is one extra tap and no hidden items. */}
         <PanelStrip items={panelItems} active={activePanel} onSelect={goPanel} />
         {/* Inside the content column, not above the whole shell — so the
             church's mark shares a left edge with everything under it.
@@ -638,28 +649,6 @@ export default function ProjectDetailPage() {
         />
 
         <div className="flex-1 px-4 sm:px-6 lg:px-8">
-        {/* Orientation sits above the tabs, on every panel, rather than
-            inside one you have to navigate to. Andrew: "let's do a side by
-            side with the 'coming up' and the 'where you are / next together'
-            cards. Then right under them make the tabs big enough to be full
-            width."
-
-            What you owe leads on the left because it is the thing that needs
-            doing; when it meets next is a fact you check, not an action. The
-            status card takes a fixed column so the two never end up at odd
-            widths as the priorities text grows. */}
-        <div className="mt-5 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <PrioritiesBanner
-            detail={detail}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            projectId={projectId}
-            moduleOptions={availableSections(detail)}
-            onChanged={refresh}
-          />
-          <ProjectStatusCard nextDate={nextDateItem} onGoToDates={() => goPanel("dates")} />
-        </div>
-
 
         {/* One panel at a time. `key` on the wrapper restarts the fade on
             every swap, so the change is legible rather than an instant
@@ -671,10 +660,23 @@ export default function ProjectDetailPage() {
             fought the navigation rather than complementing it. Andrew: "I'm
             wondering if we need that at all anymore... I don't like the way
             that that currently looks." */}
-        <div key={activePanel} className="animate-fade mt-6 min-w-0">
+        <div key={activePanel} className="animate-fade mt-5 min-w-0">
             {/* TeamSection renders the church roster itself now, so there is
                 no second ChurchTeamInfo here — that pairing was what put
                 "Church team 0" directly above a list of eight people. */}
+            {activePanel === "overview" && (
+              <OverviewPanel
+                detail={detail}
+                canEdit={canEdit}
+                accessToken={accessToken}
+                projectId={projectId}
+                nextDate={nextDateItem}
+                thumbs={thumbs}
+                onGoTo={goPanel}
+                onChanged={refresh}
+              />
+            )}
+
             {activePanel === "team" && (
               <TeamSection
                 id="team"
@@ -1572,14 +1574,22 @@ function ProjectSidebar({
   const projectLink =
     "flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white/65 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60";
 
-  // Escape closes the drawer, the same as tapping away from it.
+  // Escape closes the drawer, the same as tapping away from it — and while
+  // it is open the page behind does not scroll. Without the lock, dragging
+  // on the drawer's own list scrolls the project underneath it once the list
+  // reaches its end, which on a phone reads as the page coming apart.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
   }, [open, onClose]);
 
   /**
@@ -1831,7 +1841,7 @@ function PanelRail({
 }
 
 /**
- * The same sections as a horizontal strip, for phones and tablets.
+ * The same sections as a horizontal strip, for tablets only.
  *
  * This used to render inside the sidebar alongside the rail, which put a
  * light-grey strip inside the navy column on every screen below `lg` — and
@@ -1839,9 +1849,14 @@ function PanelRail({
  * nearest scrolling ancestor and the sidebar's middle band is one.
  *
  * It belongs in the content column instead: it is the content's navigation,
- * and only there can it actually stick beneath the header. Switching panels
- * is the common action, so it stays out here rather than behind the drawer —
- * the drawer is for changing project or reaching your account.
+ * and only there can it actually stick beneath the header.
+ *
+ * Not on a phone at all. Seven labels do not fit 375px — they scrolled
+ * sideways with "Key Dates" cut in half, which is exactly what Andrew
+ * reported. Below `md` the drawer is the navigation: one extra tap, and
+ * nothing hidden off the edge of the screen. Between `md` and `lg` there is
+ * room, and the labels wrap to two rows rather than scrolling, so every
+ * section is visible without dragging.
  */
 function PanelStrip({
   items,
@@ -1855,7 +1870,7 @@ function PanelStrip({
   if (items.length === 0) return null;
 
   return (
-    <div className="sticky top-0 z-30 border-b border-gray-200/70 bg-gray-50/90 backdrop-blur-md lg:hidden">
+    <div className="sticky top-0 z-30 hidden border-b border-gray-200/70 bg-gray-50/90 backdrop-blur-md md:block lg:hidden">
       <nav aria-label="Project sections" className="px-4 py-2 sm:px-6">
         <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {items.map((it) => {
@@ -2963,6 +2978,155 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
  * deliberately: the date is the thing people look for, and the question it
  * raises next is almost always "what else is coming?"
  */
+/**
+ * The landing panel: what is happening, before anything you have to go and
+ * look for.
+ *
+ * Andrew: "maybe just having an overview tab for every project where it just
+ * lists out all of the what's important now, upcoming session, maybe having a
+ * most recent session recording, with a link to all of the other session
+ * recordings ... that would populate kind of as a dashboard almost."
+ *
+ * This reverses a deliberate earlier decision, and the reason it is right to
+ * reverse is worth recording. Overview was removed because it was a landing
+ * pad whose only job was pointing at other panels — so its two orientation
+ * cards were floated above the tabs instead, visible everywhere. Since then
+ * the page has gained a left column, and on a phone a header and a section
+ * strip too. Those two cards became ~120px of furniture on top of all six
+ * panels. Putting them back in one place buys that height back everywhere
+ * else, and now the panel carries real content rather than signposts.
+ */
+function OverviewPanel({
+  detail,
+  canEdit,
+  accessToken,
+  projectId,
+  nextDate,
+  thumbs,
+  onGoTo,
+  onChanged,
+}: {
+  detail: ProjectDetail;
+  canEdit: boolean;
+  accessToken: string | null;
+  projectId: string;
+  nextDate: PrepItem | null;
+  thumbs: Record<string, string>;
+  onGoTo: (key: string) => void;
+  onChanged: () => void;
+}) {
+  // getProjectDetail orders sessions by held_on ASCENDING (nulls last), so
+  // sessions[0] is the OLDEST — the first meeting ever held. Taking the head
+  // of the list here would have captioned it "Most recent session".
+  //
+  // "Most recent" also has to mean one that has actually happened: a coach
+  // can create a session row for a date still in the future, and that is not
+  // something there is a recording of yet. So: the latest session dated today
+  // or earlier; failing that, the last undated one, which is a session
+  // someone logged without filling the date in; failing that, nothing, and
+  // the card says so.
+  const held = detail.sessions.filter(
+    (x) => x.held_on && (parseLocalDate(x.held_on)?.getTime() ?? Infinity) <= startOfToday()
+  );
+  const undated = detail.sessions.filter((x) => !x.held_on);
+  const latest =
+    held.length > 0
+      ? held[held.length - 1]
+      : (undated[undated.length - 1] ?? null);
+
+  return (
+    <section id="overview" className="space-y-4">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <PrioritiesBanner
+          detail={detail}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          projectId={projectId}
+          moduleOptions={availableSections(detail)}
+          onChanged={onChanged}
+        />
+        <ProjectStatusCard nextDate={nextDate} onGoToDates={() => onGoTo("dates")} />
+      </div>
+
+      <LatestSessionCard
+        session={latest}
+        thumb={latest?.recording_url ? thumbs[latest.recording_url] : undefined}
+        total={detail.sessions.length}
+        onGoToSessions={() => onGoTo("sessions")}
+      />
+    </section>
+  );
+}
+
+/**
+ * The last time you met, with its recording — and the way to every other one.
+ *
+ * Deliberately one card rather than a list: the list is what the Session
+ * Recordings panel is for, and repeating it here would make the overview a
+ * second copy of that panel rather than a summary of it.
+ */
+function LatestSessionCard({
+  session,
+  thumb,
+  total,
+  onGoToSessions,
+}: {
+  session: ProjectDetail["sessions"][number] | null;
+  thumb?: string;
+  total: number;
+  onGoToSessions: () => void;
+}) {
+  if (!session) {
+    return (
+      <div className="rounded-3xl border border-dashed border-gray-200 px-5 py-8 text-center">
+        <p className="text-sm text-gray-400">
+          Recordings appear here once we have met. Until then, everything to get ready
+          is under Preparation.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
+      <div className="h-1.5 bg-runfree-grad" />
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-4 px-5 py-4">
+        {thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumb}
+            alt=""
+            className="h-20 w-36 shrink-0 rounded-xl object-cover ring-1 ring-gray-200"
+          />
+        ) : null}
+
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
+            Most recent session
+          </p>
+          <p className="mt-0.5 truncate font-display text-xl font-extrabold tracking-tight text-runfree-ink">
+            {session.title}
+          </p>
+          <p className="mt-0.5 text-sm text-gray-500">
+            {formatSessionDate(session.held_on)}
+            {session.section && ` · ${moduleLabel(session.section)}`}
+          </p>
+        </div>
+
+        <button
+          onClick={onGoToSessions}
+          className="group inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-runfree-pink px-3.5 py-2 text-xs font-bold text-runfree-magentaDeep outline-none transition hover:bg-runfree-magenta hover:text-white focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+        >
+          {total > 1 ? `All ${total} recordings` : "Open recording"}
+          <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+            &rarr;
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProjectStatusCard({
   nextDate,
   onGoToDates,

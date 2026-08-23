@@ -438,7 +438,7 @@ export default function FramersAdminPage() {
         title="Certified Vision Framers"
         subtitle="Who can get into the portal"
         backHref="/admin"
-        backLabel="← Admin"
+        backLabel="Admin"
       />
 
       <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">

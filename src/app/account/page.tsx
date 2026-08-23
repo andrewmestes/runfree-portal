@@ -163,7 +163,7 @@ export default function AccountPage() {
         onSignOut={handleSignOut}
         title="Your account"
         backHref="/"
-        backLabel="← Home"
+        backLabel="Home"
       />
 
       <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:px-8">
@@ -240,8 +240,8 @@ export default function AccountPage() {
         </div>
 
         <p className="mt-4 text-xs text-gray-500">
-          Need your name or email changed? Ask an admin — those are tied to your
-          certification record.
+          Need your name or email changed? Ask an admin — we keep those in step
+          with your records.
         </p>
       </main>
     </div>

@@ -184,7 +184,7 @@ export default function AdminVideosPage() {
         title="Training Videos"
         subtitle="Paste a Loom, YouTube, Vimeo, or Drive link"
         backHref="/admin"
-        backLabel="← Admin"
+        backLabel="Admin"
       />
 
       <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">

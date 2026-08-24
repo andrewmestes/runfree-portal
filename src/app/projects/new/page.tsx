@@ -116,7 +116,7 @@ export default function NewProjectPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <PortalHeader
         profile={profile}
         onSignOut={handleSignOut}
@@ -126,7 +126,7 @@ export default function NewProjectPage() {
         subtitle="Stamp a new engagement from a template, or start from scratch and shape it as you go."
       />
 
-      <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+      <main className="flex-1 mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 sm:p-8">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-runfree-ink">Project name</label>

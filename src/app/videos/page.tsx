@@ -173,7 +173,7 @@ export default function VideosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <PortalHeader
         section="certification"
         backHref="/certification"
@@ -185,7 +185,7 @@ export default function VideosPage() {
         badge
       />
 
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      <main className="flex-1 mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
         {loadError && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {loadError}

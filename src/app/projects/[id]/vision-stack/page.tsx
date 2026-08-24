@@ -129,7 +129,7 @@ export default function VisionStackPage() {
 
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <PortalHeader
         profile={profile}
         onSignOut={handleSignOut}
@@ -180,7 +180,7 @@ export default function VisionStackPage() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
+      <main className="flex-1 mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="space-y-4">
           {detail.stackLayers.map((layer, i) => (
             <LayerBlock

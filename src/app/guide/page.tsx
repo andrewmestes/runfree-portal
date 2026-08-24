@@ -145,7 +145,7 @@ export default function GuidePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <PortalHeader
         section="certification"
         backHref="/certification"
@@ -159,7 +159,7 @@ export default function GuidePage() {
 
       {/* The whole training playbook lives in this one file — it earns a
           moment, not just another card in a list. */}
-      <div className="relative isolate overflow-hidden bg-runfree-navy">
+      <div className="relative isolate flex-1 overflow-hidden bg-runfree-navy">
         <Image
           src="/brand/dfg-sunset.png"
           alt=""

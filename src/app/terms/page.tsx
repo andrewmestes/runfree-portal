@@ -26,7 +26,7 @@ const UPDATED = "19 August 2026";
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <header className="bg-runfree-navy">
         <div className="h-1.5 bg-runfree-grad" />
         <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
@@ -46,7 +46,7 @@ export default function TermsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+      <main className="flex-1 mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <div className="space-y-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 sm:p-9">
           <Section title="What this is">
             <P>

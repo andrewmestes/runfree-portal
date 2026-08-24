@@ -285,7 +285,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <PortalHeader
         profile={profile}
         onSignOut={async () => {
@@ -297,7 +297,7 @@ export default function AdminPage() {
         certificationAccess
       />
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="flex-1 mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         {/* The two screens that came over from the CVF portal. They manage
             different records than this page does — the certification roster
             and the video library — so they stay separate rather than being

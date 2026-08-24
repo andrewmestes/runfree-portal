@@ -93,7 +93,7 @@ export default function HelpPage() {
   if (!profile) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <PortalHeader
         profile={profile}
         onSignOut={handleSignOut}
@@ -104,7 +104,7 @@ export default function HelpPage() {
         certificationAccess={profile.certification_access || profile.is_staff}
       />
 
-      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+      <main className="flex-1 mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
 
         {/* Only for someone who has a project to use. */}
         {(hasProjects || profile.is_staff) && (

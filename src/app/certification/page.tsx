@@ -94,9 +94,9 @@ export default function CertificationHubPage() {
 
   if (status === "denied") {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="flex min-h-screen flex-col bg-gray-50">
         <PortalHeader profile={profile} onSignOut={handleSignOut} title="" showTitleBlock={false} />
-        <main className="mx-auto max-w-xl px-4 py-24 text-center">
+        <main className="flex-1 mx-auto max-w-xl px-4 py-24 text-center">
           <h1 className="font-display text-2xl font-bold text-runfree-ink">
             This area is for Certified Vision Framers
           </h1>
@@ -118,7 +118,7 @@ export default function CertificationHubPage() {
   const firstName = profile?.full_name?.split(" ")[0];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <PortalHeader
         profile={profile}
         onSignOut={handleSignOut}
@@ -132,7 +132,7 @@ export default function CertificationHubPage() {
         subtitle="Helping teams run free into what Jesus started"
       />
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+      <main className="flex-1 mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <HubCard
             href="/resources"

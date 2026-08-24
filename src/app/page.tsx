@@ -253,7 +253,7 @@ export default function HomePage() {
         certificationAccess={(profile?.certification_access ?? false) || (profile?.is_staff ?? false)}
       />
 
-      <main className="flex-1 mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+      <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         <div className="mb-6 flex items-center justify-end gap-2">
           <div className="inline-flex rounded-lg bg-white p-1 ring-1 ring-gray-200">
             {(["cards", "list"] as const).map((l) => (

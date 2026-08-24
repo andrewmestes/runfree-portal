@@ -48,7 +48,7 @@ export default function PrivacyPage() {
         </div>
       </header>
 
-      <main className="flex-1 mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+      <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <div className="space-y-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 sm:p-9">
           <Section title="Who this covers">
             <P>

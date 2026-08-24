@@ -180,7 +180,7 @@ export default function VisionStackPage() {
         </div>
       </div>
 
-      <main className="flex-1 mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
+      <main className="flex-1 mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="space-y-4">
           {detail.stackLayers.map((layer, i) => (
             <LayerBlock

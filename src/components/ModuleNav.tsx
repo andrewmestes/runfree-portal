@@ -56,6 +56,25 @@ export default function ModuleNav({
 
   return (
     <nav aria-label="Process modules">
+      {/* Title first, icons underneath. Andrew: "move the 'module 1 - Problem'
+          and tagline above the 6 icons ... Title on top, icons underneath."
+          It used to sit below the rail, where a long label on the outer icons
+          could crowd it and where it read as a caption on the row rather than
+          the heading for what you had chosen. Keyed on the module so it
+          re-animates on each change. */}
+      <div className="mb-7 flex min-h-[68px] items-center justify-center px-4">
+        {meta && activeModule && (
+          <div key={activeModule.section} className="animate-rise text-center">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
+              {meta.stage}
+            </p>
+            <p className="mt-1 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
+              {meta.mantra}
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="relative">
         {/* Track — it must start and end at the CENTRE of the outer icons.
             The items are flex-1, so with n of them each centre sits half an
@@ -174,20 +193,6 @@ export default function ModuleNav({
         </ul>
       </div>
 
-      {/* The mantra gets its own line, sized to actually carry. Keyed on the
-          module so it re-animates each time the selection changes. */}
-      <div className="mt-8 flex min-h-[68px] items-center justify-center px-4">
-        {meta && activeModule && (
-          <div key={activeModule.section} className="animate-rise text-center">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
-              {meta.stage}
-            </p>
-            <p className="mt-1 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
-              {meta.mantra}
-            </p>
-          </div>
-        )}
-      </div>
     </nav>
   );
 }

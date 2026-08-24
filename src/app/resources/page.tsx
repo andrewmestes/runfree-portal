@@ -8,6 +8,7 @@ import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
 import PortalFooter from "@/components/PortalFooter";
+import { isProcessModule, stripModuleNumber } from "@/lib/modules";
 import ModuleNav from "@/components/ModuleNav";
 import FilePreview, { PreviewFile } from "@/components/FilePreview";
 
@@ -183,6 +184,14 @@ export default function ResourcesPage() {
 
   const needle = query.trim().toLowerCase();
 
+  // The rail carries the six process tools; everything else — the Field
+  // Guide at 0, Additional and Combined Handouts after 6 — becomes a pill
+  // underneath. isProcessModule is the same 1..6 test ModuleNav uses to
+  // decide which entries have artwork, so the split cannot drift from it.
+  const processModules = modules.filter((m) => isProcessModule(m.order));
+  const extraModules = modules.filter((m) => !isProcessModule(m.order));
+  const isFieldGuide = (name: string) => /field guide/i.test(name);
+
   // Search spans every module; the icon nav only narrows when not searching.
   const visible = modules
     .filter((m) => needle || !active || m.id === active)
@@ -248,8 +257,19 @@ export default function ResourcesPage() {
           </div>
         )}
 
+        {/* The rail is the six process tools, and only those.
+            Andrew: "the vision frame field guide, additional handouts, and
+            combined handouts should be pills below the process."
+
+            They were sitting in the rail as three document-icon circles among
+            six pieces of module artwork, which made the track read as a
+            nine-step process it is not — and gave the outer entries the
+            longest labels, so "0 - Vision Frame Field Guide" ran to three
+            lines and dragged the whole row down with it. They are reference
+            material, not steps, and the project page has always shown them as
+            pills underneath. This matches it. */}
         <ModuleNav
-          modules={modules.map((m) => ({
+          modules={processModules.map((m) => ({
             // The merged ModuleNav keys on `section` (the raw "Mod #2 CROWD
             // CLOUD" string) rather than an id, because the project side has
             // no ids for its sections. The library's module id serves.
@@ -268,6 +288,44 @@ export default function ResourcesPage() {
             setQuery("");
           }}
         />
+
+        {extraModules.length > 0 && (
+          <ul className="mb-10 mt-10 flex flex-wrap justify-center gap-2.5">
+            {extraModules.map((m) => {
+              const lead = isFieldGuide(m.name);
+              const on = !needle && active === m.id;
+              return (
+                <li key={m.id}>
+                  <button
+                    onClick={() => {
+                      setActive((prev) => (prev === m.id ? "" : m.id));
+                      setQuery("");
+                    }}
+                    aria-pressed={on}
+                    className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[44px] ${
+                      lead
+                        ? "bg-runfree-grad text-white hover:opacity-95"
+                        : on
+                          ? "bg-runfree-pink text-runfree-magentaDeep ring-1 ring-runfree-magenta/40"
+                          : "bg-white text-gray-600 ring-1 ring-gray-200 hover:text-runfree-ink hover:ring-runfree-magenta/40"
+                    }`}
+                  >
+                    <span className={lead ? "text-white" : "text-runfree-magentaDeep"}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                        <path d="M14 3v5h5" />
+                        <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
+                      </svg>
+                    </span>
+                    {stripModuleNumber(m.name)}
+                    <span className="text-[10px] font-bold tabular-nums opacity-70">
+                      {m.files.length}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <input

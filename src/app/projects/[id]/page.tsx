@@ -1639,11 +1639,17 @@ function ProjectSidebar({
             dropdown to see additional projects." A permanently visible
             heading with a collapsible list under it satisfies both. */}
         <div className="mt-8 space-y-5 border-t border-white/10 pt-5">
+          {/* Always rendered, even with nothing in it. Andrew asked for the
+              section to exist ("there should be a starred section with a
+              dropdown available"); hiding it until something is starred means
+              he looks for it and concludes it was never built. The hint also
+              teaches where the stars are. */}
           <SidebarProjectList
             title="Starred"
             projects={starred}
             currentProjectId={currentProjectId}
             starred
+            emptyHint="Star a project on Your projects to pin it here."
           />
           <SidebarProjectList
             title="All projects"
@@ -1786,14 +1792,17 @@ function SidebarProjectList({
   projects,
   currentProjectId,
   starred = false,
+  emptyHint,
 }: {
   title: string;
   projects: { id: string; name: string; pinned: boolean }[];
   currentProjectId: string;
   starred?: boolean;
+  /** Shown instead of hiding the section when there is nothing in it. */
+  emptyHint?: string;
 }) {
   const [open, setOpen] = useState(true);
-  if (projects.length === 0) return null;
+  if (projects.length === 0 && !emptyHint) return null;
 
   return (
     <div>
@@ -1821,7 +1830,11 @@ function SidebarProjectList({
         </svg>
       </button>
 
-      {open && (
+      {open && projects.length === 0 && emptyHint && (
+        <p className="px-3.5 py-1.5 text-[11px] leading-relaxed text-white/35">{emptyHint}</p>
+      )}
+
+      {open && projects.length > 0 && (
         <ul className="mt-0.5 space-y-0.5">
           {projects.map((p) => {
             const here = p.id === currentProjectId;

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { MODULE_META, isProcessModule, moduleLabel } from "@/lib/modules";
+import { MODULE_META, isProcessModule, moduleLabel, stripModuleNumber } from "@/lib/modules";
 
 export type NavModule = {
   /** The raw section string, e.g. "Mod #2 CROWD CLOUD". Used as the key. */
@@ -101,7 +101,23 @@ export default function ModuleNav({
         <ul className="relative flex flex-wrap items-start justify-center gap-x-1 gap-y-8 sm:flex-nowrap sm:gap-x-2">
           {process.map((m) => {
             const isActive = active === m.section;
-            const label = m.label ?? moduleLabel(m.section);
+            // No leading number, and one word per line.
+            //
+            // Andrew: "the titles '1-Funnel Fusion' etc look wonky because
+            // they break at different places. let's remove the numbers, and
+            // just go with the titles. both words have to either be on the
+            // same line or stacked. it can't mix, it looks bad."
+            //
+            // He is describing natural wrapping, which broke "1 - Funnel
+            // Fusion" after the number but "3 - Disciple's Journey" between
+            // the words — six labels, three different shapes. Splitting on
+            // words makes every one of them break in the same place, and the
+            // number was what made some of them wrap early in the first place.
+            //
+            // Safe to stack again now that the four-word Field Guide has left
+            // the rail for the pills below it: every process tool is exactly
+            // two words, so all six render as an identical two-line block.
+            const words = stripModuleNumber(m.label ?? moduleLabel(m.section)).split(/\s+/);
 
             return (
               <li key={m.section} className="flex-1">
@@ -180,11 +196,15 @@ export default function ModuleNav({
                       labels on a common baseline without capping the long
                       ones. */}
                   <span
-                    className={`mt-3 block min-h-10 max-w-[11ch] text-balance text-center text-[15px] font-semibold leading-[1.15] transition-colors ${
+                    className={`mt-3 flex min-h-10 flex-col items-center text-center text-[15px] font-semibold leading-[1.15] transition-colors ${
                       isActive ? "text-runfree-ink" : "text-gray-500 group-hover:text-runfree-ink"
                     }`}
                   >
-                    {label}
+                    {/* Keyed by index, not by the word: two labels in one rail
+                        can legitimately share a word. */}
+                    {words.map((w, i) => (
+                      <span key={i}>{w}</span>
+                    ))}
                   </span>
                 </button>
               </li>

@@ -555,7 +555,11 @@ export default function ProjectDetailPage() {
     // every other entry it does not depend on the project having any
     // particular content — an engagement with nothing in it yet still has a
     // "here is what happens next".
-    { key: "overview", label: "Overview" },
+    //
+    // Keyed "dashboard" since Andrew renamed it from Overview. Old
+    // ?panel=overview links still work: an unrecognised key falls through to
+    // fallbackPanel, which is this panel.
+    { key: "dashboard", label: "Dashboard" },
     prepareGroups.length > 0 || prepResources.length > 0
       ? { key: "prepare", label: "Preparation" }
       : null,
@@ -575,7 +579,7 @@ export default function ProjectDetailPage() {
   // was a signpost page. Overview now carries the work owed, the next date
   // and the last session, so it answers the question someone opens a project
   // with instead of deferring it.
-  const fallbackPanel = "overview";
+  const fallbackPanel = "dashboard";
   const activePanel = panelItems.some((p) => p.key === panel) ? panel : fallbackPanel;
 
   const nextDateItem =
@@ -664,8 +668,8 @@ export default function ProjectDetailPage() {
             {/* TeamSection renders the church roster itself now, so there is
                 no second ChurchTeamInfo here — that pairing was what put
                 "Church team 0" directly above a list of eight people. */}
-            {activePanel === "overview" && (
-              <OverviewPanel
+            {activePanel === "dashboard" && (
+              <DashboardPanel
                 detail={detail}
                 canEdit={canEdit}
                 accessToken={accessToken}
@@ -1566,14 +1570,15 @@ function ProjectSidebar({
   onClose: () => void;
 }) {
 
-  const others = projects.filter((p) => p.id !== currentProjectId);
-  const starred = others.filter((p) => p.pinned);
-  const rest = [...others]
+  // Every project, including the one you are looking at. Andrew: "make sure
+  // every project shows up on the list of projects on the left column, even
+  // if you're in the selected project." Hiding the current one made the list
+  // change length as you moved between projects, and left you unable to see
+  // where you were in it.
+  const starred = projects.filter((p) => p.pinned);
+  const rest = [...projects]
     .filter((p) => !p.pinned)
     .sort((a, b) => churchNameOf(a.name).localeCompare(churchNameOf(b.name)));
-
-  const projectLink =
-    "flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white/65 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60";
 
   // Escape closes the drawer, the same as tapping away from it — and while
   // it is open the page behind does not scroll. Without the lock, dragging
@@ -1627,47 +1632,25 @@ function ProjectSidebar({
           }}
         />
 
-        {/* Both lists, always on show. Andrew: "i want to see both 'starred'
-            and 'all projects' at all times." Folding them saved a little
-            height and cost the thing the column is for — seeing at a glance
-            what you can switch to. The middle band scrolls, so a long list
-            costs nothing that matters. */}
-        {starred.length > 0 && (
-          <div className="mt-8 border-t border-white/10 pt-5">
-            <p className="px-3.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
-              Starred
-            </p>
-            <ul className="space-y-0.5">
-              {starred.map((p) => (
-                <li key={p.id}>
-                  <a href={`/projects/${p.id}`} className={projectLink}>
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 shrink-0 text-runfree-magenta" aria-hidden="true">
-                      <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
-                    </svg>
-                    <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {rest.length > 0 && (
-          <div className={starred.length > 0 ? "mt-6" : "mt-8 border-t border-white/10 pt-5"}>
-            <p className="px-3.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
-              All projects
-            </p>
-            <ul className="space-y-0.5">
-              {rest.map((p) => (
-                <li key={p.id}>
-                  <a href={`/projects/${p.id}`} className={projectLink}>
-                    <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {/* Both headings always on show, each foldable. Andrew has asked for
+            both halves of this: "i want to see both 'starred' and 'all
+            projects' at all times", and later "there should be a starred
+            section with a dropdown available, and an 'all projects' with a
+            dropdown to see additional projects." A permanently visible
+            heading with a collapsible list under it satisfies both. */}
+        <div className="mt-8 space-y-5 border-t border-white/10 pt-5">
+          <SidebarProjectList
+            title="Starred"
+            projects={starred}
+            currentProjectId={currentProjectId}
+            starred
+          />
+          <SidebarProjectList
+            title="All projects"
+            projects={rest}
+            currentProjectId={currentProjectId}
+          />
+        </div>
       </div>
 
       {/* Always in view: the account, and the two portal-wide destinations.
@@ -1785,6 +1768,90 @@ function ProjectSidebar({
     </>
   );
 }
+/**
+ * One collapsible list of projects in the sidebar.
+ *
+ * Andrew asked for both headings to be permanently visible and for each to
+ * carry a way to fold the list under it: "there should be a starred section
+ * with a dropdown available, and an 'all projects' with a dropdown to see
+ * additional projects." So the HEADING never disappears — that was the point
+ * of the earlier "i want to see both at all times" — while the list beneath
+ * it can be put away when it gets long.
+ *
+ * Open by default: someone with three projects should not have to click
+ * twice to find the other two.
+ */
+function SidebarProjectList({
+  title,
+  projects,
+  currentProjectId,
+  starred = false,
+}: {
+  title: string;
+  projects: { id: string; name: string; pinned: boolean }[];
+  currentProjectId: string;
+  starred?: boolean;
+}) {
+  const [open, setOpen] = useState(true);
+  if (projects.length === 0) return null;
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="group flex w-full items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-left outline-none transition hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-white/60"
+      >
+        <span className="flex-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 transition group-hover:text-white/70">
+          {title}
+        </span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className={`h-3.5 w-3.5 shrink-0 text-white/40 transition-transform duration-200 ${
+            open ? "" : "-rotate-90"
+          }`}
+        >
+          <path d="M5 7.5 10 12.5l5-5" />
+        </svg>
+      </button>
+
+      {open && (
+        <ul className="mt-0.5 space-y-0.5">
+          {projects.map((p) => {
+            const here = p.id === currentProjectId;
+            return (
+              <li key={p.id}>
+                <a
+                  href={`/projects/${p.id}`}
+                  aria-current={here ? "page" : undefined}
+                  className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-white/60 ${
+                    here
+                      ? "bg-white/12 font-semibold text-white"
+                      : "text-white/65 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  {starred && (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 shrink-0 text-runfree-magenta" aria-hidden="true">
+                      <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
+                    </svg>
+                  )}
+                  <span className="min-w-0 truncate">{churchNameOf(p.name)}</span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** "Christ Chapel - Pivvot Vision Framing" -> "Christ Chapel". */
 function churchNameOf(name: string): string {
   return name.split(/\s+-\s+/)[0].trim() || name;
@@ -3080,7 +3147,7 @@ function hasPriorities(detail: ProjectDetail, canEdit: boolean) {
  * panels. Putting them back in one place buys that height back everywhere
  * else, and now the panel carries real content rather than signposts.
  */
-function OverviewPanel({
+function DashboardPanel({
   detail,
   canEdit,
   accessToken,
@@ -3124,7 +3191,7 @@ function OverviewPanel({
   const showStatus = Boolean(nextDate?.due_on);
 
   return (
-    <section id="overview" className="space-y-4">
+    <section id="dashboard" className="space-y-4">
       <div
         className={`grid items-start gap-4 ${
           showPriorities && showStatus ? "lg:grid-cols-[minmax(0,1fr)_18rem]" : ""
@@ -3305,6 +3372,8 @@ function ProjectStatusCard({
 }) {
   if (!nextDate?.due_on) return null;
 
+  const joinUrl = safeExternalUrl(nextDate.meeting_url);
+
   return (
     <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
       <div className="h-1.5 bg-runfree-grad" />
@@ -3320,17 +3389,41 @@ function ProjectStatusCard({
           <p className="mt-0.5 font-display text-xl font-extrabold tracking-tight">
             {formatPrepDate(nextDate.due_on)}
           </p>
+          {nextDate.title && (
+            <p className="mt-0.5 truncate text-xs text-white/60">{nextDate.title}</p>
+          )}
         </div>
 
-        <button
-          onClick={onGoToDates}
-          className="group inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
-        >
-          All key dates
-          <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
-            →
-          </span>
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* The way in, on the card that says when. Andrew: "if it's a
+              virtual session, I need to get this to where you can see all of
+              the information on it. Right now it says edit ... so you can add
+              a zoom link or meeting notes." The link was already stored on
+              the date; nothing surfaced it until you opened the item. */}
+          {joinUrl && (
+            <a
+              href={joinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-runfree-navy outline-none transition hover:bg-runfree-pink focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+                <path d="M15 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3.5" />
+                <path d="m15 10.5 5-3v9l-5-3" />
+              </svg>
+              Join
+            </a>
+          )}
+          <button
+            onClick={onGoToDates}
+            className="group inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
+          >
+            All key dates
+            <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+              →
+            </span>
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -182,24 +182,25 @@ against the live database instead of reasoning about the policy on paper.
 ## The project page is panels, not a long scroll
 
 `/projects/[id]` shows **one panel at a time**, selected by `?panel=<key>`:
-`overview` | `prepare` | `process` | `team` | `dates` | `sessions` |
+`dashboard` | `prepare` | `process` | `team` | `dates` | `sessions` |
 `deliverables`. Andrew: "it should be VERY easy for someone to navigate even
 if they have no idea what is all included in the project."
 
-**Overview is the landing panel** and the fallback for any unrecognised key.
+**Dashboard is the landing panel** and the fallback for any unrecognised key.
 It is the only entry that does not depend on the project having particular
 content, which is why it can be the fallback at all — every other panel is
 conditional on there being something in it, and a Younique project (no module
 track) has no `process` panel to fall back to.
 
-Overview carries What's Important Now, the next session date, and the most
+Dashboard carries What's Important Now, the next session date, and the most
 recent session recording. It was **removed once and brought back**, and the
 history matters because the arguments are symmetrical:
 
 - Removed, because it was a landing pad whose only job was pointing at other
   panels. Its two orientation cards were floated *above* the tabs instead, so
   they showed on every panel.
-- Brought back (22 Aug 2026), because the page has since gained a left column
+- Brought back (22 Aug 2026) and renamed Dashboard, because the page has
+  since gained a left column
   — and on a phone a header and a section strip too. Those two ever-present
   cards had become ~120px of furniture on top of all six other panels. One
   place to put them buys that height back everywhere else, and the panel now
@@ -214,13 +215,13 @@ so it is a dialog in the header.
 Two consequences that are easy to get wrong:
 
 - **If you add a panel, add it to `panelItems`** or it will be unreachable
-  *and* silently redirect to Overview.
+  *and* silently redirect to Dashboard.
 - **Condensed view still renders everything at once** and deliberately keeps
-  its `{ready}/{total}` counters. Don't "fix" those to match Overview:
+  its `{ready}/{total}` counters. Don't "fix" those to match Dashboard:
   Condensed is the coach's scan-everything mode, where a ratio is the point.
 
 The panel rail shows **labels only, no counts** — see the note in
-`ProjectToolbar`'s successors. And Overview shows **no completion ratio**.
+`ProjectToolbar`'s successors. And Dashboard shows **no completion ratio**.
 Andrew: "sometimes coaches don't finish all 23 based on what they're
 delivering. sometimes we do portions of the process." A denominator turns a
 deliberately partial engagement into one that reads as mostly failed.

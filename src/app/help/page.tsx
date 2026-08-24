@@ -110,7 +110,7 @@ export default function HelpPage() {
         {(hasProjects || profile.is_staff) && (
         <Section title="Using your portal">
           <Faq q="Where do I find the materials for our next session?">
-            A project opens on <strong>Overview</strong>. For the session materials,
+            A project opens on <strong>Dashboard</strong>. For the session materials,
             choose <strong>The Process</strong> in the column down the left. The six icons are the six tools of the process — click one and
             everything for it appears underneath: the handouts, the videos to watch
             beforehand, photos from our working sessions, and what that module
@@ -123,7 +123,7 @@ export default function HelpPage() {
           <Faq q="What is the dark column down the left?">
             Your way around. The sections of the project sit at the top of it:
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li><strong>Overview</strong> — where you land: what your team owes before we next meet, when that is, and the last session we held.</li>
+              <li><strong>Dashboard</strong> — where you land: what your team owes before we next meet, when that is, and the last session we held.</li>
               <li><strong>Preparation</strong> — what to gather and set up before we begin.</li>
               <li><strong>The Process</strong> — the six tools, with their handouts and videos.</li>
               <li><strong>Team</strong> — your church&rsquo;s team, and the RunFree people working with you.</li>
@@ -132,7 +132,7 @@ export default function HelpPage() {
               <li><strong>Deliverables</strong> — the finished work, in the Vision Stack.</li>
             </ul>
             A project only shows the sections it actually has, so you may see fewer than
-            seven. Overview is always there.
+            seven. Dashboard is always there.
             <br />
             <br />
             Underneath them are your other projects — <strong>Starred</strong> first if you
@@ -142,7 +142,7 @@ export default function HelpPage() {
             <br />
             <br />
             <strong>What&rsquo;s Important Now</strong> — the list of what your team owes
-            before we next meet — lives on <strong>Overview</strong>, along with the next
+            before we next meet — lives on <strong>Dashboard</strong>, along with the next
             date and the most recent recording. It used to sit above every section, which
             meant the same two cards took up the top of the screen no matter what you had
             come to look at. Everything is one click away in the column instead.

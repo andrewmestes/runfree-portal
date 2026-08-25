@@ -3,13 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import {
-  getCurrentProfile,
-  getCurrentSession,
-  listMyProjects,
-  logout,
-  setProjectPinned,
-} from "@/lib/auth";
+import { getCurrentProfile, getCurrentSession, getCurrentUser, listMyProjects, logout, setProjectPinned } from "@/lib/auth";
 import { createUserClient } from "@/lib/supabase";
 import { getSignedImageUrls } from "@/lib/storage";
 import PortalHeader from "@/components/PortalHeader";
@@ -78,9 +72,7 @@ export default function HomePage() {
 
     async function init() {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const user = await getCurrentUser();
 
         if (!user) {
           router.replace("/auth/login");

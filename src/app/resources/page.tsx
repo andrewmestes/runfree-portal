@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, hasCertificationAccess, isPortalAdmin, logout } from "@/lib/auth";
+import { getCurrentFramer, getCurrentUser, hasCertificationAccess, isPortalAdmin, logout } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
@@ -91,16 +91,19 @@ export default function ResourcesPage() {
 
   useEffect(() => {
     async function init() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
       if (!user) {
         router.replace("/auth/login");
         return;
       }
 
-      const current = (await getCurrentFramer()) as Framer | null;
-      if (!(await hasCertificationAccess())) {
+      // Independent questions, asked together. They used to be awaited one
+      // after the other, which meant two full round-trips where one would do.
+      const [current, allowed] = await Promise.all([
+        getCurrentFramer() as Promise<Framer | null>,
+        hasCertificationAccess(),
+      ]);
+      if (!allowed) {
         setStatus("denied");
         return;
       }

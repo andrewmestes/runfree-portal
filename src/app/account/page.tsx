@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, getCurrentProfile, logout, updatePassword } from "@/lib/auth";
+import { getCurrentFramer, getCurrentProfile, getCurrentUser, logout, updatePassword } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import AccessError from "@/components/AccessError";
 import { Field, FormError, FormNotice } from "@/components/AuthShell";
@@ -62,9 +62,7 @@ export default function AccountPage() {
 
   useEffect(() => {
     async function init() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
 
       if (!user) {
         router.replace("/auth/login");

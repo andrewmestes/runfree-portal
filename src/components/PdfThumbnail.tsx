@@ -20,8 +20,48 @@ import { useEffect, useRef, useState } from "react";
 
 /** Bumped when the render output changes so stale entries are discarded. */
 const CACHE_VERSION = "v1";
-const cacheKey = (id: string, width: number) =>
-  `pdfthumb:${CACHE_VERSION}:${width}:${id}`;
+const CACHE_PREFIX = `pdfthumb:${CACHE_VERSION}:`;
+const cacheKey = (id: string, width: number) => `${CACHE_PREFIX}${width}:${id}`;
+
+/**
+ * localStorage, not sessionStorage.
+ *
+ * Building one of these costs a multi-megabyte download of the whole PDF plus
+ * a pdf.js decode, purely to draw a picture of page one — which is why Andrew
+ * reports "the image of the visual summaries takes a while". In
+ * sessionStorage that entire cost was paid again in every new tab and every
+ * new visit. The render is a pure function of (file, width), so it is worth
+ * keeping between visits.
+ *
+ * Reads fall back to sessionStorage so anything cached by the previous
+ * version is still honoured rather than being re-rendered once for nothing.
+ */
+function readCache(key: string): string | null {
+  try {
+    return localStorage.getItem(key) ?? sessionStorage.getItem(key);
+  } catch {
+    // Private browsing, or storage disabled — just render it.
+    return null;
+  }
+}
+
+function writeCache(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Almost always the 5MB quota. Drop our own older entries and try once
+    // more; if it still will not fit, the render simply is not persisted.
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("pdfthumb:") && k !== key) localStorage.removeItem(k);
+      }
+      localStorage.setItem(key, value);
+    } catch {
+      // Give up quietly: a missing cache entry costs time, not correctness.
+    }
+  }
+}
 
 /** In-flight renders, so two cards for the same file don't both fetch it. */
 const inFlight = new Map<string, Promise<string | null>>();
@@ -51,12 +91,8 @@ async function renderFirstPage(
 ): Promise<string | null> {
   const key = cacheKey(fileId, width);
 
-  try {
-    const cached = sessionStorage.getItem(key);
-    if (cached) return cached;
-  } catch {
-    // Private browsing or a full quota — just render it.
-  }
+  const cached = readCache(key);
+  if (cached) return cached;
 
   const existing = inFlight.get(key);
   if (existing) return existing;
@@ -88,11 +124,7 @@ async function renderFirstPage(
       await page.render({ canvas, canvasContext: ctx, viewport }).promise;
       const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
 
-      try {
-        sessionStorage.setItem(key, dataUrl);
-      } catch {
-        // Over quota — the render still worked, it just won't persist.
-      }
+      writeCache(key, dataUrl);
 
       return dataUrl;
     } catch {

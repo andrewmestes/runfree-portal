@@ -1,10 +1,42 @@
 import { supabase, createUserClient } from "./supabase";
 
+/**
+ * Per-page-session memo for the two lookups every gated page repeats.
+ *
+ * A certification page used to make about eleven sequential network calls
+ * before it would render: getUser, then getCurrentFramer (getUser again, plus
+ * a certified_framers query), then hasCertificationAccess (getUser again,
+ * plus a profiles query), then isPortalAdmin (all of that a second time).
+ * Each helper is honest on its own; they were just never told they were being
+ * called four deep. That queue is what "Checking access…" was showing.
+ *
+ * Cleared whenever the auth state changes, so signing out or switching
+ * accounts cannot serve the previous person's row.
+ */
+type Cached = { profile: unknown; framer: unknown };
+const memo = new Map<string, Partial<Cached>>();
+
+if (typeof window !== "undefined") {
+  supabase.auth.onAuthStateChange(() => memo.clear());
+}
+
+/**
+ * The signed-in user, from the local session rather than the auth server.
+ *
+ * `auth.getUser()` round-trips to /auth/v1/user on EVERY call to re-validate
+ * the token. `getSession()` reads the token supabase-js already holds (and
+ * refreshes it when it has expired), so this is local and instant.
+ *
+ * Safe because nothing here is a security decision: these helpers choose what
+ * the UI offers, and RLS decides what the database actually returns. A forged
+ * local token buys a prettier menu and no data — which is exactly the property
+ * CLAUDE.md's "RLS is the source of truth" section insists on.
+ */
 export async function getCurrentUser() {
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.user ?? null;
 }
 
 export async function getCurrentSession() {
@@ -46,6 +78,9 @@ export async function getCurrentProfile() {
   const user = await getCurrentUser();
   if (!user) return null;
 
+  const hit = memo.get(user.id);
+  if (hit && "profile" in hit) return hit.profile as never;
+
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
@@ -53,10 +88,14 @@ export async function getCurrentProfile() {
     .maybeSingle();
 
   if (error) {
+    // Deliberately NOT cached. "No row" is an answer worth remembering; a
+    // dropped connection is not, and caching it would turn one bad moment
+    // into a broken page for the rest of the visit.
     console.error("Error fetching profile:", error);
     throw new ProfileLookupError(error.message);
   }
 
+  memo.set(user.id, { ...memo.get(user.id), profile: data });
   return data;
 }
 
@@ -205,6 +244,9 @@ export async function getCurrentFramer() {
   const user = await getCurrentUser();
   if (!user?.email) return null;
 
+  const hit = memo.get(user.id);
+  if (hit && "framer" in hit) return hit.framer as never;
+
   // maybeSingle, not single: "no row" is an ordinary answer here.
   const { data, error } = await supabase
     .from("certified_framers")
@@ -213,9 +255,12 @@ export async function getCurrentFramer() {
     .maybeSingle();
 
   if (error) {
+    // Not cached, for the same reason as the profile lookup above.
     console.error("Error fetching framer:", error);
     return null;
   }
+
+  memo.set(user.id, { ...memo.get(user.id), framer: data });
   return data;
 }
 

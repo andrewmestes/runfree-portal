@@ -51,7 +51,11 @@ type BooksLibrary = {
 // underlying files do, so there's nothing to gain from fetching them live.
 const COVERS: Record<string, string> = {
   "future church": "/brand/books/future-church.png",
-  "innovating discipleship": "/brand/books/innovating-discipleship.png",
+  // .jpg rather than .png like the other five: the source is a 66KB Amazon
+  // JPEG and re-encoding it to PNG would have quadrupled the file for no
+  // visible gain. The table holds full paths, so the extension is free to
+  // differ.
+  "innovating discipleship": "/brand/books/innovating-discipleship.jpg",
   "church unique": "/brand/books/church-unique.png",
   "god dreams": "/brand/books/god-dreams.png",
   younique: "/brand/books/younique.png",

@@ -29,8 +29,13 @@ export async function GET(
     }
 
     const library = await listBooksLibrary();
+    // Every shelf, INCLUDING the standalone one-file books. Leaving those out
+    // is what broke Innovating Discipleship the moment it was lifted from
+    // `extras` onto the shelf: the allowlist stopped containing its id, so a
+    // file that had always been readable started 404ing. Any new bucket on
+    // BooksLibrary has to be added here too.
     const known = new Set(
-      library.books.flatMap((b) =>
+      [...library.books, ...library.standalone].flatMap((b) =>
         [b.fullBook, b.visualSummary, ...b.chapters, ...b.other]
           .filter(Boolean)
           .map((f) => f!.id)

@@ -1609,15 +1609,15 @@ function ProjectSidebar({
    */
   const bands = (
     <>
-      <div className="shrink-0 px-4 pt-4 sm:px-6 lg:px-3.5 lg:pt-5">
+      <div className="shrink-0 px-4 pt-4 sm:px-6 lg:px-3.5 lg:pt-3">
         <a
           href="/"
-          className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white/70 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+          className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white/70 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 lg:rounded-lg lg:py-1.5 lg:text-[13px]"
         >
           <span aria-hidden className="text-base leading-none">←</span>
           Your projects
         </a>
-        <div className="my-3 border-t border-white/10" />
+        <div className="my-3 border-t border-white/10 lg:my-2" />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-6 lg:px-3.5">
@@ -1638,7 +1638,7 @@ function ProjectSidebar({
             section with a dropdown available, and an 'all projects' with a
             dropdown to see additional projects." A permanently visible
             heading with a collapsible list under it satisfies both. */}
-        <div className="mt-8 space-y-5 border-t border-white/10 pt-5">
+        <div className="mt-8 space-y-5 border-t border-white/10 pt-5 lg:mt-5 lg:space-y-3 lg:pt-4">
           {/* Always rendered, even with nothing in it. Andrew asked for the
               section to exist ("there should be a starred section with a
               dropdown available"); hiding it until something is starred means
@@ -1661,34 +1661,34 @@ function ProjectSidebar({
 
       {/* Always in view: the account, and the two portal-wide destinations.
           Stacked rather than side by side, per Andrew. */}
-      <div className="shrink-0 border-t border-white/10 px-4 py-3 sm:px-6 lg:px-3.5">
+      <div className="shrink-0 border-t border-white/10 px-4 py-3 sm:px-6 lg:px-3.5 lg:py-2">
         {/* Only in the drawer. On desktop the header carries this as a pill,
             and below `sm` the header hides its chrome entirely — so without
             this line Certification is unreachable on a phone. */}
         {(profile.certification_access || profile.is_staff) && (
           <a
             href="/certification"
-            className="block rounded-lg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-runfree-pink outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 lg:hidden"
+            className="block rounded-lg px-3.5 py-1.5 lg:py-1 text-[11px] font-bold uppercase tracking-wider text-runfree-pink outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 lg:hidden"
           >
             Certification
           </a>
         )}
         <a
           href="/help"
-          className="block rounded-lg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white/55 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+          className="block rounded-lg px-3.5 py-1.5 lg:py-1 text-[11px] font-bold uppercase tracking-wider text-white/55 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
         >
           Help
         </a>
         {profile.is_staff && (
           <a
             href="/admin"
-            className="block rounded-lg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-runfree-pink outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+            className="block rounded-lg px-3.5 py-1.5 lg:py-1 text-[11px] font-bold uppercase tracking-wider text-runfree-pink outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
           >
             Admin
           </a>
         )}
 
-        <div className="mt-2 flex items-center gap-2.5 border-t border-white/10 px-1 pt-3">
+        <div className="mt-2 flex items-center gap-2.5 border-t border-white/10 px-1 pt-3 lg:mt-1.5 lg:pt-2">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-runfree-grad text-[11px] font-bold text-white">
             {(profile.full_name || profile.email)
               .split(/\s+/)
@@ -1809,7 +1809,7 @@ function SidebarProjectList({
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="group flex w-full items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-left outline-none transition hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-white/60"
+        className="group flex w-full items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-left outline-none transition hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-white/60 lg:py-1"
       >
         <span className="flex-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 transition group-hover:text-white/70">
           {title}
@@ -1843,7 +1843,7 @@ function SidebarProjectList({
                 <a
                   href={`/projects/${p.id}`}
                   aria-current={here ? "page" : undefined}
-                  className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-white/60 ${
+                  className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-white/60 lg:py-1 lg:text-[12.5px] ${
                     here
                       ? "bg-white/12 font-semibold text-white"
                       : "text-white/65 hover:bg-white/10 hover:text-white"
@@ -1902,7 +1902,7 @@ function PanelRail({
 
   return (
     <nav aria-label="Project sections">
-      <ul className="space-y-1">
+      <ul className="space-y-1 lg:space-y-px">
         {items.map((it) => {
           const on = active === it.key;
           return (
@@ -1910,7 +1910,13 @@ function PanelRail({
               <button
                 onClick={() => onSelect(it.key)}
                 aria-current={on ? "true" : undefined}
-                className={`group flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-bold transition duration-150 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
+                // Denser on desktop, comfortable on touch. Andrew compared
+                // the column to his Asana sidebar at the same physical size:
+                // "there's a TON more content that's visible based on spacing
+                // and font size." The `lg:` half is the pointer-driven rail;
+                // the base sizes stay a thumb-friendly ~40px because the same
+                // markup is the phone drawer.
+                className={`group flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left text-sm font-bold transition duration-150 outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta lg:rounded-lg lg:py-1.5 lg:text-[13px] lg:font-semibold ${
                   on
                     ? "bg-runfree-grad text-white shadow-sm"
                     : "text-white/75 hover:bg-white/10 hover:text-white"

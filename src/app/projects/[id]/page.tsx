@@ -59,6 +59,8 @@ import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
 import AccessError from "@/components/AccessError";
+import BooksShelf from "@/components/BooksShelf";
+import type { BooksLibrary } from "@/lib/books";
 
 type Profile = {
   id: string;
@@ -220,7 +222,14 @@ export default function ProjectDetailPage() {
     { id: string; name: string; pinned: boolean }[]
   >([]);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
-  const [preview, setPreview] = useState<PreviewFile | null>(null);
+  /**
+   * The open preview, and which endpoint can serve it. Handouts and books
+   * live behind different routes — /handouts/file and /books/file — so the
+   * modal has to be told which one to ask.
+   */
+  const [preview, setPreview] = useState<
+    (PreviewFile & { source?: "handout" | "book" }) | null
+  >(null);
   /** Below `lg` the sidebar is a drawer. Closed on arrival, every time. */
   const [navOpen, setNavOpen] = useState(false);
 
@@ -347,9 +356,100 @@ export default function ProjectDetailPage() {
     setPreview({ id: fileId, title, num: null, label: title, sizeBytes: null });
   }, []);
 
+  /**
+   * Will's books, for the church. Andrew: "we need to add Will's Books to all
+   * the Pivvot projects."
+   *
+   * Loaded only when the panel is opened, not with the project. It is a live
+   * Drive read, and making every project page wait on it would undo the work
+   * just done to get "Checking access" down from eleven round-trips to two.
+   */
+  const [books, setBooks] = useState<BooksLibrary | null>(null);
+  const [activeBookId, setActiveBookId] = useState<string>("");
+
+  const fetchBookBlobUrl = useCallback(
+    async (fileId: string): Promise<string | null> => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return null;
+      try {
+        const res = await fetch(`/api/projects/${projectId}/books/file/${fileId}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return null;
+        return URL.createObjectURL(await res.blob());
+      } catch {
+        return null;
+      }
+    },
+    [projectId]
+  );
+
+  const fetchBookBytes = useCallback(
+    async (fileId: string): Promise<ArrayBuffer | null> => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return null;
+      try {
+        const res = await fetch(`/api/projects/${projectId}/books/file/${fileId}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return null;
+        return await res.arrayBuffer();
+      } catch {
+        return null;
+      }
+    },
+    [projectId]
+  );
+
+  const openBook = useCallback((f: { id: string; title: string; num: string | null; label: string; sizeBytes: number | null }) => {
+    setPreview({ ...f, source: "book" });
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  // Only once the panel is actually opened. A live Drive read on every
+  // project page load would undo the work that got "Checking access" down
+  // from eleven round-trips to two.
+  useEffect(() => {
+    if (panel !== "books" || books) return;
+    let cancelled = false;
+
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session || cancelled) return;
+
+      const res = await fetch(`/api/projects/${projectId}/books`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok || cancelled) return;
+
+      const body = await res.json();
+      if (cancelled) return;
+
+      const library: BooksLibrary = {
+        books: body.books ?? [],
+        extras: body.extras ?? [],
+        standalone: body.standalone ?? [],
+      };
+      setBooks(library);
+      setActiveBookId((prev) => prev || library.books[0]?.id || "");
+    })().catch(() => {
+      // The panel shows its empty state; a church does not need a stack trace
+      // because Drive was briefly unreachable.
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [panel, books, projectId]);
 
   // Default to the first module once content is known, but never fight a
   // choice the person has already made.
@@ -568,6 +668,10 @@ export default function ProjectDetailPage() {
     dateGroups.length > 0 ? { key: "dates", label: "Key Dates" } : null,
     { key: "sessions", label: "Session Recordings" },
     hasDeliverables ? { key: "deliverables", label: "Deliverables" } : null,
+    // Last, and unconditional. Andrew: "we need to add Will's Books to all the
+    // Pivvot projects." It is reading behind the process rather than part of
+    // it, so it sits after the engagement's own sections.
+    { key: "books", label: "Will's Books" },
   ].filter((x): x is { key: string; label: string } => x !== null);
 
   // Landing on Overview. Andrew: "when someone logs in to their project, it
@@ -680,6 +784,27 @@ export default function ProjectDetailPage() {
                 onGoTo={goPanel}
                 onChanged={refresh}
               />
+            )}
+
+            {activePanel === "books" && (
+              <section id="books">
+                <SectionHeading eyebrow="The reading behind it" title="Will&rsquo;s Books" />
+                <div className="mt-8">
+                  {books ? (
+                    <BooksShelf
+                      library={books}
+                      activeId={activeBookId}
+                      onSelect={setActiveBookId}
+                      onOpen={openBook}
+                      fetchBytes={fetchBookBytes}
+                    />
+                  ) : (
+                    <p className="rounded-2xl border border-dashed border-gray-200 py-12 text-center text-sm text-gray-400">
+                      Loading the library&hellip;
+                    </p>
+                  )}
+                </div>
+              </section>
             )}
 
             {activePanel === "team" && (
@@ -845,7 +970,7 @@ export default function ProjectDetailPage() {
       {preview && (
         <FilePreview
           file={preview}
-          fetchUrl={fetchHandoutBlobUrl}
+          fetchUrl={preview.source === "book" ? fetchBookBlobUrl : fetchHandoutBlobUrl}
           onClose={() => setPreview(null)}
         />
       )}

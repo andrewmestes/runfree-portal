@@ -130,9 +130,10 @@ export default function HelpPage() {
               <li><strong>Key Dates</strong> — everything already in the diary.</li>
               <li><strong>Session Recordings</strong> — every session we have held, with its recording and the charts from the room.</li>
               <li><strong>Deliverables</strong> — the finished work, in the Vision Stack.</li>
+              <li><strong>Will&rsquo;s Books</strong> — visual summaries, chapters and full downloads of the books behind the process.</li>
             </ul>
             A project only shows the sections it actually has, so you may see fewer than
-            seven. Dashboard is always there.
+            eight. Dashboard and Will&rsquo;s Books are always there.
             <br />
             <br />
             Underneath them are your other projects — <strong>Starred</strong> first if you

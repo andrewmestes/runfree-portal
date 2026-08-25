@@ -183,7 +183,7 @@ against the live database instead of reasoning about the policy on paper.
 
 `/projects/[id]` shows **one panel at a time**, selected by `?panel=<key>`:
 `dashboard` | `prepare` | `process` | `team` | `dates` | `sessions` |
-`deliverables`. Andrew: "it should be VERY easy for someone to navigate even
+`deliverables` | `books`. Andrew: "it should be VERY easy for someone to navigate even
 if they have no idea what is all included in the project."
 
 **Dashboard is the landing panel** and the fallback for any unrecognised key.
@@ -208,6 +208,14 @@ history matters because the arguments are symmetrical:
 
 Do not "simplify" this by floating the cards above the panels again without
 reading that trade — it has been made in both directions deliberately.
+
+`books` is Will's Books, and it is **the same `BooksShelf` component the
+certification /books page renders** — Andrew asked for it to look "just like
+they are displayed in the certification area", and a second copy of that
+markup would have drifted within a week. What differs is the gate, not the
+view: /api/books requires certification access, which a church client does not
+have, so the project reads /api/projects/{id}/books, gated on membership. It
+loads only when the panel is opened, because it is a live Drive read.
 
 `access` is still not a panel: who can sign in is a property of the project,
 so it is a dialog in the header.

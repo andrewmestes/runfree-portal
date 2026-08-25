@@ -87,6 +87,36 @@ export type BooksLibrary = {
   books: BookShelf[];
   /** Root-level files that didn't match any known book — shown, not dropped. */
   extras: BookFile[];
+  /**
+   * Books that live as a single root-level PDF rather than a folder of
+   * chapters. They belong on the shelf, not in Other Resources.
+   */
+  standalone: BookShelf[];
+};
+
+/**
+ * A book that is one file, not a folder.
+ *
+ * BOOK_DEFS assumes a Drive folder of chapters per title. Innovating
+ * Discipleship is a single PDF sitting in the root, so it fell through to
+ * `extras` and showed up under Other Resources beneath every real book —
+ * which is what Andrew asked to change: "move the PDF for this from
+ * underneath all of the book pdfs to be part of this when clicked." Will made
+ * the same point on the Brooke walkthrough: "the other resources with
+ * Innovating Discipleship might just need to be another book on top."
+ *
+ * Keyed by the normalized, extension-stripped filename, the same convention
+ * CHAPTER_OVERRIDES and HIDDEN_TITLES use.
+ */
+const STANDALONE_BOOKS: Record<
+  string,
+  { id: string; name: string; amazonQuery: string }
+> = {
+  innovatingdiscipleshipcomplete: {
+    id: "innovating-discipleship",
+    name: "Innovating Discipleship",
+    amazonQuery: "Innovating Discipleship Will Mancini",
+  },
 };
 
 function normalize(s: string): string {
@@ -337,15 +367,33 @@ export async function listBooksLibrary(): Promise<BooksLibrary> {
       [b.fullBook, ...b.other].filter(Boolean).map((f) => f!.id)
     )
   );
-  const extras = childrenOf(rootId)
-    .filter(
-      (f) =>
-        !claimedIds.has(f.id) &&
-        !BOOK_DEFS.some((def) => isFullBookCandidate(f.name, def.key))
-    )
-    .map((f) => toBookFile(f));
+  const unclaimed = childrenOf(rootId).filter(
+    (f) =>
+      !claimedIds.has(f.id) &&
+      !BOOK_DEFS.some((def) => isFullBookCandidate(f.name, def.key))
+  );
 
-  return { books, extras };
+  // Lift the one-file books out before the rest become Other Resources.
+  const standalone: BookShelf[] = [];
+  const extras: BookFile[] = [];
+  for (const f of unclaimed) {
+    const def = STANDALONE_BOOKS[normalize(stripExt(f.name))];
+    if (def) {
+      standalone.push({
+        id: def.id,
+        name: def.name,
+        amazonUrl: amazonSearchUrl(def.amazonQuery),
+        fullBook: toBookFile(f),
+        visualSummary: null,
+        chapters: [],
+        other: [],
+      });
+    } else {
+      extras.push(toBookFile(f));
+    }
+  }
+
+  return { books, extras, standalone };
 }
 
 export { isDriveConfigured };

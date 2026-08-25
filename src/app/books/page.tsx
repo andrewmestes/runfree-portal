@@ -42,6 +42,8 @@ type BookShelf = {
 type BooksLibrary = {
   books: BookShelf[];
   extras: BookFile[];
+  /** One-file books — on the shelf, not in Other Resources. */
+  standalone: BookShelf[];
 };
 
 // Static brand assets, not live-mirrored — book covers are design chrome,
@@ -49,6 +51,7 @@ type BooksLibrary = {
 // underlying files do, so there's nothing to gain from fetching them live.
 const COVERS: Record<string, string> = {
   "future church": "/brand/books/future-church.png",
+  "innovating discipleship": "/brand/books/innovating-discipleship.png",
   "church unique": "/brand/books/church-unique.png",
   "god dreams": "/brand/books/god-dreams.png",
   younique: "/brand/books/younique.png",
@@ -84,12 +87,24 @@ function prettySize(bytes: number | null) {
 
 export default function BooksPage() {
   const [framer, setFramer] = useState<Framer | null>(null);
-  const [library, setLibrary] = useState<BooksLibrary>({ books: [], extras: [] });
+  const [library, setLibrary] = useState<BooksLibrary>({
+    books: [],
+    extras: [],
+    standalone: [],
+  });
   const [status, setStatus] = useState<
     "checking" | "denied" | "ready" | "error"
   >("checking");
   const [loadError, setLoadError] = useState("");
   const [activeId, setActiveId] = useState<string>("");
+  /**
+   * Covers that 404'd. A title can be on the shelf before its artwork has
+   * been saved — Innovating Discipleship is exactly that case — and a broken
+   * image icon looks like a fault, where the name tile looks deliberate.
+   * Drop the file into public/brand/books and it starts working with no code
+   * change.
+   */
+  const [coverFailed, setCoverFailed] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
@@ -112,7 +127,11 @@ export default function BooksPage() {
 
     setLoadError("");
     const books: BookShelf[] = body.books || [];
-    setLibrary({ books, extras: body.extras || [] });
+    setLibrary({
+      books,
+      extras: body.extras || [],
+      standalone: body.standalone || [],
+    });
     setActiveId((prev) => prev || books[0]?.id || "");
   }, []);
 
@@ -209,7 +228,8 @@ export default function BooksPage() {
     return <PageLoader label="Checking your access…" />;
   }
 
-  const active = library.books.find((b) => b.id === activeId) || null;
+  const active =
+    [...library.books, ...library.standalone].find((b) => b.id === activeId) || null;
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
@@ -236,8 +256,12 @@ export default function BooksPage() {
             framer had to scroll before seeing a single chapter. It scrolls
             sideways on phones rather than wrapping to two ragged rows. */}
         <div className="-mx-4 mb-6 flex items-start gap-5 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:justify-center sm:gap-8 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
-          {[...library.books, CALLING_BOOK].map((b) => {
-            const cover = coverFor(b.name);
+          {/* Innovating Discipleship sits after Calling, where Andrew asked
+              for it. It comes from library.standalone rather than
+              library.books because it is one PDF rather than a folder of
+              chapters — see STANDALONE_BOOKS in lib/books.ts. */}
+          {[...library.books, CALLING_BOOK, ...library.standalone].map((b) => {
+            const cover = coverFailed.has(b.id) ? null : coverFor(b.name);
             const isActive = b.id === activeId;
             return (
               <button
@@ -265,6 +289,9 @@ export default function BooksPage() {
                       fill
                       sizes="(min-width: 640px) 96px, 64px"
                       className="object-contain"
+                      onError={() =>
+                        setCoverFailed((prev) => new Set(prev).add(b.id))
+                      }
                     />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center bg-runfree-indigo p-2 text-center text-[10px] font-semibold text-runfree-navy">

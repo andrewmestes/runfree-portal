@@ -2,6 +2,38 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFocusTrap } from "@/lib/useFocusTrap";
+import PdfPageViewer from "./PdfPageViewer";
+
+/**
+ * Should this device get canvas-rendered pages instead of the native viewer?
+ *
+ * Not a width question. iOS refuses to scroll a PDF inside an <iframe> and
+ * lays it out at the document's own page width regardless of the frame — and
+ * an iPad does that at 1024px just as a phone does at 375px, so testing the
+ * breakpoint would leave every iPad broken. The test is the engine.
+ *
+ * iPadOS reports itself as "Macintosh", so the touch-point count is what
+ * separates an iPad from a Mac. A narrow screen also qualifies regardless of
+ * engine, because a full-page PDF in a 375px frame is unreadable anywhere.
+ */
+function useCanvasPdf(): boolean {
+  const [canvas, setCanvas] = useState(false);
+
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const iOS =
+      /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    const mq = window.matchMedia("(max-width: 767px)");
+    const decide = () => setCanvas(iOS || mq.matches);
+    decide();
+    mq.addEventListener("change", decide);
+    return () => mq.removeEventListener("change", decide);
+  }, []);
+
+  return canvas;
+}
 
 export type PreviewFile = {
   id: string;
@@ -31,6 +63,11 @@ export default function FilePreview({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const wantsCanvas = useCanvasPdf();
+  /** Set when pdf.js cannot parse the document, so we hand back to the
+   *  browser's own viewer rather than showing nothing. */
+  const [canvasFailed, setCanvasFailed] = useState(false);
+  const canvasPdf = wantsCanvas && !canvasFailed;
 
   useEffect(() => {
     let url: string | null = null;
@@ -73,11 +110,11 @@ export default function FilePreview({
       >
         <div className="h-1.5 shrink-0 bg-runfree-grad" />
 
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-100 px-5 py-3">
+        <header className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
           <div className="min-w-0 flex-1">
             <h2
               id="preview-title"
-              className="truncate font-display text-base font-bold text-runfree-ink"
+              className="truncate font-display text-sm font-bold text-runfree-ink sm:text-base"
             >
               {file.num && (
                 <span className="mr-2 text-runfree-magentaDeep">{file.num}</span>
@@ -89,7 +126,7 @@ export default function FilePreview({
           <a
             href={blobUrl || undefined}
             download={`${file.title}.pdf`}
-            className={`shrink-0 rounded-lg bg-runfree-grad px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 ${
+            className={`shrink-0 rounded-lg bg-runfree-grad px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 sm:px-4 sm:text-sm ${
               blobUrl ? "" : "pointer-events-none opacity-40"
             }`}
           >
@@ -99,7 +136,7 @@ export default function FilePreview({
           <button
             onClick={onClose}
             aria-label="Close preview"
-            className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-gray-500 transition hover:text-runfree-magentaDeep"
+            className="shrink-0 rounded-lg px-2 py-2 text-xs font-medium text-gray-500 transition hover:text-runfree-magentaDeep sm:px-3 sm:text-sm"
           >
             Close
           </button>
@@ -113,11 +150,19 @@ export default function FilePreview({
               </p>
             </div>
           ) : blobUrl ? (
-            <iframe
-              src={`${blobUrl}#toolbar=0&navpanes=0&statusbar=0`}
-              title={file.title}
-              className="h-full w-full border-0"
-            />
+            canvasPdf ? (
+              // On failure this flips to the iframe below rather than to an
+              // error: a zoomed-in PDF showing page one is worth more than a
+              // message saying the file could not be opened, which would also
+              // be untrue — the bytes downloaded fine, only the render failed.
+              <PdfPageViewer blobUrl={blobUrl} onFail={() => setCanvasFailed(true)} />
+            ) : (
+              <iframe
+                src={`${blobUrl}#toolbar=0&navpanes=0&statusbar=0`}
+                title={file.title}
+                className="h-full w-full border-0"
+              />
+            )
           ) : (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">

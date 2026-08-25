@@ -265,6 +265,54 @@ purpose. They were one component rendering both layouts, and that is exactly
 how they drifted apart — and why removing the count badges from "the rail"
 silently left them in the strip.
 
+## Next steps live in exactly one place: `project_tasks`
+
+Andrew, walking Brooke through the portal: "currently there's three different
+places where they're looking for next steps and I need to be able to
+streamline that." Those three were:
+
+- `projects.priorities` — free text. Converted to tasks by **040**.
+- `sessions.commitments` — free text. Converted to tasks by **041**.
+- `project_tasks` — the one that can be ticked, dated, counted and grouped.
+
+Both free-text columns are **kept, not dropped**, and simply no longer
+rendered. If a conversion was wrong the original text is still readable.
+Removing them is a later decision. Do not reintroduce a prose field for
+things-to-do; that is what created the problem.
+
+`sessions.takeaways` **survives on purpose** — it is a short "if you read
+nothing else", which is a different thing from a list of things to do.
+
+`sessions.recap` is the long write-up. It existed in the schema from the
+beginning, documented as "what we covered", and nothing rendered it until
+Will's sample session summary made the gap obvious. `SessionRecap` renders a
+small Markdown subset (headings, bullets, bold) with no dependency, folded by
+default — the sample runs to ~3,000 words for one four-hour session.
+
+## `project_tasks.owner` — church or runfree
+
+Migration **041**. Will's session summaries have always split action items
+into "For the cohort" and "For Will & Andrew, owed to the group"; this is that
+line made explicit.
+
+- `church` (the default) — the client team's homework.
+- `runfree` — what we owe them.
+
+Two things depend on it. The project Dashboard groups What's Important Now so
+a church never finds "Andrew to send the video link" inside their own
+homework — and can see what they are waiting on us for. And **/my-work**
+lists every unfinished `runfree` task across every engagement the caller can
+see, grouped by due date rather than by church.
+
+`/my-work` does **no scoping in app code**. `read_project_tasks` is
+`can_see_project(project_id)`, so the query returns exactly what the caller is
+entitled to. Do not add a project filter there "to be safe" — it would drift
+from the policy, which is the thing that is actually enforcing this.
+
+The header badge counts the same set and is deliberately **non-blocking**: it
+runs after paint and the header renders fine without it. See the auth section
+above for why that matters.
+
 ## Never run `next build` while `next dev` is running
 
 Both write to `.next/`. A production build replaces the dev server's chunk

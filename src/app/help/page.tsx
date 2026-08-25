@@ -148,6 +148,23 @@ export default function HelpPage() {
             meant the same two cards took up the top of the screen no matter what you had
             come to look at. Everything is one click away in the column instead.
           </Faq>
+          <Faq q="Where are the notes from a session we have already had?">
+            Open <strong>Session Recordings</strong> and click the session. Each one can
+            carry four things: the recording, a short <strong>Takeaways</strong> line, the
+            full <strong>Session summary</strong> — folded up, with a rough reading time on
+            it, so a long write-up does not bury everything else — and the next steps that
+            came out of the session.
+            <br />
+            <br />
+            If you missed a session, the summary is written so you can catch up without
+            watching the whole recording.
+          </Faq>
+          <Faq q="Why do some next steps say RunFree owes them?">
+            Because they do. Every task belongs either to your team or to us, and both show
+            on your <strong>Dashboard</strong> under What&rsquo;s Important Now —
+            what RunFree owes you first, then your team&rsquo;s own work. We would rather
+            you could see what you are waiting on us for than hide it.
+          </Faq>
           <Faq q="How does this work on my phone?">
             The column would leave almost nothing for the content on a narrow screen, so
             it tucks away. Tap the <strong>☰</strong> button at the top left to slide it
@@ -243,6 +260,29 @@ export default function HelpPage() {
 
         {profile.is_staff && (
           <Section title="For the RunFree team" tone="staff">
+            <Faq q="My Work — everything you owe, across every church">
+              <strong>My Work</strong> in the top bar lists every unfinished task marked
+              as owed by RunFree, across every engagement you can see, grouped by when it
+              is due rather than by which church. Overdue leads, because an overdue promise
+              to a client is the most expensive thing on the list. The badge beside the
+              link is the count.
+              <br />
+              <br />
+              Tasks land there when you add a next step and set it to <em>RunFree owes
+              this</em> instead of <em>The team owes this</em>. Tick it off from either
+              place.
+            </Faq>
+            <Faq q="Writing up a session">
+              Paste the full write-up into <strong>Session summary</strong> on the session.
+              Headings, bullets and <strong>bold</strong> are formatted, so a summary
+              written in Google Docs can go straight in.
+              <br />
+              <br />
+              Anything the team has to <em>do</em> belongs as a next step rather than in the
+              prose — that is what makes it appear on their dashboard, gives it a date and
+              lets it be ticked off. The summary is for what happened; the tasks are for
+              what happens next.
+            </Faq>
             <Faq q="Starting a new engagement">
               <strong>+ New project</strong> from your projects page. Pick the template
               — Pivvot Vision Framing or Younique — and the project is created with that

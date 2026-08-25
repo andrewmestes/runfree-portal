@@ -1101,6 +1101,71 @@ async function main() {
       );
     }
 
+    // -----------------------------------------------------------------
+    // 24. Task owner (041).
+    //
+    // The column carries a real distinction — the church's homework versus
+    // what RunFree owes them — and two things have to hold for the /my-work
+    // view to be trustworthy: the default must be "church", so no existing
+    // row silently becomes something we owe, and the constraint must refuse
+    // anything outside the two values, so a typo cannot quietly create a
+    // third category that nothing queries for.
+    // -----------------------------------------------------------------
+    {
+      const asAdminA = createUserClient(adminA.accessToken);
+
+      const { data: defaulted } = await asAdminA
+        .from("project_tasks")
+        .insert({ project_id: projectA.id, title: `RLS owner default ${RUN}` })
+        .select("id, owner")
+        .single();
+      record(
+        "24a. a new task defaults to owner 'church'",
+        (defaulted as { owner?: string } | null)?.owner === "church",
+        `owner=${(defaulted as { owner?: string } | null)?.owner}`
+      );
+
+      const { data: explicit } = await asAdminA
+        .from("project_tasks")
+        .insert({ project_id: projectA.id, title: `RLS owner runfree ${RUN}`, owner: "runfree" })
+        .select("id, owner")
+        .single();
+      record(
+        "24b. a task can be marked as owed by RunFree",
+        (explicit as { owner?: string } | null)?.owner === "runfree",
+        `owner=${(explicit as { owner?: string } | null)?.owner}`
+      );
+
+      const { error: badOwner } = await asAdminA
+        .from("project_tasks")
+        .insert({ project_id: projectA.id, title: `RLS owner bogus ${RUN}`, owner: "nobody" as never });
+      record(
+        "24c. an unknown owner is rejected by the constraint",
+        !!badOwner,
+        badOwner ? "correctly rejected" : "ACCEPTED — the check constraint is missing"
+      );
+
+      // A viewer reads tasks through can_see_project, so what we owe them is
+      // visible to them. That is intended: seeing what RunFree owes, in the
+      // same list and just as accountable, is the point.
+      const asViewerA = createUserClient(viewerA.accessToken);
+      const { data: seen } = await asViewerA
+        .from("project_tasks")
+        .select("id, owner")
+        .eq("project_id", projectA.id)
+        .eq("owner", "runfree");
+      record(
+        "24d. a viewer can see what RunFree owes on their project",
+        (seen ?? []).length > 0,
+        `${(seen ?? []).length} runfree-owned task(s) visible`
+      );
+
+      for (const row of [defaulted, explicit]) {
+        const id = (row as { id?: string } | null)?.id;
+        if (id) await supabaseAdmin.from("project_tasks").delete().eq("id", id);
+      }
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

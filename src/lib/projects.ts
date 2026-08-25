@@ -80,7 +80,16 @@ export type ProjectTask = {
   is_done: boolean;
   completed_at: string | null;
   position: number;
+  /**
+   * Who owes it. "church" is the client team's homework; "runfree" is what we
+   * owe them. Will's session summaries have always split action items this
+   * way — "For the cohort" versus "For Will & Andrew, owed to the group" —
+   * the portal just had no way to say it. See migration 041.
+   */
+  owner: TaskOwner;
 };
+
+export type TaskOwner = "church" | "runfree";
 
 export type ChurchContact = {
   id: string;
@@ -813,6 +822,7 @@ export async function createTask(
     section?: string | null;
     session_id?: string | null;
     due_on?: string | null;
+    owner?: TaskOwner;
   },
   siblings: { position: number }[] = []
 ) {
@@ -827,11 +837,50 @@ export async function createTask(
 export async function updateTask(
   accessToken: string,
   taskId: string,
-  patch: { title?: string; notes?: string | null; section?: string | null; due_on?: string | null }
+  patch: {
+    title?: string;
+    notes?: string | null;
+    section?: string | null;
+    due_on?: string | null;
+    owner?: TaskOwner;
+  }
 ) {
   const client = createUserClient(accessToken);
   const { error } = await client.from("project_tasks").update(patch).eq("id", taskId);
   if (error) throw error;
+}
+
+/** A task with enough of its project attached to be listed out of context. */
+export type OwedTask = ProjectTask & {
+  project: { id: string; name: string } | null;
+};
+
+/**
+ * Everything RunFree owes, across every engagement the caller can see.
+ *
+ * Andrew: "it might be nice as a RunFree team member ... to have their own
+ * dashboard of tasks needed from all clients."
+ *
+ * No scoping logic here on purpose. `read_project_tasks` is
+ * `can_see_project(project_id)`, so this query returns exactly the projects
+ * this person is entitled to and nothing else — a coach sees their own
+ * engagements, the owner sees more, and neither case is re-derived in app
+ * code where it could drift from the policy. Same principle as the rest of
+ * this file: ask the database, do not reimplement the database.
+ */
+export async function listTasksOwedByRunFree(accessToken: string): Promise<OwedTask[]> {
+  const client = createUserClient(accessToken);
+  const { data, error } = await client
+    .from("project_tasks")
+    .select("*, projects(id, name)")
+    .eq("owner", "runfree")
+    .eq("is_done", false)
+    .order("due_on", { ascending: true, nullsFirst: false });
+
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as (ProjectTask & { projects: { id: string; name: string } | null })[])
+    .map(({ projects, ...task }) => ({ ...task, project: projects }));
 }
 
 export async function deleteTask(accessToken: string, taskId: string) {

@@ -626,6 +626,8 @@ export type Database = {
           completed_at: string | null;
           position: number;
           created_at: string;
+          /** Who owes it — see migration 041. */
+          owner: "church" | "runfree";
         };
         Insert: {
           id?: string;
@@ -637,6 +639,7 @@ export type Database = {
           due_on?: string | null;
           is_done?: boolean;
           position?: number;
+          owner?: "church" | "runfree";
         };
         Update: {
           title?: string;
@@ -645,6 +648,7 @@ export type Database = {
           section?: string | null;
           is_done?: boolean;
           position?: number;
+          owner?: "church" | "runfree";
         };
         Relationships: [];
       };

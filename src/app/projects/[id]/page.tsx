@@ -40,6 +40,7 @@ import {
   type PrepGroupKind,
   type PrepItem,
   type ProjectTask,
+  type TaskOwner,
   type ProjectDetail,
   type ProjectMember,
   type ProjectRole,
@@ -1798,6 +1799,16 @@ function ProjectSidebar({
             Certification
           </a>
         )}
+        {/* The project page hides the header's chrome, so the cross-engagement
+            view needs a door here too. */}
+        {profile.is_staff && (
+          <a
+            href="/my-work"
+            className="block rounded-lg px-3.5 py-1.5 lg:py-1 text-[11px] font-bold uppercase tracking-wider text-white/55 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+          >
+            My Work
+          </a>
+        )}
         <a
           href="/help"
           className="block rounded-lg px-3.5 py-1.5 lg:py-1 text-[11px] font-bold uppercase tracking-wider text-white/55 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
@@ -2360,6 +2371,7 @@ function AddTask({
   const [notes, setNotes] = useState("");
   const [due, setDue] = useState("");
   const [pickedSection, setPickedSection] = useState(section ?? "");
+  const [owner, setOwner] = useState<TaskOwner>("church");
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -2376,12 +2388,14 @@ function AddTask({
           due_on: due || null,
           section: pickedSection || null,
           session_id: sessionId ?? null,
+          owner,
         },
         siblings
       );
       setTitle("");
       setNotes("");
       setDue("");
+      setOwner("church");
       setOpen(false);
       onChanged();
     } finally {
@@ -2408,11 +2422,40 @@ function AddTask({
 
   return (
     <form onSubmit={submit} className="space-y-2 rounded-xl bg-gray-50/80 p-3">
+      {/* Who owes it, first — because it changes what the rest of the form
+          means. Will's session summaries have always split action items into
+          "For the cohort" and "For Will & Andrew, owed to the group"; this is
+          that line, made explicit. What the church owes shows on their
+          dashboard; what we owe also collects on /my-work across every
+          engagement. */}
+      <div className="flex rounded-lg bg-white p-0.5 ring-1 ring-gray-300">
+        {(
+          [
+            { value: "church", label: "The team owes this" },
+            { value: "runfree", label: "RunFree owes this" },
+          ] as const
+        ).map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => setOwner(o.value)}
+            aria-pressed={owner === o.value}
+            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition ${
+              owner === o.value
+                ? "bg-runfree-grad text-white shadow-sm"
+                : "text-gray-500 hover:text-runfree-ink"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+
       <input
         autoFocus
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="What should the team do?"
+        placeholder={owner === "runfree" ? "What do we owe them?" : "What should the team do?"}
         className={field}
       />
       <textarea
@@ -2802,6 +2845,140 @@ function scrollPageToTop() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+/**
+ * A session write-up, folded away until wanted.
+ *
+ * Will's sample runs to about three thousand words for one four-hour session,
+ * with headings, sub-headings and lists. Rendering that as one pre-wrapped
+ * blob would be unreadable, and rendering it open would bury the recording and
+ * the assignments beneath it — so it is collapsed by default and given just
+ * enough structure to scan.
+ *
+ * A deliberately small subset of Markdown: headings, bullets, numbered items
+ * and bold. No dependency, and anything it does not recognise falls through as
+ * a paragraph rather than showing raw syntax. Tables — which Will uses — come
+ * through as their rows; not beautiful, but legible, and worth far less than
+ * the weight of a full Markdown pipeline for a field a handful of people fill
+ * in.
+ */
+function SessionRecap({ recap }: { recap: string }) {
+  const [open, setOpen] = useState(false);
+
+  const words = recap.trim().split(/\s+/).length;
+  const minutes = Math.max(1, Math.round(words / 220));
+
+  return (
+    <div className="overflow-hidden rounded-xl bg-gray-50 ring-1 ring-gray-200/80">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 px-4 py-3 text-left outline-none transition hover:bg-runfree-pink/30 focus-visible:bg-runfree-pink/30"
+      >
+        <span
+          aria-hidden
+          className={`shrink-0 text-gray-400 transition-transform duration-200 ${open ? "rotate-90" : ""}`}
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <path d="M7.5 4.5 13 10l-5.5 5.5" />
+          </svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
+            Session summary
+          </span>
+          <span className="block text-xs text-gray-500">
+            The full write-up &middot; about {minutes} min read
+          </span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="animate-fade border-t border-gray-200/80 bg-white px-4 py-4">
+          <RecapBody text={recap} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Inline **bold** only — the one bit of emphasis worth honouring. */
+function inline(text: string): React.ReactNode {
+  return text.split(/\*\*(.+?)\*\*/g).map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className="font-semibold text-runfree-ink">
+        {part}
+      </strong>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
+
+function RecapBody({ text }: { text: string }) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const out: React.ReactNode[] = [];
+  let list: string[] = [];
+
+  const flush = () => {
+    if (list.length === 0) return;
+    out.push(
+      <ul key={`l${out.length}`} className="my-2 space-y-1 pl-1">
+        {list.map((item, i) => (
+          <li key={i} className="flex gap-2.5 text-sm leading-relaxed text-gray-700">
+            <span aria-hidden className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-runfree-magenta" />
+            <span>{inline(item)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+    list = [];
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      flush();
+      continue;
+    }
+
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (heading) {
+      flush();
+      const depth = heading[1].length;
+      const body = heading[2].replace(/\*\*/g, "");
+      out.push(
+        <p
+          key={`h${out.length}`}
+          className={
+            depth <= 2
+              ? "mt-5 font-display text-base font-extrabold tracking-tight text-runfree-ink first:mt-0"
+              : "mt-4 text-sm font-bold text-runfree-ink first:mt-0"
+          }
+        >
+          {body}
+        </p>
+      );
+      continue;
+    }
+
+    const bullet = /^([-*•]|\d+[.)])\s+(.*)$/.exec(line);
+    if (bullet) {
+      list.push(bullet[2]);
+      continue;
+    }
+
+    flush();
+    out.push(
+      <p key={`p${out.length}`} className="my-2 text-sm leading-relaxed text-gray-700">
+        {inline(line)}
+      </p>
+    );
+  }
+  flush();
+
+  return <div>{out}</div>;
+}
+
 /** Appears once you are far enough down to want it. */
 
 function BackToTop() {
@@ -2952,6 +3129,12 @@ function PrioritiesBanner({
 
   const open = detail.tasks.filter((t) => !t.is_done);
   const done = detail.tasks.filter((t) => t.is_done);
+  // Split by who owes it. A church should not find "Andrew to send the video
+  // link" sitting in their own homework list — and seeing what RunFree owes
+  // them, in the same place and just as accountable, is worth more than
+  // hiding it.
+  const ours = open.filter((t) => t.owner === "runfree");
+  const theirs = open.filter((t) => t.owner !== "runfree");
   if (!hasPriorities(detail, canEdit)) return null;
 
   return (
@@ -3011,9 +3194,29 @@ function PrioritiesBanner({
 
         {!collapsed && (
           <div className="mt-3 space-y-2">
-            {open.length > 0 && (
+            {ours.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
+                  RunFree owes you
+                </p>
+                <TaskList
+                  tasks={ours}
+                  accessToken={accessToken}
+                  onChanged={onChanged}
+                  canEdit={canEdit}
+                />
+              </div>
+            )}
+
+            {theirs.length > 0 && ours.length > 0 && (
+              <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                Your team
+              </p>
+            )}
+
+            {theirs.length > 0 && (
               <TaskList
-                tasks={open}
+                tasks={theirs}
                 accessToken={accessToken}
                 onChanged={onChanged}
                 canEdit={canEdit}
@@ -5807,7 +6010,7 @@ function SessionRow({
     section: session.section ?? "",
     recording_url: session.recording_url ?? "",
     takeaways: session.takeaways ?? "",
-    commitments: session.commitments ?? "",
+    recap: session.recap ?? "",
     transcript: session.transcript ?? "",
     published: !!session.published_at,
   });
@@ -5822,7 +6025,7 @@ function SessionRow({
         section: form.section || null,
         recording_url: form.recording_url || null,
         takeaways: form.takeaways || null,
-        commitments: form.commitments || null,
+        recap: form.recap || null,
         transcript: form.transcript || null,
         published_at: form.published ? new Date().toISOString() : null,
       });
@@ -5934,7 +6137,25 @@ function SessionRow({
                   rows={3}
                   value={form.takeaways}
                   onChange={(e) => setForm((f) => ({ ...f, takeaways: e.target.value }))}
+                  placeholder="If they read nothing else — two or three lines."
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                />
+              </Field>
+              {/* The long write-up. Sized for what actually gets pasted here:
+                  Will's sample summary of a four-hour session runs to about
+                  three thousand words. Headings, bullets and **bold** are
+                  rendered; everything else falls through as paragraphs. */}
+              <Field label="Session summary">
+                <textarea
+                  rows={10}
+                  value={form.recap}
+                  onChange={(e) => setForm((f) => ({ ...f, recap: e.target.value }))}
+                  placeholder={
+                    "The full recap — paste it straight in.\n\n" +
+                    "## Headings, - bullets and **bold** are formatted.\n" +
+                    "Anything the team needs to DO belongs below as a next step, not here."
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs leading-relaxed outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
                 />
               </Field>
               {/* Andrew: "I typically upload a Session Recap, which would be
@@ -6041,6 +6262,9 @@ function SessionRow({
                   </div>
                 </div>
               )}
+              {/* Takeaways is the short version — "if you read nothing else".
+                  It stays because it is a different thing from a list of
+                  things to do. */}
               {session.takeaways && (
                 <div>
                   <h5 className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
@@ -6051,16 +6275,27 @@ function SessionRow({
                   </p>
                 </div>
               )}
-              {session.commitments && (
-                <div>
-                  <h5 className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-                    Next steps &amp; homework
-                  </h5>
-                  <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">
-                    {session.commitments}
-                  </p>
-                </div>
-              )}
+
+              {/* The full write-up. `recap` has existed in the schema since
+                  the beginning, documented as "what we covered — the session
+                  recap a coach writes afterwards", and nothing ever rendered
+                  it. This is where Will's four-hour session summary belongs:
+                  long, structured, read once by whoever was in the room and
+                  properly by whoever was not.
+
+                  Folded by default. Three thousand words unfurled inside a
+                  session row would bury the recording and the assignments
+                  underneath it. */}
+              {session.recap && <SessionRecap recap={session.recap} />}
+
+              {/* `commitments` is no longer rendered. It was one of the three
+                  places next steps lived — Andrew: "currently there's three
+                  different places where they're looking for next steps and I
+                  need to be able to streamline that." Migration 041 converted
+                  every line of it into a real task on this session, which is
+                  the list below: dated, tickable, and countable on the
+                  dashboard. The column is kept, unread, in case a conversion
+                  was wrong. */}
               {photos.length > 0 && (
                 <div>
                   <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
@@ -6079,7 +6314,7 @@ function SessionRow({
                 </div>
               )}
 
-              {!loomId && !session.takeaways && !session.commitments && photos.length === 0 && (
+              {!loomId && !session.takeaways && !session.recap && photos.length === 0 && (
                 <p className="text-sm text-gray-400">Notes from this session are coming.</p>
               )}
             </>

@@ -6580,24 +6580,25 @@ function TeamSection({
     <section id={id} className="mt-20 scroll-mt-20">
       <SectionHeading eyebrow="Who you're working with" title="Your Team" />
 
-      {/* The church's own people lead. Andrew: "Let's lead with their actual
-          church team. And then below it shows the run free team." A church
-          opening this tab is looking for themselves first. */}
-      {isGroup && (
-        <ChurchTeamInfo
-          id="church-team"
-          contacts={detail.contacts}
-          projectId={projectId}
-          canEdit={canEdit}
-          accessToken={accessToken}
-          onChanged={onChanged}
-        />
-      )}
-
-      {/* RunFree side — real people, from project_members. The static
-          template "team_bio" rows are gone (migration 019): they duplicated
-          anyone who was also a member, and a string in a resources table has
-          no face, no address and nothing to click. */}
+      {/* RunFree leads now — a deliberate reversal, and both sides of it are
+          worth keeping.
+          
+          Originally: "Let's lead with their actual church team. And then below
+          it shows the run free team", on the reasoning that a church opening
+          this tab is looking for themselves first.
+          
+          Now: "since RunFree only usually has 3 people, let's start with that,
+          and make sure the 'your team' is still easily visible." That resolves
+          the original objection rather than overruling it — three people is a
+          short block, so the church's own team is still on screen right below
+          rather than pushed under a wall of faces. If the RunFree side ever
+          grows past a handful, this ordering stops being free and should be
+          revisited.
+          
+          Real people, from project_members. The static template "team_bio"
+          rows are gone (migration 019): they duplicated anyone who was also a
+          member, and a string in a resources table has no face, no address and
+          nothing to click. */}
       {/* Same heading style as "Your Team" above it. Andrew: "I like the size
           of the title, your team. I want you to make the... your run free
           team the same style of header." */}
@@ -6657,6 +6658,20 @@ function TeamSection({
           thing from the roster above while wearing almost the same name, so
           the tab showed "Church team 0" directly above eight people. Granting
           access lives in one place now: Manage access, in the header. */}
+      {/* The church's own people, directly under. Still a full section with
+          its own heading — "make sure the 'your team' is still easily
+          visible". */}
+      {isGroup && (
+        <ChurchTeamInfo
+          id="church-team"
+          contacts={detail.contacts}
+          projectId={projectId}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          onChanged={onChanged}
+        />
+      )}
+
       {teamGroups.length > 0 && (
         <div className="mt-12">
           <PrepCards

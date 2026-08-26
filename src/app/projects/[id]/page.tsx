@@ -3951,6 +3951,26 @@ function ModulePanel({
           </Block>
         )}
 
+        {/* What came out of the room, before the library about it. Andrew:
+            "let's continue to start with 'handouts' but let's move 'training
+            videos' lower, and lead with 'from our sessions.'"
+
+            He is right about the order. Handouts are what a team needs in
+            hand; what the team themselves produced is the next most
+            interesting thing on the page; the teaching videos are reference,
+            and reference belongs underneath. */}
+        <Block title="From our sessions">
+          <ImageGallery
+            images={images}
+            imageUrls={imageUrls}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            projectId={detail.id}
+            section={section}
+            onChanged={onChanged}
+          />
+        </Block>
+
         {videos.length > 0 && (
           <Block title={`${moduleLabel(section)} training videos`}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -4001,18 +4021,6 @@ function ModulePanel({
           accessToken={accessToken}
           onChanged={onChanged}
         />
-
-        <Block title="From our sessions">
-          <ImageGallery
-            images={images}
-            imageUrls={imageUrls}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            projectId={detail.id}
-            section={section}
-            onChanged={onChanged}
-          />
-        </Block>
 
         {moduleDeliverables.length > 0 && (
           <Block title="What this module produces">

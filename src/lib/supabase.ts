@@ -324,6 +324,8 @@ export type Database = {
           external_url: string | null;
           /** Supabase Storage object path in the deliverable-images bucket, e.g. "{project_id}/{filename}". */
           image_path: string | null;
+          /** Long-form notes on the card — see migration 042. */
+          body: string | null;
           /** An uploaded document (usually a PDF) — see migration 014. */
           file_path: string | null;
           file_name: string | null;
@@ -345,6 +347,7 @@ export type Database = {
           drive_file_id?: string | null;
           external_url?: string | null;
           image_path?: string | null;
+          body?: string | null;
           file_path?: string | null;
           file_name?: string | null;
           file_mime?: string | null;
@@ -363,6 +366,7 @@ export type Database = {
           drive_file_id?: string | null;
           external_url?: string | null;
           image_path?: string | null;
+          body?: string | null;
           file_path?: string | null;
           file_name?: string | null;
           file_mime?: string | null;

@@ -146,7 +146,7 @@ export default function MyWorkPage() {
       <PortalHeader
         profile={profile}
         onSignOut={handleSignOut}
-        title="My Work"
+        title="My Tasks"
         subtitle="Everything RunFree owes, across every engagement"
         backHref="/"
         backLabel="Your projects"

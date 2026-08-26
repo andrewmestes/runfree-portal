@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase, createUserClient } from "@/lib/supabase";
+import { useOwedCount } from "@/lib/useOwedCount";
 import Image from "next/image";
 
 type Profile = { full_name?: string | null; is_staff?: boolean; account_role?: string | null } | null;
@@ -87,47 +87,6 @@ const CERT_LINKS: { href: string; label: string; title?: string }[] = [
   { href: "/books", label: "Books" },
   { href: "/guide", label: "Guide", title: "Digital Facilitator's Guide" },
 ];
-
-/**
- * How many things RunFree owes, unfinished, across every engagement this
- * person can see.
- *
- * Deliberately non-blocking: it runs after paint and the header renders fine
- * without it. A badge is worth one cheap indexed query; it is not worth
- * delaying every page in the portal, which is the mistake the auth helpers
- * had been quietly making before they were fixed.
- */
-function useOwedCount(enabled: boolean): number {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-
-    (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session || cancelled) return;
-
-      const { count: n } = await createUserClient(session.access_token)
-        .from("project_tasks")
-        .select("id", { count: "exact", head: true })
-        .eq("owner", "runfree")
-        .eq("is_done", false);
-
-      if (!cancelled) setCount(n ?? 0);
-    })().catch(() => {
-      // A missing badge is not worth a broken header.
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled]);
-
-  return count;
-}
 
 export default function PortalHeader({
   profile,
@@ -245,7 +204,7 @@ export default function PortalHeader({
                 href="/my-work"
                 className="group inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white/80 transition hover:text-white"
               >
-                My Work
+                My Tasks
                 {owed > 0 && (
                   <span className="grid h-4 min-w-4 place-items-center rounded-full bg-runfree-grad px-1 text-[10px] font-bold tabular-nums text-white">
                     {owed}

@@ -62,6 +62,7 @@ import PortalFooter from "@/components/PortalFooter";
 import AccessError from "@/components/AccessError";
 import BooksShelf from "@/components/BooksShelf";
 import type { BooksLibrary } from "@/lib/books";
+import { useOwedCount } from "@/lib/useOwedCount";
 
 type Profile = {
   id: string;
@@ -667,7 +668,13 @@ export default function ProjectDetailPage() {
     modules.length > 0 ? { key: "process", label: "The Process" } : null,
     { key: "team", label: "Team" },
     dateGroups.length > 0 ? { key: "dates", label: "Key Dates" } : null,
-    { key: "sessions", label: "Session Recordings" },
+    // "Sessions", not "Session Recordings". Andrew: "I think I want the
+    // 'session recordings' to be renamed 'sessions' and all of the
+    // recordings, notes, and homework be housed there." The old name made the
+    // recording the object and everything else an attachment to it — which
+    // left an in-person session, where there is audio and notes and no video,
+    // looking like it did not belong in its own tab.
+    { key: "sessions", label: "Sessions" },
     hasDeliverables ? { key: "deliverables", label: "Deliverables" } : null,
     // Last, and unconditional. Andrew: "we need to add Will's Books to all the
     // Pivvot projects." It is reading behind the process rather than part of
@@ -781,7 +788,6 @@ export default function ProjectDetailPage() {
                 projectId={projectId}
                 nextDate={nextDateItem}
                 thumbs={thumbs}
-                modules={modules}
                 onGoTo={goPanel}
                 onChanged={refresh}
               />
@@ -1706,6 +1712,8 @@ function ProjectSidebar({
     .filter((p) => !p.pinned)
     .sort((a, b) => churchNameOf(a.name).localeCompare(churchNameOf(b.name)));
 
+  const owed = useOwedCount(!!profile.is_staff);
+
   // Escape closes the drawer, the same as tapping away from it — and while
   // it is open the page behind does not scroll. Without the lock, dragging
   // on the drawer's own list scrolls the project underneath it once the list
@@ -1800,13 +1808,19 @@ function ProjectSidebar({
           </a>
         )}
         {/* The project page hides the header's chrome, so the cross-engagement
-            view needs a door here too. */}
+            view needs a door here too — badge included, since this is where a
+            coach actually spends their day. */}
         {profile.is_staff && (
           <a
             href="/my-work"
-            className="block rounded-lg px-3.5 py-1.5 lg:py-1 text-[11px] font-bold uppercase tracking-wider text-white/55 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
+            className="flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 lg:py-1 text-[11px] font-bold uppercase tracking-wider text-white/55 outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60"
           >
-            My Work
+            My Tasks
+            {owed > 0 && (
+              <span className="grid h-4 min-w-4 place-items-center rounded-full bg-runfree-grad px-1 text-[10px] font-bold tabular-nums text-white">
+                {owed}
+              </span>
+            )}
           </a>
         )}
         <a
@@ -3114,8 +3128,17 @@ function PrioritiesBanner({
 }) {
   const [adding, setAdding] = useState(false);
 
-  // Collapsible, and it remembers — it sits above every panel, so its height
-  // is paid on every screen.
+  // Open by default now. Andrew: "since that only shows up in one space now
+  // (the dashboard) let's make it default to open, not collapsed."
+  //
+  // It used to sit above every panel, so its height was paid on every screen
+  // and folding it away was worth remembering. Now it appears once, on the
+  // panel someone opens specifically to find out what they owe — starting it
+  // shut hides the answer to the question they came with. Still collapsible,
+  // and a deliberate fold is still remembered; only the default changed.
+  //
+  // The stored value is read as an explicit "1", so anyone who folded it under
+  // the old behaviour is not silently re-opened, but everyone else gets open.
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     setCollapsed(window.localStorage.getItem("rf-win-collapsed") === "1");
@@ -3501,7 +3524,6 @@ function DashboardPanel({
   projectId,
   nextDate,
   thumbs,
-  modules,
   onGoTo,
   onChanged,
 }: {
@@ -3511,7 +3533,6 @@ function DashboardPanel({
   projectId: string;
   nextDate: PrepItem | null;
   thumbs: Record<string, string>;
-  modules: NavModule[];
   onGoTo: (key: string) => void;
   onChanged: () => void;
 }) {
@@ -3555,6 +3576,8 @@ function DashboardPanel({
         <ProjectStatusCard nextDate={nextDate} onGoToDates={() => onGoTo("dates")} />
       </div>
 
+      <JoinSessionCard nextDate={nextDate} />
+
       <LatestSessionCard
         session={latest}
         thumb={latest?.recording_url ? thumbs[latest.recording_url] : undefined}
@@ -3562,87 +3585,13 @@ function DashboardPanel({
         onGoToSessions={() => onGoTo("sessions")}
       />
 
-      <ProcessGlanceCard
-        modules={modules}
-        currentSection={latest?.section ?? null}
-        onOpen={() => onGoTo("process")}
-      />
+      {/* No process card. It was added to fill an empty-looking dashboard,
+          and Andrew's read is right: "I'm not sure 'the process' card is
+          necessary... It doesn't really add much." The rail already has The
+          Process one click away and permanently in view, so a card whose only
+          job was linking there was repeating the navigation rather than
+          adding to it. */}
     </section>
-  );
-}
-
-/**
- * The six tools, and which one we were last in.
- *
- * Overview opens the project and, with only the two orientation cards and the
- * last session on it, left most of the screen empty. This is the piece that
- * was missing: a church leader landing here can see the shape of the whole
- * engagement and where inside it they are, without opening anything.
- *
- * It marks ONE module — the one the most recent session was tagged with — and
- * deliberately does not mark the earlier ones as finished. Order of delivery
- * is not order of completion; coaches run parts of the process, and Andrew
- * has been explicit that a progress read which implies "3 of 6 done" turns a
- * deliberately partial engagement into a failing one.
- */
-function ProcessGlanceCard({
-  modules,
-  currentSection,
-  onOpen,
-}: {
-  modules: NavModule[];
-  currentSection: string | null;
-  onOpen: () => void;
-}) {
-  if (modules.length === 0) return null;
-
-  return (
-    <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
-      <div className="h-1.5 bg-runfree-grad" />
-      <div className="px-5 py-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
-            The process
-          </p>
-          <button
-            onClick={onOpen}
-            className="group inline-flex items-center gap-1.5 text-xs font-bold text-runfree-magentaDeep outline-none transition hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
-          >
-            Open the process
-            <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
-              &rarr;
-            </span>
-          </button>
-        </div>
-
-        <ul className="mt-3 flex flex-wrap gap-1.5">
-          {modules.map((m) => {
-            const here = currentSection != null && m.section === currentSection;
-            return (
-              <li key={m.section}>
-                <button
-                  onClick={onOpen}
-                  aria-current={here ? "true" : undefined}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
-                    here
-                      ? "bg-runfree-grad text-white shadow-sm"
-                      : "bg-gray-50 text-gray-600 ring-1 ring-gray-200 hover:text-runfree-ink"
-                  }`}
-                >
-                  {moduleLabel(m.section)}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-
-        {currentSection && (
-          <p className="mt-3 text-xs text-gray-500">
-            Most recently in <strong className="font-semibold text-runfree-ink">{moduleLabel(currentSection)}</strong>.
-          </p>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -3706,7 +3655,121 @@ function LatestSessionCard({
           </span>
         </button>
       </div>
+
+      {/* The summary, previewed. Andrew: "the 'most recent session' within the
+          dashboard might be better served to have a view of the summary of
+          that session if it's uploaded. At least partially visible and then
+          have a button to 'see more'."
+
+          The dashboard exists so a client learns where things stand without
+          going hunting, and "we met on the 20th" is not that. A few lines of
+          what actually happened is. */}
+      {session.recap && <RecapPreview recap={session.recap} />}
     </div>
+  );
+}
+
+/**
+ * The first lines of a session summary, with the rest a click away.
+ *
+ * Markdown is stripped for the teaser rather than rendered: heading and bold
+ * markers inside a two-line excerpt read as noise, and the excerpt exists to
+ * say "there is something here worth opening", not to be the thing itself.
+ * Expand and the real renderer takes over.
+ */
+function RecapPreview({ recap }: { recap: string }) {
+  const [open, setOpen] = useState(false);
+
+  const teaser = recap
+    .split("\n")
+    .map((l) => l.trim())
+    // Skip headings and list items — a preview opening on "## PART 1" tells
+    // you nothing about the session.
+    .filter((l) => l && !/^#{1,6}\s/.test(l) && !/^([-*\u2022]|\d+[.)])\s/.test(l))
+    .join(" ")
+    .replace(/\*\*/g, "")
+    .slice(0, 240);
+
+  return (
+    <div className="border-t border-gray-100 px-5 py-4">
+      {open ? (
+        <RecapBody text={recap} />
+      ) : (
+        <p className="text-sm leading-relaxed text-gray-600">
+          {teaser}
+          {recap.length > teaser.length ? "\u2026" : ""}
+        </p>
+      )}
+
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-runfree-magentaDeep outline-none transition hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+      >
+        {open ? "Show less" : "See more"}
+        <span
+          aria-hidden
+          className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+            <path d="M5 7.5 10 12.5l5-5" />
+          </svg>
+        </span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The way into the next session, when there is one.
+ *
+ * Andrew: "let's add a Zoom Link card if the project admin decides to add
+ * that. That way it's one of the first things people see when logging in. but
+ * only if it's available."
+ *
+ * Only if available is the whole design. It renders when the next dated thing
+ * carries a meeting link and not otherwise — no empty state, no "no link
+ * yet", because a card explaining its own absence is worse than no card. The
+ * small Join button that used to sit on the Next Session card is gone: the
+ * two would have been adjacent on the same dashboard saying the same thing.
+ */
+function JoinSessionCard({ nextDate }: { nextDate: PrepItem | null }) {
+  const url = safeExternalUrl(nextDate?.meeting_url);
+  if (!url || !nextDate) return null;
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex flex-wrap items-center gap-x-5 gap-y-3 overflow-hidden rounded-3xl bg-runfree-navy px-5 py-4 text-white shadow-sm outline-none transition hover:bg-runfree-navyDeep focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-2"
+    >
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/20">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+          <path d="M15 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3.5" />
+          <path d="m15 10.5 5-3v9l-5-3" />
+        </svg>
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
+          Join the next session
+        </span>
+        <span className="mt-0.5 block font-display text-lg font-extrabold tracking-tight">
+          {nextDate.title || "Virtual session"}
+        </span>
+        <span className="mt-0.5 block text-xs text-white/60">
+          {formatPrepDate(nextDate.due_on)}
+        </span>
+      </span>
+
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-bold text-runfree-navy transition group-hover:bg-runfree-pink">
+        Open the link
+        <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+          &rarr;
+        </span>
+      </span>
+    </a>
   );
 }
 
@@ -3718,8 +3781,6 @@ function ProjectStatusCard({
   onGoToDates: () => void;
 }) {
   if (!nextDate?.due_on) return null;
-
-  const joinUrl = safeExternalUrl(nextDate.meeting_url);
 
   return (
     <div className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
@@ -3742,25 +3803,9 @@ function ProjectStatusCard({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {/* The way in, on the card that says when. Andrew: "if it's a
-              virtual session, I need to get this to where you can see all of
-              the information on it. Right now it says edit ... so you can add
-              a zoom link or meeting notes." The link was already stored on
-              the date; nothing surfaced it until you opened the item. */}
-          {joinUrl && (
-            <a
-              href={joinUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-runfree-navy outline-none transition hover:bg-runfree-pink focus-visible:ring-2 focus-visible:ring-white"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
-                <path d="M15 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3.5" />
-                <path d="m15 10.5 5-3v9l-5-3" />
-              </svg>
-              Join
-            </a>
-          )}
+          {/* No Join button here — JoinSessionCard carries it now, full width
+              and unmissable, which is what Andrew asked for. Two of them on
+              one dashboard would have been the same link twice. */}
           <button
             onClick={onGoToDates}
             className="group inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white outline-none ring-1 ring-white/20 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
@@ -5247,7 +5292,7 @@ function PrepRow({
         </button>
       )}
 
-      {group.kind === "dates" && <DateTile date={item.due_on} />}
+      {group.kind === "dates" && <DateTile date={item.due_on} endDate={item.end_on} />}
 
       <div className="min-w-0 flex-1">
         {href ? (
@@ -5284,11 +5329,10 @@ function PrepRow({
           </p>
         )}
 
-        {group.kind === "dates" && item.end_on && item.end_on !== item.due_on && (
-          <p className="mt-1 text-[11px] font-semibold text-runfree-navy">
-            through {formatSessionDate(item.end_on)}
-          </p>
-        )}
+        {/* No "through 12 September" line any more — the tile says 11–12
+            itself. Andrew: "I'd like to see '11-12' in the color box under the
+            'sep' rather than see '11' and then see 'through September 12,
+            2026.'" */}
 
         <span className="mt-1.5 flex flex-wrap items-center gap-2">
           {safeExternalUrl(item.meeting_url) && (
@@ -5366,32 +5410,79 @@ function PrepRow({
   );
 }
 
-/** A little calendar chip, so a list of dates scans as dates. */
-function DateTile({ date }: { date: string | null }) {
+/**
+ * A little calendar chip, so a list of dates scans as dates.
+ *
+ * A multi-day event shows its whole span in the tile — "SEP / 11–12" — rather
+ * than showing the first day and repeating the rest as prose underneath.
+ * Andrew: "I'd like to see '11-12' in the color box under the 'sep' rather
+ * than see '11' and then see 'through September 12, 2026'. while that makes
+ * sense, I think it looks better when both are present."
+ *
+ * The box stays square at every variant, per the same note — only the type
+ * shrinks, and only as far as it has to. "11–12" is five glyphs where "11" is
+ * two, so a single size cannot serve both without either overflowing the
+ * range or shrinking the common case for no reason.
+ */
+function DateTile({ date, endDate }: { date: string | null; endDate?: string | null }) {
   if (!date) {
     return (
-      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-dashed border-gray-300 text-[10px] font-semibold uppercase text-gray-400">
+      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-dashed border-gray-300 text-[10px] font-semibold uppercase text-gray-400">
         TBD
       </div>
     );
   }
-  const [y, m, d] = date.split("-").map(Number);
-  const parsed = y && m && d ? new Date(y, m - 1, d) : null;
-  const past = parsed ? parsed.getTime() < new Date().setHours(0, 0, 0, 0) : false;
+
+  const parse = (v: string | null | undefined) => {
+    if (!v) return null;
+    const [y, m, d] = v.split("-").map(Number);
+    return y && m && d ? { y, m, d, at: new Date(y, m - 1, d) } : null;
+  };
+
+  const start = parse(date);
+  const end = parse(endDate);
+  const spans = !!(end && endDate !== date);
+
+  // A span is over when its LAST day is, not its first — an onsite weekend is
+  // still current on the Saturday.
+  const last = (spans ? end : start)?.at ?? null;
+  const past = last ? last.getTime() < new Date().setHours(0, 0, 0, 0) : false;
+
+  const short = (dt: Date | undefined) =>
+    dt ? dt.toLocaleDateString(undefined, { month: "short" }) : "";
+
+  // Same month reads as one label; a span across months has to name both, and
+  // "SEP–OCT" is the only honest way to say 30 September to 2 October.
+  const monthLabel =
+    spans && start && end && (start.m !== end.m || start.y !== end.y)
+      ? `${short(start.at)}\u2013${short(end.at)}`
+      : short(start?.at);
+
+  const dayLabel = spans && start && end ? `${start.d}\u2013${end.d}` : String(start?.d ?? "");
 
   return (
     <div
-      className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-center leading-none ${
+      className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl px-0.5 text-center leading-none ${
         past
           ? "bg-runfree-indigo text-runfree-navy ring-1 ring-runfree-navy/10"
           : "bg-runfree-grad text-white shadow-sm"
       }`}
     >
-      <div>
-        <div className="text-[9px] font-extrabold uppercase tracking-wider">
-          {parsed?.toLocaleDateString(undefined, { month: "short" })}
+      <div className="w-full">
+        <div
+          className={`font-extrabold uppercase tracking-wider ${
+            monthLabel.length > 4 ? "text-[8px] tracking-normal" : "text-[9px]"
+          }`}
+        >
+          {monthLabel}
         </div>
-        <div className="text-base font-extrabold tabular-nums">{d}</div>
+        <div
+          className={`font-extrabold tabular-nums ${
+            dayLabel.length >= 5 ? "text-[12px]" : dayLabel.length === 4 ? "text-[13px]" : "text-base"
+          }`}
+        >
+          {dayLabel}
+        </div>
       </div>
     </div>
   );
@@ -5518,25 +5609,36 @@ function PrepItemForm({
         className={field}
       />
 
+      {/* Labelled, not just placeheld. Andrew: "let's make sure the start
+          date and end date is added to calendar elements when choosing dates,
+          so it's obvious." Two bare mm/dd/yyyy boxes side by side give no clue
+          which is which until you have already guessed wrong once. */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <input
-          type="date"
-          value={dueOn}
-          onChange={(e) => setDueOn(e.target.value)}
-          className={field}
-          aria-label={group.kind === "dates" ? "Date" : "Due date"}
-        />
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
+            {group.kind === "dates" ? "Start date" : "Due date"}
+          </span>
+          <input
+            type="date"
+            value={dueOn}
+            onChange={(e) => setDueOn(e.target.value)}
+            className={field}
+          />
+        </label>
         {/* An onsite weekend is one row with a span, not three rows.
             Andrew: "we need to be able to track that there are multiple
             dates there." */}
-        <input
-          type="date"
-          value={endOn}
-          onChange={(e) => setEndOn(e.target.value)}
-          className={field}
-          aria-label="End date, for something spanning days"
-          title="End date, if it runs over more than one day"
-        />
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
+            End date <span className="font-medium normal-case tracking-normal text-gray-400">(if it runs over)</span>
+          </span>
+          <input
+            type="date"
+            value={endOn}
+            onChange={(e) => setEndOn(e.target.value)}
+            className={field}
+          />
+        </label>
         <input
           type="url"
           value={url}
@@ -5878,7 +5980,7 @@ function SessionsSection({
 
   return (
     <section id={id} className="mt-20 scroll-mt-20">
-      <SectionHeading eyebrow="Every time we met" title="Session Recordings" />
+      <SectionHeading eyebrow="Every time we met" title="Sessions" />
 
       <div className="mx-auto mt-8 max-w-3xl space-y-3">
         {sessions.length === 0 && (

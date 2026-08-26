@@ -128,7 +128,7 @@ export default function HelpPage() {
               <li><strong>The Process</strong> — the six tools, with their handouts and videos.</li>
               <li><strong>Team</strong> — your church&rsquo;s team, and the RunFree people working with you.</li>
               <li><strong>Key Dates</strong> — everything already in the diary.</li>
-              <li><strong>Session Recordings</strong> — every session we have held, with its recording and the charts from the room.</li>
+              <li><strong>Sessions</strong> — every session we have held: its recording, the write-up, the charts from the room, and what came out of it.</li>
               <li><strong>Deliverables</strong> — the finished work, in the Vision Stack.</li>
               <li><strong>Will&rsquo;s Books</strong> — visual summaries, chapters and full downloads of the books behind the process.</li>
             </ul>
@@ -149,7 +149,7 @@ export default function HelpPage() {
             come to look at. Everything is one click away in the column instead.
           </Faq>
           <Faq q="Where are the notes from a session we have already had?">
-            Open <strong>Session Recordings</strong> and click the session. Each one can
+            Open <strong>Sessions</strong> and click the one you want. Each one can
             carry four things: the recording, a short <strong>Takeaways</strong> line, the
             full <strong>Session summary</strong> — folded up, with a rough reading time on
             it, so a long write-up does not bury everything else — and the next steps that

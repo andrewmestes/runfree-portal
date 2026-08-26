@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "My Work · RunFree Portal",
+  title: "My Tasks · RunFree Portal",
   description: "Everything RunFree owes, across every engagement.",
 };
 

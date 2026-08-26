@@ -940,6 +940,7 @@ export default function ProjectDetailPage() {
                 {deliverableGroups.length > 0 && (
                   <div className="mt-6">
                     <PrepCards
+                      emphasised
                       groups={deliverableGroups}
                       items={detail.prepItems}
                       projectId={projectId}
@@ -4849,6 +4850,7 @@ function PrepCards({
   onChanged,
   asRows = false,
   stacked = false,
+  emphasised = false,
 }: {
   groups: PrepGroup[];
   items: PrepItem[];
@@ -4861,6 +4863,8 @@ function PrepCards({
   asRows?: boolean;
   /** Full-width cards, one per row, for content of very uneven length. */
   stacked?: boolean;
+  /** A firmer edge, for cards sitting beside a heavy one. */
+  emphasised?: boolean;
 }) {
   if (groups.length === 0) return null;
 
@@ -4949,6 +4953,7 @@ function PrepCards({
           accessToken={accessToken}
           fileUrls={fileUrls}
           onChanged={onChanged}
+          emphasised={emphasised}
         />
       ))}
     </div>
@@ -4965,6 +4970,7 @@ function PrepCard({
   onChanged,
   asRow = false,
   step,
+  emphasised = false,
 }: {
   group: PrepGroup;
   items: PrepItem[];
@@ -4977,6 +4983,8 @@ function PrepCard({
   asRow?: boolean;
   /** Position in the sequence, when the caller is presenting one. */
   step?: number;
+  /** A firmer edge, for cards sitting beside a heavy one. */
+  emphasised?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   // A row opens when it has something to show. An empty group stays shut —
@@ -5101,7 +5109,19 @@ function PrepCard({
   }
 
   return (
-    <section className="flex flex-col rounded-2xl bg-white p-5 ring-1 ring-gray-200/80 transition hover:ring-gray-300 sm:p-6">
+    /* Andrew, on Deliverables: "the Guest Perspective Evaluation and Final
+       Documents should have a boarder or something around the card. something
+       to make them not dissapear in contrast to the bold blue card of 'your
+       vision stack.'" A hairline ring on white holds its own against most
+       things; it does not hold its own against a full-bleed navy gradient
+       directly above it. */
+    <section
+      className={`flex flex-col rounded-2xl bg-white p-5 transition sm:p-6 ${
+        emphasised
+          ? "shadow-md ring-1 ring-gray-300 hover:ring-runfree-magenta/40"
+          : "ring-1 ring-gray-200/80 hover:ring-gray-300"
+      }`}
+    >
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
           {step != null && (

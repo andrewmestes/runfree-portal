@@ -158,11 +158,21 @@ export default function VisionStackGraphic({
       >
         {PLATES.map((p, i) => {
           const lift = hovered === p.slug;
-          // Hovering pulls one plate 26px clear of the stack.
-          const y = i * PLATE_GAP_PX - (lift ? 26 : 0);
           const dark = p.face !== "#FFFFFF";
 
           return (
+            /* The hit area never moves; only the plate inside it does.
+             *
+             * Andrew: "when I hover over the tiles, it glitches to the left
+             * and right." That was a feedback loop, not a rendering fault —
+             * the element carrying onMouseEnter was also the element being
+             * lifted 26px, so hovering moved it out from under the cursor,
+             * which fired onMouseLeave, which dropped it back under the
+             * cursor, which fired onMouseEnter. Forever.
+             *
+             * Splitting them fixes it by construction: the button sits still
+             * at its resting position and owns the pointer, and a child does
+             * the animating. */
             <button
               key={p.slug}
               type="button"
@@ -177,14 +187,19 @@ export default function VisionStackGraphic({
                 height: PLATE_PX,
                 width: PLATE_PX,
                 transformStyle: "preserve-3d",
-                transform: `translate(-50%, ${y}px) rotateX(55deg) rotateZ(-45deg) translateZ(${
-                  shown ? 0 : -260
-                }px)`,
+                transform: `translate(-50%, ${i * PLATE_GAP_PX}px) rotateX(55deg) rotateZ(-45deg)`,
+                zIndex: PLATES.length - i,
+              }}
+            >
+            <span
+              className="absolute inset-0"
+              style={{
+                transformStyle: "preserve-3d",
+                transform: `translateY(${lift ? -26 : 0}px) translateZ(${shown ? 0 : -260}px)`,
                 opacity: shown ? 1 : 0,
                 transition:
                   "transform 700ms cubic-bezier(.22,1,.36,1), opacity 600ms ease-out",
                 transitionDelay: shown ? `${(PLATES.length - 1 - i) * 110}ms` : "0ms",
-                zIndex: PLATES.length - i,
               }}
             >
               {/* The slab's side, drawn as a second face pushed down in Z so
@@ -214,6 +229,7 @@ export default function VisionStackGraphic({
                 className="absolute inset-0 rounded-[3px] bg-white transition-opacity duration-300"
                 style={{ opacity: lift ? 0.16 : 0 }}
               />
+            </span>
             </button>
           );
         })}

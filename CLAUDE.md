@@ -19,6 +19,13 @@ the binary directly instead:
 ./node_modules/.bin/tsx --env-file=.env.local tests/rls.test.ts
 ```
 
+**The failure is silent and the exit code is a lie.** `npm run build` in this
+repo prints `sh: next: command not found`, does nothing, and **exits 0**;
+`npx tsc --noEmit` does the same. So a script that greps the output for
+"error" sees none, the exit code says success, and you will believe a
+typecheck passed when nothing ran at all. That has already happened once.
+Always call the binary directly and read the actual output.
+
 ## Which Supabase project — the names read backwards
 
 There were three Supabase projects in the org. The one **named**
@@ -312,6 +319,52 @@ from the policy, which is the thing that is actually enforcing this.
 The header badge counts the same set and is deliberately **non-blocking**: it
 runs after paint and the header renders fine without it. See the auth section
 above for why that matters.
+
+## Module content cards are `deliverables` rows, not a new table
+
+The cards under *From our sessions* on each module — the ones that can carry a
+photo, a PDF and written notes at once — are `deliverables` rows with
+`section` set to the module. Migration **042** added `body`; the image and file
+columns were already there. There is no `cards` table, and adding one would
+split "the finished work" across two places for no gain.
+
+Consequences worth knowing before you touch them:
+
+- A card renders a disclosure control **only when it has something to reveal**
+  (a body or a file). An image-only card gets no arrow, because an arrow onto
+  an empty panel is worse than no arrow.
+- `section_notes` is **retired but not dropped**. Migration **043** converted
+  its one production row — 1,297 characters of the Expectations Exercise on
+  Funnel Fusion — into a card. Same restraint as 040 and 041: the original is
+  still readable if a conversion turns out wrong.
+- "Homework & next steps" and "Notes & homework" are gone from the module
+  panel. Next steps are `project_tasks` (see above); everything else is a
+  card. Do not add a prose field back here.
+
+**Asana attachment URLs are signed and short-lived.** `import-asana-cards.ts`
+hit this: a link fetched at the start of a run had expired by the time it was
+used, both uploads 403'd, and the card was created with prose and no files.
+Re-fetch `get_attachments` immediately before downloading, and never let a
+"row already exists" check mean "this card is complete" — check the columns.
+
+## Checking it on a phone
+
+`scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,
+touch, iOS user agent) and asserts what a screenshot cannot show you: nothing
+spilling past the viewport, no page-level horizontal scroll, every visible
+image actually decoded, nothing in the console.
+
+```bash
+./node_modules/.bin/tsx --env-file=.env.local scripts/mobile-audit.ts <project-id>
+```
+
+It creates and deletes a throwaway account the way `tests/rls.test.ts` does,
+so it needs nobody's password and leaves no extra face in the Team panel. A
+spill inside an ancestor that clips or scrolls is ignored on purpose — the
+books rail is a carousel, not a bug.
+
+The iOS user agent matters: `useCanvasPdf()` in `FilePreview` branches on the
+engine, not the width, so a desktop-UA run silently tests the wrong PDF path.
 
 ## Never run `next build` while `next dev` is running
 

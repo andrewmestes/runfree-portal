@@ -112,13 +112,26 @@ export default function HelpPage() {
           <Faq q="Where do I find the materials for our next session?">
             A project opens on <strong>Dashboard</strong>. For the session materials,
             choose <strong>The Process</strong> in the column down the left. The six icons are the six tools of the process — click one and
-            everything for it appears underneath: the handouts, the videos to watch
-            beforehand, photos from our working sessions, and what that module
-            produces. Nothing loads a new page, so you can move between them freely.
+            everything for it appears underneath: the handouts first, then what came out
+            of our working sessions, then the videos to watch beforehand, then what that
+            module produces. Nothing loads a new page, so you can move between them freely.
             <br />
             <br />
             The work to do before we start has its own section, <strong>Preparation</strong>,
             at the top of that column.
+          </Faq>
+          <Faq q="What are the cards under &lsquo;From our sessions&rsquo;?">
+            One card for each thing that came out of the room. A single card can hold a
+            photo of a chart, a PDF and written notes all at once — so a survey and the
+            write-up that explains it stay together, instead of sitting in three
+            different places for you to piece back together.
+            <br />
+            <br />
+            The chips on the front of a card say what is inside before you open it:{" "}
+            <strong>PDF</strong>, <strong>NOTES</strong>. Tap <em>Open</em> to read it;
+            any PDF downloads from in there. A card with nothing more behind it — a photo
+            on its own — has no <em>Open</em> at all, because there would be nothing to
+            show you.
           </Faq>
           <Faq q="What is the dark column down the left?">
             Your way around. The sections of the project sit at the top of it:
@@ -260,8 +273,8 @@ export default function HelpPage() {
 
         {profile.is_staff && (
           <Section title="For the RunFree team" tone="staff">
-            <Faq q="My Work — everything you owe, across every church">
-              <strong>My Work</strong> in the top bar lists every unfinished task marked
+            <Faq q="My Tasks — everything you owe, across every church">
+              <strong>My Tasks</strong> in the top bar lists every unfinished task marked
               as owed by RunFree, across every engagement you can see, grouped by when it
               is due rather than by which church. Overdue leads, because an overdue promise
               to a client is the most expensive thing on the list. The badge beside the
@@ -315,8 +328,10 @@ export default function HelpPage() {
             <Faq q="After a session">
               Sessions &rarr; <strong>+ Add a session</strong>, or open the existing one.
               Set the date, tag which module it covered, paste the Loom or Zoom link,
-              then write the takeaways and the next steps. Drop in photos of any
-              flipcharts or screen work — they attach to that session. Nothing is visible
+              then write the takeaways and the next steps. Flipcharts, screen work,
+              handouts the team filled in — those go on the module as cards, under{" "}
+              <em>From our sessions</em>: one card can carry the photo, the PDF and your
+              notes together rather than splitting them apart. Nothing is visible
               to the church until you tick <em>Visible to the church team</em>, so you
               can write it up over several sittings.
             </Faq>

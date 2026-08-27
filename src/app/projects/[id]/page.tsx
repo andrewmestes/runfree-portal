@@ -1063,13 +1063,13 @@ function ChurchTeamInfo({
     "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
 
   return (
-    <section id={id} className="mt-8 scroll-mt-20">
+    <section id={id} className="first:mt-0 mt-8 scroll-mt-20">
       <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
         {/* Not collapsible. Andrew: "I don't think that needs to be
             collapsible. Let's just go ahead and... when they click on the
             team tab, it just shows everybody in the team." Behind a fold it
             was one more click on a tab that exists to show these people. */}
-        <div className="flex w-full items-center gap-3.5 bg-runfree-indigo/50 px-5 py-4">
+        <div className="flex w-full flex-wrap items-center gap-x-3.5 gap-y-3 bg-runfree-indigo/50 px-5 py-4">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-runfree-grad text-white shadow-sm">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-5 w-5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 19v-1.5a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3V19" />
@@ -1088,16 +1088,21 @@ function ChurchTeamInfo({
           </span>
 
 
-          {contacts.length > 0 && (
-            <button
-              onClick={downloadCsv}
-              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-ink hover:ring-runfree-magenta/40"
-            >
-              Export CSV
-            </button>
-          )}
-          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
-            {contacts.length}
+          {/* Full width on a phone, inline from sm up. Sharing one row with
+              the heading at 390px left the title a ~110px column, which broke
+              the eyebrow across three lines and "Church Team" across two. */}
+          <span className="flex w-full items-center gap-2 sm:w-auto">
+            {contacts.length > 0 && (
+              <button
+                onClick={downloadCsv}
+                className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-ink hover:ring-runfree-magenta/40"
+              >
+                Export CSV
+              </button>
+            )}
+            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-600">
+              {contacts.length}
+            </span>
           </span>
         </div>
 
@@ -1311,7 +1316,7 @@ function ProjectSettings({
   }
 
   return (
-    <section className="mt-20">
+    <section className="first:mt-0 mt-20">
       <div className="rounded-2xl border border-dashed border-gray-300 p-5">
         <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
           Project settings
@@ -1564,7 +1569,7 @@ function ChurchHero({
                       ) : (
                         <span
                           key={m.profileId}
-                          className="grid h-8 w-8 place-items-center rounded-full bg-runfree-indigo text-[10px] font-bold text-runfree-navy ring-2 ring-white"
+                          className="grid h-8 w-8 place-items-center rounded-full bg-runfree-indigo pr-2.5 text-[10px] font-bold text-runfree-navy ring-2 ring-white"
                         >
                           {(m.fullName || m.email)
                             .split(/\s+/)
@@ -1576,7 +1581,7 @@ function ChurchHero({
                       );
                     })}
                     {detail.members.length > 5 && (
-                      <span className="grid h-8 w-8 place-items-center rounded-full bg-runfree-grad text-[10px] font-bold text-white ring-2 ring-white">
+                      <span className="grid h-8 w-8 place-items-center rounded-full bg-runfree-grad pr-2.5 text-[10px] font-bold text-white ring-2 ring-white">
                         +{detail.members.length - 5}
                       </span>
                     )}
@@ -6286,7 +6291,7 @@ function SessionsSection({
   }
 
   return (
-    <section id={id} className="mt-20 scroll-mt-20">
+    <section id={id} className="first:mt-0 mt-20 scroll-mt-20">
       <SectionHeading eyebrow="Every time we met" title="Sessions" />
 
       <div className="mx-auto mt-8 max-w-3xl space-y-3">
@@ -6856,7 +6861,7 @@ function TeamSection({
   const isGroup = detail.template?.isGroup ?? true;
 
   return (
-    <section id={id} className="mt-20 scroll-mt-20">
+    <section id={id} className="first:mt-0 mt-20 scroll-mt-20">
       <SectionHeading eyebrow="Who you're working with" title="Your Team" />
 
       {/* RunFree leads now — a deliberate reversal, and both sides of it are

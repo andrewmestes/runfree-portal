@@ -153,7 +153,7 @@ async function main() {
       title: "Leadership Team Survey",
       body:
         "The leadership team's own read on where the church is — gathered before we met, " +
-        "and the baseline every later conversation in Funnel Fusion is measured against.\\n\\n" +
+        "and the baseline every later conversation in Funnel Fusion is measured against.\n\n" +
         "The full results are in the PDF below.",
       image_path: img?.path ?? null,
       file_path: pdf?.path ?? null,

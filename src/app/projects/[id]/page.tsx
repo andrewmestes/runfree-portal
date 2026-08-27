@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentProfile, listMyProjects, logout } from "@/lib/auth";
 import {
   createDeliverable,
+  updateDeliverable,
   availableSections,
   createContact,
   createPrepItem,
@@ -48,6 +49,7 @@ import {
 import {
   getSignedImageUrls,
   uploadDeliverableImage,
+  uploadDeliverableFile,
   uploadPrepFile,
   setPrepFilePrivacy,
   uploadProjectLogo,
@@ -3960,8 +3962,8 @@ function ModulePanel({
             interesting thing on the page; the teaching videos are reference,
             and reference belongs underneath. */}
         <Block title="From our sessions">
-          <ImageGallery
-            images={images}
+          <SessionCards
+            items={images}
             imageUrls={imageUrls}
             canEdit={canEdit}
             accessToken={accessToken}
@@ -3986,41 +3988,20 @@ function ModulePanel({
           </Block>
         )}
 
-        {(() => {
-          const mine = detail.tasks.filter((t) => t.section === section);
-          if (mine.length === 0 && !canEdit) return null;
-          return (
-            <Block title="Homework &amp; next steps">
-              <div className="space-y-2.5">
-                <TaskList
-                  tasks={mine}
-                  accessToken={accessToken}
-                  onChanged={onChanged}
-                  canEdit={canEdit}
-                  emptyLabel="Nothing assigned for this module yet."
-                />
-                {canEdit && (
-                  <AddTask
-                    projectId={detail.id}
-                    accessToken={accessToken}
-                    siblings={detail.tasks}
-                    section={section}
-                    onChanged={onChanged}
-                  />
-                )}
-              </div>
-            </Block>
-          );
-        })()}
+        {/* "Homework & next steps" and "Notes & homework" used to sit here.
+            Andrew: "If we do that, we can remove 'homework & Next Steps' and
+            'notes & Homework' from this area ... all of the recordings, notes,
+            and homework be housed there [Sessions]."
 
-        <SectionNote
-          projectId={detail.id}
-          section={section}
-          initial={detail.sectionNotes[section] ?? ""}
-          canEdit={canEdit}
-          accessToken={accessToken}
-          onChanged={onChanged}
-        />
+            Both are replaced rather than deleted. Anything to DO is a task on
+            a session, which is what puts it on the dashboard with a date and a
+            tick-box; anything to READ is a card above, which can carry the
+            chart and the PDF alongside the writing. Module-scoped tasks still
+            show on the dashboard — nothing became unreachable.
+
+            The one section note that existed (Funnel Fusion, 1,297 characters
+            of the Expectations Exercise) was converted to a card by migration
+            043 rather than left to rot behind a removed component. */}
 
         {moduleDeliverables.length > 0 && (
           <Block title="What this module produces">
@@ -4093,96 +4074,6 @@ function IconButton({
  * banner, which is about right now across the whole engagement; this is what
  * belongs with a specific tool.
  */
-function SectionNote({
-  projectId,
-  section,
-  initial,
-  canEdit,
-  accessToken,
-  onChanged,
-}: {
-  projectId: string;
-  section: string;
-  initial: string;
-  canEdit: boolean;
-  accessToken: string | null;
-  onChanged: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(initial);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => setDraft(initial), [initial, section]);
-
-  if (!initial && !canEdit) return null;
-
-  async function save() {
-    if (!accessToken) return;
-    setBusy(true);
-    try {
-      await saveSectionNote(accessToken, projectId, section, draft);
-      onChanged();
-      setEditing(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-          Notes &amp; homework
-        </h4>
-        {canEdit && !editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="inline-flex items-center text-xs font-medium text-runfree-magentaDeep hover:underline max-sm:min-h-[40px]"
-          >
-            {initial ? "Edit" : "Add"}
-          </button>
-        )}
-      </div>
-
-      {editing ? (
-        <div className="space-y-2">
-          <textarea
-            autoFocus
-            rows={4}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="What should the team do with this module before you meet again?"
-            className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={save}
-              disabled={busy}
-              className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
-              {busy ? "Saving…" : "Save"}
-            </button>
-            <button
-              onClick={() => setEditing(false)}
-              className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-runfree-ink"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : initial ? (
-        <p className="whitespace-pre-line rounded-xl bg-runfree-indigo/40 px-4 py-3 text-sm leading-relaxed text-runfree-ink">
-          {initial}
-        </p>
-      ) : (
-        <p className="rounded-xl border border-dashed border-gray-200 py-5 text-center text-xs text-gray-400">
-          No notes for this module yet.
-        </p>
-      )}
-    </section>
-  );
-}
-
 /**
  * The numbered sheets for one module, as the walkthrough they actually are.
  *
@@ -4494,6 +4385,394 @@ function VideoCard({
  * single exercise that we name." So an image is just an image — drop it in
  * and it appears.
  */
+/**
+ * One thing that came out of a session: a chart photo, a PDF, some writing,
+ * or any combination of the three on a single card.
+ *
+ * This is the Asana board card, ported. Andrew: "if I want a card within the
+ * Funnel Fusion module to be text, a PDF, a Photo, etc. it shows up as just
+ * one card that can be opened ... to display all relevant content for that
+ * card."
+ *
+ * Checking the real board bore that out — "Expectations Exercise" is one task
+ * with a long description and a chart photo, and "Leadership Team Survey" is
+ * one task carrying both a PDF and a screenshot. `deliverables` already held
+ * image_path and file_path on the same row, so the only thing missing was the
+ * writing (migration 042 added `body`).
+ *
+ * Full width, and collapsed until asked. Andrew again: "they could be full
+ * width cards that way they can easily be opened, we could show the primary
+ * image attached as a good sized thumbnail, but also it could indicate
+ * whether or not a PDF is attached, or notes exist before clicking an
+ * uncollapse arrow." The chips do that job — you can tell what is inside
+ * without opening anything.
+ */
+function SessionCards({
+  items,
+  imageUrls,
+  canEdit,
+  accessToken,
+  projectId,
+  section,
+  onChanged,
+}: {
+  items: ProjectDetail["deliverables"];
+  imageUrls: Record<string, string>;
+  canEdit: boolean;
+  accessToken: string | null;
+  projectId: string;
+  section: string;
+  onChanged: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+
+  if (items.length === 0 && !canEdit) {
+    return (
+      <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">
+        Nothing from this module yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((d) => (
+        <SessionCard
+          key={d.id}
+          item={d}
+          imageUrls={imageUrls}
+          canEdit={canEdit}
+          accessToken={accessToken}
+          onChanged={onChanged}
+        />
+      ))}
+
+      {canEdit &&
+        (adding ? (
+          <SessionCardForm
+            projectId={projectId}
+            section={section}
+            siblings={items}
+            accessToken={accessToken}
+            onDone={() => {
+              setAdding(false);
+              onChanged();
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            className="w-full rounded-xl border border-dashed border-gray-300 py-3 text-xs font-semibold text-gray-500 transition hover:border-runfree-magenta/50 hover:text-runfree-magentaDeep"
+          >
+            + Add a card — chart, PDF, notes, or all three
+          </button>
+        ))}
+    </div>
+  );
+}
+
+function SessionCard({
+  item,
+  imageUrls,
+  canEdit,
+  accessToken,
+  onChanged,
+}: {
+  item: ProjectDetail["deliverables"][number];
+  imageUrls: Record<string, string>;
+  canEdit: boolean;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  const name = item.title || item.caption || "Untitled";
+  const thumb = item.image_path ? imageUrls[item.image_path] : undefined;
+  const fileUrl = item.file_path ? imageUrls[item.file_path] : undefined;
+  const hasBody = !!item.body?.trim();
+  // Nothing to open means nothing to click. A photo with no notes and no
+  // document is finished as a thumbnail; giving it a disclosure arrow that
+  // reveals an empty panel is worse than not having one.
+  const expandable = hasBody || !!item.file_path;
+
+  if (editing) {
+    return (
+      <SessionCardForm
+        existing={item}
+        accessToken={accessToken}
+        onDone={() => {
+          setEditing(false);
+          onChanged();
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl bg-white ring-1 ring-gray-200/80 transition hover:ring-gray-300">
+      <div className="flex items-start gap-4 p-3">
+        {thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumb}
+            alt=""
+            className="h-20 w-28 shrink-0 rounded-lg object-cover ring-1 ring-gray-200 sm:h-24 sm:w-36"
+          />
+        ) : (
+          <span className="grid h-20 w-28 shrink-0 place-items-center rounded-lg bg-runfree-indigo text-runfree-navy/50 sm:h-24 sm:w-36">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
+              <path d="M14 3v5h5" />
+              <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
+            </svg>
+          </span>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold leading-snug text-runfree-ink">{name}</p>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {item.file_path && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-runfree-pink px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
+                PDF
+              </span>
+            )}
+            {hasBody && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                Notes
+              </span>
+            )}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            {expandable && (
+              <button
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-runfree-magentaDeep outline-none transition hover:underline"
+              >
+                {open ? "Close" : "Open"}
+                <span
+                  aria-hidden
+                  className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                >
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
+                    <path d="M5 7.5 10 12.5l5-5" />
+                  </svg>
+                </span>
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => setEditing(true)}
+                className="text-[11px] font-medium text-gray-400 transition hover:text-runfree-magentaDeep"
+              >
+                Edit
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {open && (
+        <div className="animate-fade border-t border-gray-100 bg-gray-50/60 px-4 py-4">
+          {hasBody && <RecapBody text={item.body!} />}
+
+          {fileUrl && (
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-runfree-grad px-4 py-2 text-xs font-bold text-white transition hover:opacity-90"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+                <path d="M14 3v5h5" />
+                <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
+              </svg>
+              {item.file_name || "Open the document"}
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Add or edit one card. Every field optional except the name, because the
+ * whole point is that a card can be a photo, a document, some writing, or any
+ * mix — forcing all four would make it useless for the common case of "here
+ * is the chart from the room".
+ */
+function SessionCardForm({
+  existing,
+  projectId,
+  section,
+  siblings = [],
+  accessToken,
+  onDone,
+  onCancel,
+}: {
+  existing?: ProjectDetail["deliverables"][number];
+  projectId?: string;
+  section?: string;
+  siblings?: ProjectDetail["deliverables"];
+  accessToken: string | null;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState(existing?.title || existing?.caption || "");
+  const [body, setBody] = useState(existing?.body ?? "");
+  const [image, setImage] = useState<File | null>(null);
+  const [doc, setDoc] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken || !title.trim()) return;
+
+    if (image && image.size > MAX_IMAGE_BYTES) {
+      setError(`That image is over ${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)}MB.`);
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      const patch: Record<string, unknown> = {
+        title: title.trim(),
+        body: body.trim() || null,
+      };
+
+      if (image) {
+        const { path } = await uploadDeliverableImage(accessToken, projectId ?? "", image);
+        patch.image_path = path;
+      }
+      if (doc) {
+        const up = await uploadDeliverableFile(accessToken, projectId ?? "", doc);
+        patch.file_path = up.path;
+        patch.file_name = up.name;
+        patch.file_mime = up.mime;
+        patch.file_size = up.size;
+      }
+
+      if (existing) {
+        await updateDeliverable(accessToken, existing.id, patch as never);
+      } else {
+        await createDeliverable(accessToken, projectId!, {
+          title: title.trim(),
+          body: body.trim() || null,
+          image_path: (patch.image_path as string | undefined) ?? null,
+          file_path: (patch.file_path as string | undefined) ?? null,
+          file_name: (patch.file_name as string | undefined) ?? null,
+          file_mime: (patch.file_mime as string | undefined) ?? null,
+          file_size: (patch.file_size as number | undefined) ?? null,
+          kind: "session_image",
+          section: section ?? null,
+          position: siblings.reduce((max, d) => Math.max(max, d.position), -1) + 1,
+        });
+      }
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save that.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!accessToken || !existing) return;
+    if (!confirm(`Delete "${existing.title || existing.caption || "this card"}"?`)) return;
+    setBusy(true);
+    try {
+      await deleteDeliverable(accessToken, existing.id);
+      onDone();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field =
+    "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-runfree-ink outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
+
+  return (
+    <form onSubmit={submit} className="space-y-2.5 rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200">
+      {error && <p className="text-xs font-medium text-red-600">{error}</p>}
+
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="What is this? e.g. Expectations Exercise"
+        className={field}
+      />
+
+      <textarea
+        rows={4}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder={"Notes (optional) — what the team said, what it means.\n## Headings, - bullets and **bold** are formatted."}
+        className={`${field} font-mono text-xs leading-relaxed`}
+      />
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
+            {existing?.image_path ? "Replace the image" : "Image"}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setImage(e.target.files?.[0] ?? null)}
+            className="w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-runfree-magentaDeep file:ring-1 file:ring-gray-300"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
+            {existing?.file_path ? "Replace the document" : "Document"}
+          </span>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setDoc(e.target.files?.[0] ?? null)}
+            className="w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-runfree-magentaDeep file:ring-1 file:ring-gray-300"
+          />
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="submit"
+          disabled={busy || !title.trim()}
+          className="min-h-[40px] rounded-lg bg-runfree-grad px-4 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? "Saving…" : existing ? "Save" : "Add the card"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="min-h-[40px] rounded-lg px-3 text-sm text-gray-500 transition hover:text-runfree-ink"
+        >
+          Cancel
+        </button>
+        {existing && (
+          <button
+            type="button"
+            onClick={remove}
+            disabled={busy}
+            className="ml-auto min-h-[40px] rounded-lg px-3 text-xs font-medium text-gray-400 transition hover:text-red-600"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 function ImageGallery({
   images,
   imageUrls,

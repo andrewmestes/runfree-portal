@@ -423,6 +423,25 @@ is called before rendering would become the slowest page in the portal.
 Highlights carry **no done state**. What needs ticking is a `project_task`;
 this is the shelf beside it. Same line as the reading shelf.
 
+**Admin only, not editor** (migration **050**). Andrew: "only project managers
+can see 'highlight resources.'" `editor` is deliberately not enough — an
+editor can be a non-staff client leading their own process, and a church
+assigning itself homework is precisely what this prevents. The UI gates on
+`canManage`, and RLS enforces the same rule, so hiding the button is
+presentation rather than protection. Note the live consequence: only Andrew is
+`admin` on the two projects (Will is `viewer` on both, Brooke `editor` on
+Christ Chapel), so nobody else can highlight until they are promoted through
+the Access dialog.
+
+**A shelf jacket belongs to the book, not to its folder.** `buildCatalogue`
+gives `coverFor(shelf.name)` only to files that ARE the book — the full text,
+the visual summary, a chapter. `shelf.other` is workbooks and bullet books,
+separate publications that merely live in the same Drive folder, and handing
+them the shelf cover put the red Future Church jacket on the 7 Laws Bullet
+Book. Those fall back to `coverForFile()` in `book-covers.ts`, which matches a
+title to its own art. **Highlights cache their art**, so fixing the rule does
+not fix rows already written — repair those in place.
+
 - **`ResourceCard`** draws both this and Reading & Pre-Work. One component on
   purpose — `PanelRail`/`PanelStrip` is what happens otherwise. Videos get a
   16:9 frame and object-cover, everything else **2:3** and object-contain,

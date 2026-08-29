@@ -207,6 +207,16 @@ async function main() {
   console.log(bad === 0 ? "clean on a 390x844 iPhone" : `${bad} page(s) need a look`);
 }
 
+// The account exists for about a minute per run, and for that minute it is a
+// face in the project's Team panel — Andrew saw one and asked where it came
+// from. `finally` covers a normal failure; these cover Ctrl-C and a kill,
+// which otherwise strand it there indefinitely.
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.once(sig, () => {
+    void teardown().finally(() => process.exit(1));
+  });
+}
+
 main()
   .catch((e) => { console.error(e); process.exitCode = 1; })
   .finally(async () => { await teardown(); });

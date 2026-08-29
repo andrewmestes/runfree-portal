@@ -1,7 +1,7 @@
 import { createUserClient } from "./supabase";
 import type { ProjectDetail } from "./projects";
 import type { BooksLibrary, BookShelf } from "./books";
-import { coverFor } from "./book-covers";
+import { coverFor, coverForFile } from "./book-covers";
 import { moduleLabel, moduleOrder, stripModuleNumber } from "./modules";
 
 export type HighlightSource =
@@ -193,12 +193,16 @@ export function buildCatalogue(
       // The whole book, the visual summary, every chapter and every workbook.
       // A chapter is as assignable as a book — Andrew: "If I want them to read
       // a certain chapter of Will's books, we could highlight it there."
-      const files = [
-        shelf.fullBook,
-        shelf.visualSummary,
-        ...shelf.chapters,
-        ...shelf.other,
-      ].filter((f): f is NonNullable<typeof f> => !!f);
+      // The jacket represents THE BOOK, so only the things that ARE the book
+      // may wear it: the full text, the visual summary, a chapter. `other` is
+      // workbooks and bullet books — separate publications that happen to live
+      // in the same Drive folder — and giving them the shelf cover put the
+      // Future Church jacket on the 7 Laws Bullet Book. Andrew: "the pink
+      // version is the correct one for that PDF."
+      const isTheBook = [shelf.fullBook, shelf.visualSummary, ...shelf.chapters]
+        .filter((f): f is NonNullable<typeof f> => !!f);
+      const files = [...isTheBook, ...shelf.other];
+      const wearsJacket = new Set(isTheBook.map((f) => f.id));
       for (const f of files) {
         out.push({
           key: `book:${f.id}`,
@@ -213,7 +217,9 @@ export function buildCatalogue(
           file_mime: f.mimeType,
           file_size: f.sizeBytes,
           thumb_path: null,
-          thumb_url: cover,
+          // The shelf jacket if this file IS the book; otherwise its own
+          // cover if we have one, and a glyph if we do not.
+          thumb_url: wearsJacket.has(f.id) ? cover : coverForFile(f.title),
         });
       }
     }

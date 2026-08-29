@@ -1294,6 +1294,38 @@ async function main() {
         upsertErr ? upsertErr.message : `${(after ?? []).length} row(s)`
       );
 
+      // 050: an EDITOR cannot highlight. This is the line between "can write
+      // content on this project" and "runs this project" — selfLeadEditor is
+      // the non-staff client leading their own process, and a church
+      // assigning itself homework is exactly what this rule prevents.
+      const asEditor = createUserClient(selfLeadEditor.accessToken);
+      const { error: editorAddErr } = await asEditor.from("project_highlights").insert({
+        project_id: projectA.id,
+        source_kind: "prep_item",
+        source_id: `rls-editor-${RUN}`,
+        title: "An editor should not be able to highlight this",
+        media_kind: "pdf",
+      });
+      record(
+        "25h. an editor cannot highlight a resource",
+        !!editorAddErr,
+        editorAddErr ? "correctly rejected" : "insert unexpectedly succeeded"
+      );
+
+      const { data: beforeDel } = await supabaseAdmin
+        .from("project_highlights").select("id").eq("id", made?.id ?? "");
+      await asEditor
+        .from("project_highlights")
+        .delete()
+        .eq("id", made?.id ?? "00000000-0000-0000-0000-000000000000");
+      const { data: afterDel } = await supabaseAdmin
+        .from("project_highlights").select("id").eq("id", made?.id ?? "");
+      record(
+        "25i. an editor cannot remove a highlight",
+        (beforeDel ?? []).length === 1 && (afterDel ?? []).length === 1,
+        `${(afterDel ?? []).length} row(s) still there`
+      );
+
       await supabaseAdmin.from("project_highlights").delete().eq("project_id", projectA.id);
     }
 

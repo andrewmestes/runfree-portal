@@ -24,7 +24,7 @@ import type { Highlight } from "@/lib/highlights";
  */
 export default function HighlightShelf({
   highlights,
-  canEdit,
+  canManage,
   fileUrls,
   thumbs,
   onOpen,
@@ -32,7 +32,16 @@ export default function HighlightShelf({
   onRemove,
 }: {
   highlights: Highlight[];
-  canEdit: boolean;
+  /**
+   * Admin on this project, or the owner — NOT merely an editor.
+   *
+   * Andrew: "I want to make sure that only project managers can see
+   * 'highlight resources.'" An editor can be a non-staff client leading their
+   * own process, and a church assigning itself homework is not what this is.
+   * Migration 050 enforces the same rule in RLS, so this is presentation, not
+   * protection.
+   */
+  canManage: boolean;
   /** Signed URLs for our own storage paths. */
   fileUrls: Record<string, string>;
   /** Loom stills, keyed by video URL. */
@@ -46,7 +55,7 @@ export default function HighlightShelf({
   // Nothing highlighted and no right to highlight anything: the section would
   // be a heading over an empty box, so it does not render at all. An editor
   // still sees it, because the empty state is how they learn it exists.
-  if (highlights.length === 0 && !canEdit) return null;
+  if (highlights.length === 0 && !canManage) return null;
 
   return (
     <section className="mt-8">
@@ -56,10 +65,10 @@ export default function HighlightShelf({
             Between sessions
           </p>
           <h3 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-runfree-ink">
-            Read &amp; watch this
+            Read &amp; Watch This
           </h3>
         </div>
-        {canEdit && (
+        {canManage && (
           <button
             onClick={onAdd}
             className="shrink-0 rounded-xl bg-runfree-grad px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
@@ -98,7 +107,7 @@ export default function HighlightShelf({
                 }
                 href={h.external_url}
                 actions={
-                  canEdit ? (
+                  canManage ? (
                     <button
                       disabled={busy === h.id}
                       onClick={async () => {

@@ -928,6 +928,7 @@ export default function ProjectDetailPage() {
                 nextDate={nextDateItem}
                 thumbs={thumbs}
                 highlights={highlights}
+                canManage={canManage}
                 fileUrls={imageUrls}
                 onOpenHighlight={openHighlight}
                 onAddHighlights={() => setPicking(true)}
@@ -3704,6 +3705,7 @@ function DashboardPanel({
   nextDate,
   thumbs,
   highlights,
+  canManage,
   fileUrls,
   onOpenHighlight,
   onAddHighlights,
@@ -3718,6 +3720,7 @@ function DashboardPanel({
   nextDate: PrepItem | null;
   thumbs: Record<string, string>;
   highlights: Highlight[];
+  canManage: boolean;
   fileUrls: Record<string, string>;
   onOpenHighlight: (h: Highlight) => void;
   onAddHighlights: () => void;
@@ -3780,7 +3783,7 @@ function DashboardPanel({
           question after those two. */}
       <HighlightShelf
         highlights={highlights}
-        canEdit={canEdit}
+        canManage={canManage}
         fileUrls={fileUrls}
         thumbs={thumbs}
         onOpen={onOpenHighlight}

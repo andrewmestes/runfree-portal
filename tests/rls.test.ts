@@ -1166,6 +1166,137 @@ async function main() {
       }
     }
 
+    // -----------------------------------------------------------------
+    // 25. project_highlights (046/047) — the dashboard's "Read & watch
+    // this" shelf.
+    //
+    // Read is can_see_project; write mirrors deliverables, i.e. editor or
+    // admin. A viewer reading but not writing is the whole point: the shelf
+    // is something a coach hands a church, not something the church edits.
+    // -----------------------------------------------------------------
+    {
+      const asAdmin = createUserClient(adminA.accessToken);
+      const { data: made, error: addErr } = await asAdmin
+        .from("project_highlights")
+        .insert({
+          project_id: projectA.id,
+          source_kind: "template_resource",
+          source_id: `rls-${RUN}`,
+          title: "RLS highlight",
+          media_kind: "video",
+          external_url: "https://www.loom.com/share/rlssuite",
+        })
+        .select("id")
+        .single();
+      record("25a. admin can highlight a resource", !addErr, addErr?.message);
+
+      const asViewer = createUserClient(viewerA.accessToken);
+      const { data: seen } = await asViewer
+        .from("project_highlights")
+        .select("id")
+        .eq("project_id", projectA.id);
+      record(
+        "25b. a viewer sees the highlights on their project",
+        (seen ?? []).some((r) => (r as { id: string }).id === made?.id),
+        `${(seen ?? []).length} visible`
+      );
+
+      const { error: viewerWriteErr } = await asViewer
+        .from("project_highlights")
+        .insert({
+          project_id: projectA.id,
+          source_kind: "upload",
+          title: "Viewer should not be able to write this",
+          media_kind: "pdf",
+        });
+      record(
+        "25c. a viewer cannot highlight anything",
+        !!viewerWriteErr,
+        viewerWriteErr ? "correctly rejected" : "insert unexpectedly succeeded"
+      );
+
+      const { error: viewerDelErr } = await asViewer
+        .from("project_highlights")
+        .delete()
+        .eq("id", made?.id ?? "00000000-0000-0000-0000-000000000000");
+      const { data: stillThere } = await supabaseAdmin
+        .from("project_highlights")
+        .select("id")
+        .eq("id", made?.id ?? "00000000-0000-0000-0000-000000000000");
+      record(
+        "25d. a viewer cannot remove a highlight",
+        (stillThere ?? []).length === 1,
+        viewerDelErr ? "rejected outright" : "delete matched no rows under RLS"
+      );
+
+      // An outsider must not see it at all — the shelf can name a church's
+      // own private decks, so a leak here leaks their work, not just a title.
+      //
+      // viewerB, not staffOutsider: test 13 adds staffOutsider to projectA as
+      // a viewer, so by the time this runs they are a legitimate member and
+      // SHOULD see it. viewerB is the suite's real outsider for project A —
+      // non-staff, member of project B only — and is used that way throughout.
+      const asOutsider = createUserClient(viewerB.accessToken);
+      const { data: outsiderSaw } = await asOutsider
+        .from("project_highlights")
+        .select("id")
+        .eq("project_id", projectA.id);
+      record(
+        "25e. someone outside the project sees no highlights",
+        (outsiderSaw ?? []).length === 0,
+        `got ${(outsiderSaw ?? []).length}`
+      );
+
+      // 047: the same resource twice is always a mistake. This is also the
+      // regression guard for the ON CONFLICT target — a partial index here
+      // made every multi-select add fail silently.
+      const { error: dupeErr } = await asAdmin.from("project_highlights").insert({
+        project_id: projectA.id,
+        source_kind: "template_resource",
+        source_id: `rls-${RUN}`,
+        title: "Duplicate",
+        media_kind: "video",
+      });
+      record(
+        "25f. the same resource cannot be highlighted twice",
+        !!dupeErr,
+        dupeErr ? "correctly rejected" : "duplicate unexpectedly allowed"
+      );
+
+      const { error: upsertErr } = await asAdmin
+        .from("project_highlights")
+        .upsert(
+          [
+            {
+              project_id: projectA.id,
+              source_kind: "template_resource" as const,
+              source_id: `rls-${RUN}`,
+              title: "Duplicate",
+              media_kind: "video" as const,
+            },
+            {
+              project_id: projectA.id,
+              source_kind: "book" as const,
+              source_id: `rls-book-${RUN}`,
+              title: "New one",
+              media_kind: "book" as const,
+            },
+          ],
+          { onConflict: "project_id,source_kind,source_id", ignoreDuplicates: true }
+        );
+      const { data: after } = await supabaseAdmin
+        .from("project_highlights")
+        .select("id")
+        .eq("project_id", projectA.id);
+      record(
+        "25g. multi-select add skips duplicates instead of failing",
+        !upsertErr && (after ?? []).length === 2,
+        upsertErr ? upsertErr.message : `${(after ?? []).length} row(s)`
+      );
+
+      await supabaseAdmin.from("project_highlights").delete().eq("project_id", projectA.id);
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

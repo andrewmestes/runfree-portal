@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { coverFor } from "@/lib/book-covers";
 import Image from "next/image";
 import PdfThumbnail from "@/components/PdfThumbnail";
 import type { BookFile, BookShelf as Shelf, BooksLibrary } from "@/lib/books";
@@ -22,26 +23,6 @@ import type { BookFile, BookShelf as Shelf, BooksLibrary } from "@/lib/books";
  * /api/projects/{id}/books on project membership — so the data and the
  * byte-fetcher arrive as props and this stays presentational.
  */
-
-// Static brand assets, not live-mirrored — book covers are design chrome,
-// same reasoning as the Pivvot process icons: they don't change the way the
-// underlying files do, so there's nothing to gain from fetching them live.
-const COVERS: Record<string, string> = {
-  "future church": "/brand/books/future-church.png",
-  // .jpg rather than .png like the other five: the source is a 66KB Amazon
-  // JPEG and re-encoding it to PNG would have quadrupled the file for no
-  // visible gain. The table holds full paths, so the extension is free to
-  // differ.
-  "innovating discipleship": "/brand/books/innovating-discipleship.jpg",
-  "church unique": "/brand/books/church-unique.png",
-  "god dreams": "/brand/books/god-dreams.png",
-  younique: "/brand/books/younique.png",
-  calling: "/brand/books/calling.png",
-};
-
-function coverFor(name: string): string | null {
-  return COVERS[name.toLowerCase().trim()] || null;
-}
 
 // Not part of the live-mirrored shelf — there's no Google Drive folder of
 // chapters/resources for this one, just the book itself. Still sits on the

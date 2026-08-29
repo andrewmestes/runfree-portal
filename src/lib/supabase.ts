@@ -770,6 +770,71 @@ export type Database = {
           },
         ];
       };
+      /** Resources a coach has highlighted for a church right now (046). */
+      project_highlights: {
+        Row: {
+          id: string;
+          project_id: string;
+          source_kind: "template_resource" | "book" | "deliverable" | "prep_item" | "session" | "upload";
+          /** uuid, Drive file id, or null for an upload. */
+          source_id: string | null;
+          title: string;
+          media_kind: "video" | "pdf" | "image" | "link" | "book";
+          note: string | null;
+          external_url: string | null;
+          file_path: string | null;
+          file_name: string | null;
+          file_mime: string | null;
+          file_size: number | null;
+          /** Ours, in the deliverable-images bucket. */
+          thumb_path: string | null;
+          /** Remote — a Loom still or a Drive cover. */
+          thumb_url: string | null;
+          position: number;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          source_kind: "template_resource" | "book" | "deliverable" | "prep_item" | "session" | "upload";
+          source_id?: string | null;
+          title: string;
+          media_kind: "video" | "pdf" | "image" | "link" | "book";
+          note?: string | null;
+          external_url?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_mime?: string | null;
+          file_size?: number | null;
+          thumb_path?: string | null;
+          thumb_url?: string | null;
+          position?: number;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          title?: string;
+          media_kind?: "video" | "pdf" | "image" | "link" | "book";
+          note?: string | null;
+          external_url?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_mime?: string | null;
+          file_size?: number | null;
+          thumb_path?: string | null;
+          thumb_url?: string | null;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_highlights_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       /** The per-project, editable preparation rows. */
       prep_items: {
         Row: {

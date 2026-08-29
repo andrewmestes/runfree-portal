@@ -394,6 +394,45 @@ that guard working, not a bug: the 7 Laws overview
 (`937fe2b1…`) gets handed a still belonging to `96ada777…`. The fix is an entry
 in that file's hand-picked map, which needs a real frame from the video.
 
+## Highlighted resources are pointers, not copies
+
+Migration **046**/**047**. `project_highlights` is what a coach has put on a
+church's dashboard for right now — Andrew: "a visual overview of what is
+important right now as they are moving forward in the process between
+sessions."
+
+It **points** at what it highlights (`source_kind` + `source_id`) so the same
+resource cannot be added twice and stays recognisable. It also **caches what
+the card draws** — title, media kind, art. That denormalisation is deliberate
+and measured: Will's books and the handouts live in Drive, the books panel
+takes ~7s against it, and a dashboard that had to ask Drive what a highlight
+is called before rendering would become the slowest page in the portal.
+
+Highlights carry **no done state**. What needs ticking is a `project_task`;
+this is the shelf beside it. Same line as the reading shelf.
+
+- **`ResourceCard`** draws both this and Reading & Pre-Work. One component on
+  purpose — `PanelRail`/`PanelStrip` is what happens otherwise. Videos get a
+  16:9 frame and object-cover, everything else 3:4 and object-contain, because
+  a book jacket and a video still do not survive each other's crop.
+- **`buildCatalogue`** flattens four tables and a Drive folder into one
+  searchable list. A template resource with no `external_url` is skipped: the
+  handouts and exercises are Drive-backed labels here, so highlighting one
+  would put a card on the dashboard that does nothing when tapped. **That is
+  also why there is no "Exercises & handouts" filter in practice** — it counts
+  zero and the picker hides empty filters. Wiring it up means sourcing from
+  the handouts library, not `template_resources`.
+- **Opening the picker triggers the books load**, the same lazy Drive read the
+  books panel does, or "Will's Books" would be empty until someone happened to
+  visit that panel first.
+
+**A partial unique index cannot be an ON CONFLICT target.** 046 made the index
+partial so uploads (null `source_id`) would not collide; PostgREST's upsert
+does not repeat the predicate, so Postgres could not infer it and every
+multi-select add failed silently, adding nothing. 047 makes it plain — NULLs
+are distinct in a Postgres unique index, so uploads never needed the
+predicate. Found by driving the picker, not by reading it.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,
@@ -412,6 +451,13 @@ books rail is a carousel, not a bug.
 
 The iOS user agent matters: `useCanvasPdf()` in `FilePreview` branches on the
 engine, not the width, so a desktop-UA run silently tests the wrong PDF path.
+
+It forces `loading="eager"` on every image before asserting. Without that it
+reports a false failure the moment a page grows past a screenful: a lazy image
+below the fold has layout, so it passes the visibility check, but has not
+begun loading, so `complete` is false and it looks broken. Two such "failures"
+appeared the day Help gained an FAQ and Preparation gained the reading shelf,
+and both URLs returned 200 when fetched directly.
 
 ## Never run `next build` while `next dev` is running
 

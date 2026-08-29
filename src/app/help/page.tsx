@@ -120,6 +120,18 @@ export default function HelpPage() {
             The work to do before we start has its own section, <strong>Preparation</strong>,
             at the top of that column.
           </Faq>
+          <Faq q="What is &lsquo;Read &amp; watch this&rsquo; on my dashboard?">
+            The handful of things your coach wants this team to look at before
+            you next meet — a chapter, a teaching, a deck, a session worth
+            rewatching. Each one is a card with its own picture, and tapping it
+            opens the thing itself.
+            <br />
+            <br />
+            It sits beside <strong>What&rsquo;s Important Now</strong> on purpose, and
+            the two are different. What&rsquo;s Important Now is what your team
+            <em> owes</em> — it has dates and tick-boxes. This is what to read and
+            watch, and it has neither.
+          </Faq>
           <Faq q="What is in Preparation, and do I tick things off?">
             <strong>Reading &amp; Pre-Work</strong> is a shelf, not a to-do list. Each
             thing your team reads or watches before we begin is a card with its own
@@ -303,6 +315,19 @@ export default function HelpPage() {
               Tasks land there when you add a next step and set it to <em>RunFree owes
               this</em> instead of <em>The team owes this</em>. Tick it off from either
               place.
+            </Faq>
+            <Faq q="Highlighting resources between sessions">
+              On any project&rsquo;s Dashboard, <strong>Highlight resources</strong>
+              opens a search across everything that project has — every teaching
+              video, every one of Will&rsquo;s books and chapters, the church&rsquo;s
+              own files and decks, and every session you have recorded with them.
+              Filter, tick as many as you want, add them in one go.
+              <br />
+              <br />
+              They show up on the church&rsquo;s dashboard as cards with covers.
+              Use it for the week&rsquo;s actual assignment — three things, not
+              thirty. If something needs <em>doing</em> rather than reading, make it
+              a next step instead so it gets a date and a tick-box.
             </Faq>
             <Faq q="Writing up a session">
               Paste the full write-up into <strong>Session summary</strong> on the session.

@@ -172,6 +172,16 @@ async function main() {
   for (const [name, u] of pages) {
     errs.length = 0;
     await go(u, name === "panel-books" ? 8000 : 4200);
+    // Force the lazy images in before asserting.
+    //
+    // Otherwise this reports a false failure the moment a page grows past a
+    // screenful: an `loading="lazy"` image below the fold has layout, so it
+    // passes the visibility check, but has not begun loading, so `complete`
+    // is false and it looks broken. That is exactly what happened when the
+    // Help page gained an FAQ and Preparation gained the reading shelf — two
+    // "broken" images that both returned 200 when fetched directly.
+    await ev(`[...document.images].forEach((i) => { i.loading = "eager"; }); "ok"`);
+    await sleep(2500);
     const a = await ev(AUDIT) as {
       hScroll: boolean; scrollW: number; vw: number; chars: number;
       spills: { tag: string; cls: string; left: number; right: number; text: string }[]; badImgs: string[];

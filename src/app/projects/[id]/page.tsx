@@ -58,6 +58,17 @@ import { extractLoomId } from "@/lib/loom";
 import { MODULE_META, moduleLabel, moduleOrder } from "@/lib/modules";
 import ModuleNav, { type NavModule } from "@/components/ModuleNav";
 import FilePreview, { type PreviewFile } from "@/components/FilePreview";
+import ResourceCard from "@/components/ResourceCard";
+import HighlightShelf from "@/components/HighlightShelf";
+import ResourcePicker from "@/components/ResourcePicker";
+import {
+  addHighlights,
+  buildCatalogue,
+  deleteHighlight,
+  listHighlights,
+  type CatalogueEntry,
+  type Highlight,
+} from "@/lib/highlights";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
@@ -228,6 +239,22 @@ export default function ProjectDetailPage() {
   >([]);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   /**
+   * Resources highlighted for right now. Loaded beside the project rather
+   * than on demand: the shelf is on the landing panel, so "load it when the
+   * panel opens" would mean loading it every time anyway, one render late.
+   */
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [picking, setPicking] = useState(false);
+  /**
+   * Highlighted video URLs, for loadThumbs.
+   *
+   * A ref rather than the state: loadThumbs is called in the same tick as
+   * setHighlights, so reading state there would use the previous render's
+   * value and leave a freshly added video without its still until something
+   * else re-rendered.
+   */
+  const highlightUrlsRef = useRef<string[]>([]);
+  /**
    * The open preview, and which endpoint can serve it. Handouts and books
    * live behind different routes — /handouts/file and /books/file — so the
    * modal has to be told which one to ask.
@@ -284,8 +311,20 @@ export default function ProjectDetailPage() {
       setDetail(result);
       setStatus("ready");
 
+      // Highlights first, so their covers are in the same signing request as
+      // everything else — a second round trip for four thumbnails is the kind
+      // of thing that made "checking access" feel slow.
+      const hl = await listHighlights(session.access_token, projectId).catch(() => []);
+      setHighlights(hl);
+      highlightUrlsRef.current = hl.map((h) => h.external_url).filter((u): u is string => !!u);
+
       // Logo and every session image in a single signing request.
-      setImageUrls(await getSignedImageUrls(session.access_token, signablePaths(result)));
+      setImageUrls(
+        await getSignedImageUrls(session.access_token, [
+          ...signablePaths(result),
+          ...hl.flatMap((h) => [h.thumb_path, h.file_path]).filter((x): x is string => !!x),
+        ])
+      );
 
       // Real Loom stills, resolved server-side. Fired after the render like
       // the handouts: a video card is usable without its picture, and waiting
@@ -378,7 +417,48 @@ export default function ProjectDetailPage() {
     }
   }, []);
 
-  const openPrepFile = useCallback(
+  /**
+   * Open a highlight. Which viewer depends on where the bytes are: a book is
+   * in Drive behind /books/file, one of our own PDFs is a signed storage URL.
+   * Anything with only a link never reaches here — the card is an anchor.
+   */
+  const openHighlight = useCallback(
+    (h: Highlight) => {
+      if (h.source_kind === "book" && h.source_id) {
+        setPreview({
+          id: h.source_id,
+          title: h.title,
+          num: null,
+          label: h.title,
+          sizeBytes: h.file_size,
+          source: "book",
+        });
+        return;
+      }
+      const url = h.thumb_path && !h.file_path ? undefined : h.file_path ? imageUrls[h.file_path] : undefined;
+      if (!url) return;
+      setPreview({
+        id: url,
+        title: h.title,
+        num: null,
+        label: h.title,
+        sizeBytes: h.file_size,
+        source: "storage",
+      });
+    },
+    [imageUrls]
+  );
+
+  const removeHighlight = useCallback(
+    async (h: Highlight) => {
+      if (!accessToken) return;
+      await deleteHighlight(accessToken, h.id);
+      setHighlights((prev) => prev.filter((x) => x.id !== h.id));
+    },
+    [accessToken]
+  );
+
+    const openPrepFile = useCallback(
     (signedUrl: string, title: string, sizeBytes: number | null) => {
       setPreview({ id: signedUrl, title, num: null, label: title, sizeBytes, source: "storage" });
     },
@@ -446,7 +526,10 @@ export default function ProjectDetailPage() {
   // project page load would undo the work that got "Checking access" down
   // from eleven round-trips to two.
   useEffect(() => {
-    if (panel !== "books" || books) return;
+    // The picker offers books as well, so opening it is a second reason to
+    // go and get them — otherwise "Will's Books" is an empty filter until
+    // someone happens to visit that panel first.
+    if ((panel !== "books" && !picking) || books) return;
     let cancelled = false;
 
     (async () => {
@@ -524,7 +607,9 @@ export default function ProjectDetailPage() {
       .concat(result.sessions.map((x) => x.recording_url).filter((u): u is string => !!u))
       // Reading & Pre-Work carries its own videos now — the two master
       // teachings that used to be prose telling you to go and find them.
-      .concat(result.prepItems.map((x) => x.external_url).filter((u): u is string => !!u));
+      .concat(result.prepItems.map((x) => x.external_url).filter((u): u is string => !!u))
+      // And anything highlighted, which is very often a video.
+      .concat(highlightUrlsRef.current);
     if (videoUrls.length === 0) return;
     try {
       const res = await fetch("/api/loom-thumbnails", {
@@ -545,7 +630,15 @@ export default function ProjectDetailPage() {
     const result = await getProjectDetail(accessToken, projectId);
     if (!result) return;
     setDetail(result);
-    setImageUrls(await getSignedImageUrls(accessToken, signablePaths(result)));
+    const hl = await listHighlights(accessToken, projectId).catch(() => []);
+    setHighlights(hl);
+    highlightUrlsRef.current = hl.map((h) => h.external_url).filter((u): u is string => !!u);
+    setImageUrls(
+      await getSignedImageUrls(accessToken, [
+        ...signablePaths(result),
+        ...hl.flatMap((h) => [h.thumb_path, h.file_path]).filter((x): x is string => !!x),
+      ])
+    );
     loadThumbs(result, accessToken);
   }
 
@@ -818,6 +911,11 @@ export default function ProjectDetailPage() {
                 projectId={projectId}
                 nextDate={nextDateItem}
                 thumbs={thumbs}
+                highlights={highlights}
+                fileUrls={imageUrls}
+                onOpenHighlight={openHighlight}
+                onAddHighlights={() => setPicking(true)}
+                onRemoveHighlight={removeHighlight}
                 onGoTo={goPanel}
                 onChanged={refresh}
               />
@@ -1005,6 +1103,33 @@ export default function ProjectDetailPage() {
       </div>
 
       <BackToTop />
+
+      {picking && detail && (
+        <ResourcePicker
+          catalogue={buildCatalogue(detail, books)}
+          alreadyKeys={
+            new Set(
+              highlights
+                .filter((h) => h.source_id)
+                .map((h) => `${h.source_kind}:${h.source_id}`)
+            )
+          }
+          booksLoading={!books}
+          onCancel={() => setPicking(false)}
+          onAdd={async (entries: CatalogueEntry[]) => {
+            if (!accessToken) return;
+            await addHighlights(accessToken, projectId, entries, highlights.length);
+            const hl = await listHighlights(accessToken, projectId);
+            setHighlights(hl);
+            highlightUrlsRef.current = hl
+              .map((h) => h.external_url)
+              .filter((u): u is string => !!u);
+            setImageUrls((prev) => ({ ...prev }));
+            setPicking(false);
+            refresh();
+          }}
+        />
+      )}
 
       {preview && (
         <FilePreview
@@ -3567,6 +3692,11 @@ function DashboardPanel({
   projectId,
   nextDate,
   thumbs,
+  highlights,
+  fileUrls,
+  onOpenHighlight,
+  onAddHighlights,
+  onRemoveHighlight,
   onGoTo,
   onChanged,
 }: {
@@ -3576,6 +3706,11 @@ function DashboardPanel({
   projectId: string;
   nextDate: PrepItem | null;
   thumbs: Record<string, string>;
+  highlights: Highlight[];
+  fileUrls: Record<string, string>;
+  onOpenHighlight: (h: Highlight) => void;
+  onAddHighlights: () => void;
+  onRemoveHighlight: (h: Highlight) => Promise<void>;
   onGoTo: (key: string) => void;
   onChanged: () => void;
 }) {
@@ -3626,6 +3761,20 @@ function DashboardPanel({
         thumb={latest?.recording_url ? thumbs[latest.recording_url] : undefined}
         total={detail.sessions.length}
         onGoToSessions={() => onGoTo("sessions")}
+      />
+
+      {/* What to read and watch between sessions. Below the session card
+          rather than above it, because the dashboard's first job is still
+          "when do we meet and what happened last time" — this answers the
+          question after those two. */}
+      <HighlightShelf
+        highlights={highlights}
+        canEdit={canEdit}
+        fileUrls={fileUrls}
+        thumbs={thumbs}
+        onOpen={onOpenHighlight}
+        onAdd={onAddHighlights}
+        onRemove={onRemoveHighlight}
       />
 
       {/* No process card. It was added to fill an empty-looking dashboard,
@@ -5644,152 +5793,40 @@ function ReadingShelf({
             />
           </li>
         ) : (
-          <ReadingCard
-            key={item.id}
-            item={item}
-            cover={item.thumb_path ? fileUrls[item.thumb_path] : undefined}
-            still={item.external_url ? thumbs?.[item.external_url] : undefined}
-            fileUrl={item.file_path ? fileUrls[item.file_path] : undefined}
-            canEdit={canEdit}
-            onEdit={() => setEditingId(item.id)}
-            onOpenFile={onOpenFile}
-          />
+          (() => {
+            const href = safeExternalUrl(item.external_url);
+            const isVideo = !!href && /loom\.com|vimeo\.com|youtube\.com|youtu\.be/i.test(href);
+            const cover = item.thumb_path ? fileUrls[item.thumb_path] : undefined;
+            const fileUrl = item.file_path ? fileUrls[item.file_path] : undefined;
+            return (
+              <ResourceCard
+                key={item.id}
+                title={item.title}
+                note={item.notes}
+                media={isVideo ? "video" : item.file_path ? "pdf" : href ? "link" : "pdf"}
+                art={cover ?? (isVideo && item.external_url ? thumbs?.[item.external_url] : undefined)}
+                href={href}
+                onOpen={
+                  fileUrl && onOpenFile
+                    ? () => onOpenFile(fileUrl, item.title, item.file_size)
+                    : undefined
+                }
+                actions={
+                  canEdit ? (
+                    <button
+                      onClick={() => setEditingId(item.id)}
+                      className="text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+                    >
+                      Edit
+                    </button>
+                  ) : undefined
+                }
+              />
+            );
+          })()
         )
       )}
     </ul>
-  );
-}
-
-function ReadingCard({
-  item,
-  cover,
-  still,
-  fileUrl,
-  canEdit,
-  onEdit,
-  onOpenFile,
-}: {
-  item: PrepItem;
-  cover?: string;
-  still?: string;
-  fileUrl?: string;
-  canEdit: boolean;
-  onEdit: () => void;
-  onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
-}) {
-  const href = safeExternalUrl(item.external_url);
-  const isVideo = !!href && /loom\.com|vimeo\.com|youtube\.com|youtu\.be/i.test(href);
-  const art = cover ?? (isVideo ? still : undefined);
-  const openable = !!fileUrl && !!onOpenFile;
-
-  const media = (
-    /* Two shapes on one shelf, each given the box it deserves. A video still
-       is 16:9 and fills a landscape box exactly; a book jacket is about 2:3
-       and fills a portrait one. Forcing either into the other's frame is what
-       made the first cut look wrong — the videos sat as a thin band inside a
-       tall grey card. The grid is items-start, so rows of different heights
-       simply sit side by side rather than stretching to match. */
-    <span
-      className={`relative block overflow-hidden rounded-xl bg-runfree-indigo/40 ring-1 ring-gray-200/80 transition group-hover:ring-runfree-magenta/40 ${
-        isVideo ? "aspect-video" : "aspect-[3/4]"
-      }`}
-    >
-      {art ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={art}
-          alt=""
-          loading="lazy"
-          className={`h-full w-full ${isVideo ? "object-cover" : "object-contain"}`}
-        />
-      ) : (
-        <span className="grid h-full w-full place-items-center text-runfree-navy/25">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="h-10 w-10" aria-hidden="true">
-            {isVideo ? (
-              <>
-                <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
-                <path d="M10.5 9.5v5l4-2.5z" />
-              </>
-            ) : href ? (
-              <>
-                <path d="M13.5 10.5 21 3" />
-                <path d="M15 3h6v6" />
-                <path d="M20 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5" />
-              </>
-            ) : (
-              <>
-                <path d="M14 3v5h5" />
-                <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
-              </>
-            )}
-          </svg>
-        </span>
-      )}
-
-      {isVideo && art && (
-        <span
-          aria-hidden
-          className="absolute inset-0 grid place-items-center bg-runfree-ink/15 transition group-hover:bg-runfree-ink/25"
-        >
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-white/90 text-runfree-magentaDeep shadow-md">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-5 w-5">
-              <path d="M8 5.5v13l11-6.5z" />
-            </svg>
-          </span>
-        </span>
-      )}
-    </span>
-  );
-
-  const label = (
-    <>
-      <span className="mt-2.5 block text-sm font-semibold leading-snug text-runfree-ink">
-        {item.title}
-      </span>
-      {item.notes && (
-        <span className="mt-1 line-clamp-3 block text-xs leading-relaxed text-gray-500">
-          {item.notes}
-        </span>
-      )}
-    </>
-  );
-
-  return (
-    <li className="min-w-0">
-      {openable ? (
-        <button
-          onClick={() => onOpenFile!(fileUrl!, item.title, item.file_size)}
-          className="group block w-full text-left outline-none"
-        >
-          {media}
-          {label}
-        </button>
-      ) : href ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group block outline-none"
-        >
-          {media}
-          {label}
-        </a>
-      ) : (
-        <span className="group block">
-          {media}
-          {label}
-        </span>
-      )}
-
-      {canEdit && (
-        <button
-          onClick={onEdit}
-          className="mt-1.5 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
-        >
-          Edit
-        </button>
-      )}
-    </li>
   );
 }
 

@@ -478,6 +478,51 @@ multi-select add failed silently, adding nothing. 047 makes it plain — NULLs
 are distinct in a Postgres unique index, so uploads never needed the
 predicate. Found by driving the picker, not by reading it.
 
+## Notes are formatted HTML, and cards take any number of files
+
+**Notes** (`deliverables.body`, `sessions.recap`) were a Markdown subset with a
+placeholder that read "## Headings, - bullets and **bold** are formatted" — a
+syntax to learn, which is the opposite of what Andrew asked for: "as easy as
+possible for the least techy person on our team." They are now a small subset
+of HTML written with buttons (`RichText`), which is also the only way to get
+underline, since Markdown has none.
+
+- **Allowlist-rebuild, never sanitise-in-place.** `cleanRichText` parses and
+  emits a fresh tree of tags it recognises, so nothing unrecognised survives
+  by being cleverly written. It guards both save and render, so a row edited
+  straight in the database gets the same suspicion as fresh input.
+- **Both formats render.** `isRichText()` picks; notes written before this are
+  still Markdown and `RecapBody` still renders them. Nothing was rewritten in
+  place — the same restraint as 040/041/043.
+- `.rich-text` in globals.css styles the editor and the read-only view from
+  one place. Without it Tailwind's preflight strips list markers and heading
+  sizes, and the toolbar buttons appear to do nothing.
+- `document.execCommand` is deprecated and has no equivalent replacement. The
+  content is plain HTML in a column, so it survives whatever replaces this.
+
+**Files** are `deliverable_files` (**051**). `deliverables.image_path` changed
+job: it is the card's THUMBNAIL, a pointer at whichever attachment is its face,
+set to the last image dropped. `file_path` is untouched for older cards and the
+renderer shows it alongside the new rows. The chips count both — a card whose
+only document is a `deliverable_files` row showed no PDF chip until they did.
+
+## Task assignment is a capability, not a role
+
+Migration **053**. Andrew: "Only project admins can assign tasks. If I want a
+team member (or subscriber) to have access, I should be able to assign that
+separately than the master permission list."
+
+`project_members.can_manage_tasks` grants create/edit/complete without the
+admin role. It is deliberately not a fourth role — roles are a ladder where
+every rung carries the ones below, and this has nothing to do with managing
+members or project settings.
+
+`may_manage_tasks(project_id)` is the single source: the policy and
+`set_task_done` both call it, so they cannot drift the way 030 and 039 did.
+The migration backfills the grant to existing editors, because tightening the
+default would otherwise have taken it away mid-engagement from whoever had it
+yesterday.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

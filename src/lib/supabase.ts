@@ -220,6 +220,11 @@ export type Database = {
            * admin-only for direct UPDATE.
            */
           pinned_at: string | null;
+          /**
+           * Task create/edit/complete without the admin role (053). Ignored
+           * when role = 'admin', which already carries it.
+           */
+          can_manage_tasks: boolean;
         };
         Insert: {
           project_id: string;
@@ -229,12 +234,14 @@ export type Database = {
           is_lead?: boolean;
           added_at?: string;
           pinned_at?: string | null;
+          can_manage_tasks?: boolean;
         };
         Update: {
           role?: "viewer" | "editor" | "admin";
           org_role?: string | null;
           is_lead?: boolean;
           pinned_at?: string | null;
+          can_manage_tasks?: boolean;
         };
         Relationships: [
           {
@@ -766,6 +773,45 @@ export type Database = {
             foreignKeyName: "template_prep_items_group_id_fkey";
             columns: ["group_id"];
             referencedRelation: "template_prep_groups";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      /** Attachments on a module card — however many there are (051). */
+      deliverable_files: {
+        Row: {
+          id: string;
+          deliverable_id: string;
+          project_id: string;
+          path: string;
+          name: string;
+          mime: string | null;
+          size: number | null;
+          is_image: boolean;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          deliverable_id: string;
+          project_id: string;
+          path: string;
+          name: string;
+          mime?: string | null;
+          size?: number | null;
+          is_image?: boolean;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          name?: string;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "deliverable_files_deliverable_id_fkey";
+            columns: ["deliverable_id"];
+            referencedRelation: "deliverables";
             referencedColumns: ["id"];
           },
         ];

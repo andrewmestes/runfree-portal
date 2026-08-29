@@ -14,6 +14,12 @@ export type ProjectMember = {
   isLead: boolean;
   /** Splits the roster into the RunFree side and the church's side. */
   isStaff: boolean;
+  /**
+   * Task create/edit/complete without the admin role (migration 053).
+   * Andrew: "If I want a team member (or subscriber) to have access, I should
+   * be able to assign that separately than the master permission list."
+   */
+  canManageTasks: boolean;
   fullName: string | null;
   email: string;
   avatarPath: string | null;
@@ -178,7 +184,7 @@ export async function getProjectDetail(
   ] = await Promise.all([
     client
       .from("project_members")
-      .select("profile_id, role, org_role, is_lead, profiles(full_name, email, is_staff, avatar_path)")
+      .select("profile_id, role, org_role, is_lead, can_manage_tasks, profiles(full_name, email, is_staff, avatar_path)")
       .eq("project_id", projectId),
     // Date first, because that is how a coach thinks about ten sessions
     // delivered over months. position only breaks ties — two sessions on one
@@ -287,6 +293,7 @@ export async function getProjectDetail(
       return {
         profileId: m.profile_id,
         role: m.role,
+        canManageTasks: m.can_manage_tasks ?? false,
         orgRole: m.org_role,
         isLead: m.is_lead,
         isStaff: profile?.is_staff ?? false,
@@ -1150,6 +1157,28 @@ export async function updateMemberRole(
   const { error } = await client
     .from("project_members")
     .update({ role })
+    .eq("project_id", projectId)
+    .eq("profile_id", profileId);
+  if (error) throw error;
+}
+
+/**
+ * Grant or revoke task assignment for one person, without touching their role.
+ *
+ * Andrew: "If I want a team member (or subscriber) to have access, I should be
+ * able to assign that separately than the master permission list." Admins have
+ * it inherently, so this only ever matters for viewers and editors.
+ */
+export async function setMemberCanManageTasks(
+  accessToken: string,
+  projectId: string,
+  profileId: string,
+  can: boolean
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client
+    .from("project_members")
+    .update({ can_manage_tasks: can })
     .eq("project_id", projectId)
     .eq("profile_id", profileId);
   if (error) throw error;

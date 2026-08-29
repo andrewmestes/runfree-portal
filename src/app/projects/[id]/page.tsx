@@ -32,6 +32,7 @@ import {
   updateAvatar,
   updateMemberDetails,
   updateMemberRole,
+  setMemberCanManageTasks,
   updateContact,
   updatePrepItem,
   updateProject,
@@ -59,6 +60,15 @@ import { MODULE_META, moduleLabel, moduleOrder } from "@/lib/modules";
 import ModuleNav, { type NavModule } from "@/components/ModuleNav";
 import FilePreview, { type PreviewFile } from "@/components/FilePreview";
 import ResourceCard from "@/components/ResourceCard";
+import RichText, { RichTextView } from "@/components/RichText";
+import FileDrop, { isImageFile, type StagedFile } from "@/components/FileDrop";
+import { richTextIsEmpty, isRichText } from "@/lib/rich-text";
+import {
+  attachFiles,
+  listDeliverableFiles,
+  removeDeliverableFile,
+  type DeliverableFile,
+} from "@/lib/deliverable-files";
 import HighlightShelf from "@/components/HighlightShelf";
 import ResourcePicker from "@/components/ResourcePicker";
 import {
@@ -245,6 +255,8 @@ export default function ProjectDetailPage() {
    */
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [picking, setPicking] = useState(false);
+  /** Attachments on module cards (051), keyed by deliverable in the panel. */
+  const [cardFiles, setCardFiles] = useState<DeliverableFile[]>([]);
   /**
    * Highlighted video URLs, for loadThumbs.
    *
@@ -317,12 +329,15 @@ export default function ProjectDetailPage() {
       const hl = await listHighlights(session.access_token, projectId).catch(() => []);
       setHighlights(hl);
       highlightUrlsRef.current = hl.map((h) => h.external_url).filter((u): u is string => !!u);
+      const cf = await listDeliverableFiles(session.access_token, projectId).catch(() => []);
+      setCardFiles(cf);
 
       // Logo and every session image in a single signing request.
       setImageUrls(
         await getSignedImageUrls(session.access_token, [
           ...signablePaths(result),
           ...hl.flatMap((h) => [h.thumb_path, h.file_path]).filter((x): x is string => !!x),
+          ...cf.map((f) => f.path),
         ])
       );
 
@@ -649,10 +664,13 @@ export default function ProjectDetailPage() {
     const hl = await listHighlights(accessToken, projectId).catch(() => []);
     setHighlights(hl);
     highlightUrlsRef.current = hl.map((h) => h.external_url).filter((u): u is string => !!u);
+    const cf = await listDeliverableFiles(accessToken, projectId).catch(() => []);
+    setCardFiles(cf);
     setImageUrls(
       await getSignedImageUrls(accessToken, [
         ...signablePaths(result),
         ...hl.flatMap((h) => [h.thumb_path, h.file_path]).filter((x): x is string => !!x),
+        ...cf.map((f) => f.path),
       ])
     );
     loadThumbs(result, accessToken);
@@ -686,6 +704,18 @@ export default function ProjectDetailPage() {
   const myRole: ProjectRole | null = myMembership?.role ?? (profile.is_owner ? "admin" : null);
   const canEdit = myRole === "editor" || myRole === "admin";
   const canManage = myRole === "admin" || profile.is_owner;
+  /**
+   * Who may create, edit and tick a task (migration 053).
+   *
+   * Deliberately not `canEdit`. Andrew: "Only project admins can assign
+   * tasks. If I want a team member (or subscriber) to have access, I should
+   * be able to assign that separately than the master permission list." So:
+   * admins and the owner by default, plus anyone explicitly granted it on
+   * this project — a capability, not a rung on the role ladder.
+   */
+  const canAssignTasks =
+    canManage || !!detail?.members.find((m) => m.profileId === profile?.id)?.canManageTasks;
+
 
   // Which sections belong to the prepare block is a property of the template,
   // not a constant. Pivvot calls it "CHURCH PREPARATION"; Younique's prework
@@ -929,6 +959,7 @@ export default function ProjectDetailPage() {
                 thumbs={thumbs}
                 highlights={highlights}
                 canManage={canManage}
+                canAssignTasks={canAssignTasks}
                 fileUrls={imageUrls}
                 onOpenHighlight={openHighlight}
                 onAddHighlights={() => setPicking(true)}
@@ -1026,6 +1057,7 @@ export default function ProjectDetailPage() {
                   section={activeModule}
                   detail={detail}
                   imageUrls={imageUrls}
+                  cardFiles={cardFiles}
                   canEdit={canEdit}
                   accessToken={accessToken}
                   onChanged={refresh}
@@ -1044,6 +1076,7 @@ export default function ProjectDetailPage() {
                           section={section}
                           detail={detail}
                           imageUrls={imageUrls}
+                          cardFiles={cardFiles}
                           canEdit={canEdit}
                           accessToken={accessToken}
                           onChanged={refresh}
@@ -2897,6 +2930,39 @@ function ProjectAccess({
                     <option value="editor">Editor</option>
                     <option value="admin">Admin</option>
                   </select>
+                  {/* A capability, not a rung on the role ladder — so it is a
+                      checkbox beside the role rather than a fourth option in
+                      it. An admin already has it and cannot un-have it, so
+                      the control is shown ticked and disabled rather than
+                      hidden, which would read as "admins cannot do this". */}
+                  <label
+                    className={`flex shrink-0 items-center gap-1.5 text-[11px] font-medium ${
+                      m.role === "admin" ? "text-gray-400" : "text-gray-600"
+                    }`}
+                    title={
+                      m.role === "admin"
+                        ? "Admins can always assign tasks"
+                        : "Let this person add, edit and tick off tasks"
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={m.role === "admin"}
+                      checked={m.role === "admin" || m.canManageTasks}
+                      onChange={async (e) => {
+                        if (!accessToken) return;
+                        await setMemberCanManageTasks(
+                          accessToken,
+                          projectId,
+                          m.profileId,
+                          e.target.checked
+                        );
+                        onChanged();
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 accent-runfree-magenta disabled:opacity-50"
+                    />
+                    Tasks
+                  </label>
                   <button
                     onClick={async () => {
                       if (!accessToken) return;
@@ -3106,7 +3172,7 @@ function SessionRecap({ recap }: { recap: string }) {
 
       {open && (
         <div className="animate-fade border-t border-gray-200/80 bg-white px-4 py-4">
-          <RecapBody text={recap} />
+          {isRichText(recap) ? <RichTextView html={recap} /> : <RecapBody text={recap} />}
         </div>
       )}
     </div>
@@ -3719,6 +3785,7 @@ function DashboardPanel({
   thumbs,
   highlights,
   canManage,
+  canAssignTasks,
   fileUrls,
   onOpenHighlight,
   onAddHighlights,
@@ -3734,6 +3801,8 @@ function DashboardPanel({
   thumbs: Record<string, string>;
   highlights: Highlight[];
   canManage: boolean;
+  /** Task create/edit/complete — admins plus anyone granted it (053). */
+  canAssignTasks: boolean;
   fileUrls: Record<string, string>;
   onOpenHighlight: (h: Highlight) => void;
   onAddHighlights: () => void;
@@ -3772,7 +3841,7 @@ function DashboardPanel({
       >
         <PrioritiesBanner
           detail={detail}
-          canEdit={canEdit}
+          canEdit={canAssignTasks}
           accessToken={accessToken}
           projectId={projectId}
           moduleOptions={availableSections(detail)}
@@ -3899,20 +3968,37 @@ function LatestSessionCard({
 function RecapPreview({ recap }: { recap: string }) {
   const [open, setOpen] = useState(false);
 
-  const teaser = recap
-    .split("\n")
-    .map((l) => l.trim())
-    // Skip headings and list items — a preview opening on "## PART 1" tells
-    // you nothing about the session.
-    .filter((l) => l && !/^#{1,6}\s/.test(l) && !/^([-*\u2022]|\d+[.)])\s/.test(l))
-    .join(" ")
-    .replace(/\*\*/g, "")
+  const teaser = (
+    isRichText(recap)
+      ? // Formatted notes: drop the headings whole, then the remaining tags.
+        // Without the first step the preview opens on the section title, which
+        // is the same problem the Markdown branch below solves by skipping
+        // "## PART 1" lines.
+        recap
+          .replace(/<h[1-6][^>]*>.*?<\/h[1-6]>/gis, " ")
+          .replace(/<li[^>]*>/gi, " • ")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/&nbsp;/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+      : recap
+          .split("\n")
+          .map((l) => l.trim())
+          // Skip headings and list items — a preview opening on "## PART 1"
+          // tells you nothing about the session.
+          .filter((l) => l && !/^#{1,6}\s/.test(l) && !/^([-*\u2022]|\d+[.)])\s/.test(l))
+          .join(" ")
+          .replace(/\*\*/g, "")
+  )
+    .replace(/\s+/g, " ")
+    .trim()
     .slice(0, 240);
 
   return (
     <div className="border-t border-gray-100 px-5 py-4">
       {open ? (
-        <RecapBody text={recap} />
+        isRichText(recap) ? <RichTextView html={recap} /> : <RecapBody text={recap} />
       ) : (
         <p className="text-sm leading-relaxed text-gray-600">
           {teaser}
@@ -4044,6 +4130,7 @@ function ModulePanel({
   section,
   detail,
   imageUrls,
+  cardFiles = [],
   canEdit,
   accessToken,
   onChanged,
@@ -4053,6 +4140,7 @@ function ModulePanel({
 }: {
   section: string;
   detail: ProjectDetail;
+  cardFiles?: DeliverableFile[];
   imageUrls: Record<string, string>;
   canEdit: boolean;
   accessToken: string | null;
@@ -4181,6 +4269,7 @@ function ModulePanel({
           <SessionCards
             items={images}
             imageUrls={imageUrls}
+            cardFiles={cardFiles}
             canEdit={canEdit}
             accessToken={accessToken}
             projectId={detail.id}
@@ -4625,6 +4714,7 @@ function VideoCard({
  */
 function SessionCards({
   items,
+  cardFiles = [],
   imageUrls,
   canEdit,
   accessToken,
@@ -4634,6 +4724,8 @@ function SessionCards({
 }: {
   items: ProjectDetail["deliverables"];
   imageUrls: Record<string, string>;
+  /** Every attachment on the project; split per card here. */
+  cardFiles?: DeliverableFile[];
   canEdit: boolean;
   accessToken: string | null;
   projectId: string;
@@ -4657,6 +4749,7 @@ function SessionCards({
           key={d.id}
           item={d}
           imageUrls={imageUrls}
+          files={cardFiles.filter((f) => f.deliverable_id === d.id)}
           canEdit={canEdit}
           accessToken={accessToken}
           onChanged={onChanged}
@@ -4691,12 +4784,15 @@ function SessionCards({
 function SessionCard({
   item,
   imageUrls,
+  files = [],
   canEdit,
   accessToken,
   onChanged,
 }: {
   item: ProjectDetail["deliverables"][number];
   imageUrls: Record<string, string>;
+  /** Everything dropped on this card (051), newest numbering last. */
+  files?: DeliverableFile[];
   canEdit: boolean;
   accessToken: string | null;
   onChanged: () => void;
@@ -4711,7 +4807,9 @@ function SessionCard({
   // Nothing to open means nothing to click. A photo with no notes and no
   // document is finished as a thumbnail; giving it a disclosure arrow that
   // reveals an empty panel is worse than not having one.
-  const expandable = hasBody || !!item.file_path;
+  // A card with attachments has something behind it even when it has no
+  // legacy file_path and no notes.
+  const expandable = hasBody || !!item.file_path || files.length > 0;
 
   if (editing) {
     return (
@@ -4750,9 +4848,18 @@ function SessionCard({
           <p className="text-sm font-semibold leading-snug text-runfree-ink">{name}</p>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {item.file_path && (
+            {/* The chips say what is inside before you open it, so they have
+                to count the attachments too — a card whose only document is a
+                deliverable_files row was showing no PDF chip at all, because
+                this only ever looked at the legacy single file_path. */}
+            {(item.file_path || files.some((f) => !f.is_image)) && (
               <span className="inline-flex items-center gap-1 rounded-full bg-runfree-pink px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
                 PDF
+              </span>
+            )}
+            {files.length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-runfree-indigo/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-navy">
+                {files.length} {files.length === 1 ? "file" : "files"}
               </span>
             )}
             {hasBody && (
@@ -4794,7 +4901,15 @@ function SessionCard({
 
       {open && (
         <div className="animate-fade border-t border-gray-100 bg-gray-50/60 px-4 py-4">
-          {hasBody && <RecapBody text={item.body!} />}
+          {hasBody &&
+            (isRichText(item.body) ? (
+              /* Written with the formatting buttons. Notes saved before those
+                 existed are still Markdown, and RecapBody still renders them —
+                 043's restraint again: nothing is rewritten in place. */
+              <RichTextView html={item.body!} />
+            ) : (
+              <RecapBody text={item.body!} />
+            ))}
 
           {fileUrl && (
             <a
@@ -4809,6 +4924,49 @@ function SessionCard({
               </svg>
               {item.file_name || "Open the document"}
             </a>
+          )}
+
+          {files.length > 0 && (
+            /* Everything dropped on the card. Images included: the one chosen
+               as the card's face is still a file someone may want to open at
+               full size, and hiding it here would make it look lost. */
+            <ul className="mt-3 space-y-1.5">
+              {files.map((f) => {
+                const url = imageUrls[f.path];
+                return (
+                  <li key={f.id}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex items-center gap-2.5 rounded-lg bg-gray-50 px-3 py-2 transition hover:bg-runfree-indigo/40 ${
+                        url ? "" : "pointer-events-none opacity-50"
+                      }`}
+                    >
+                      {f.is_image && url ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={url} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />
+                      ) : (
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded bg-white text-gray-400 ring-1 ring-gray-200">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                            <path d="M14 3v5h5" />
+                            <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
+                          </svg>
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700">
+                        {f.name}
+                      </span>
+                      {f.size != null && (
+                        <span className="shrink-0 text-[11px] tabular-nums text-gray-400">
+                          {prettySize(f.size)}
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       )}
@@ -4827,6 +4985,7 @@ function SessionCardForm({
   projectId,
   section,
   siblings = [],
+  existingFiles = [],
   accessToken,
   onDone,
   onCancel,
@@ -4835,61 +4994,98 @@ function SessionCardForm({
   projectId?: string;
   section?: string;
   siblings?: ProjectDetail["deliverables"];
+  /** Attachments already on this card, so new ones are numbered after them. */
+  existingFiles?: DeliverableFile[];
   accessToken: string | null;
   onDone: () => void;
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState(existing?.title || existing?.caption || "");
   const [body, setBody] = useState(existing?.body ?? "");
-  const [image, setImage] = useState<File | null>(null);
-  const [doc, setDoc] = useState<File | null>(null);
+  const [staged, setStaged] = useState<StagedFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Object URLs are revoked when a file leaves the list and on unmount; a
+  // preview thumbnail that outlives its file is a leak in a form people open
+  // and close all day.
+  useEffect(() => () => staged.forEach((s) => s.url && URL.revokeObjectURL(s.url)), [staged]);
+
+  function addFiles(files: File[]) {
+    setError(null);
+    const tooBig = files.find((f) => f.type.startsWith("image/") && f.size > MAX_IMAGE_BYTES);
+    if (tooBig) {
+      setError(`"${tooBig.name}" is over ${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)}MB.`);
+      return;
+    }
+    setStaged((prev) => [
+      ...prev,
+      ...files.map((file) => {
+        const isImage = isImageFile(file);
+        return { file, isImage, url: isImage ? URL.createObjectURL(file) : undefined };
+      }),
+    ]);
+  }
+
+  function removeStaged(index: number) {
+    setStaged((prev) => {
+      const s = prev[index];
+      if (s?.url) URL.revokeObjectURL(s.url);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  /** The card's face: the last image dropped, per Andrew's rule. */
+  const lastImage = [...staged].reverse().find((s) => s.isImage);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!accessToken || !title.trim()) return;
 
-    if (image && image.size > MAX_IMAGE_BYTES) {
-      setError(`That image is over ${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)}MB.`);
-      return;
-    }
-
     setBusy(true);
     setError(null);
     try {
-      const patch: Record<string, unknown> = {
-        title: title.trim(),
-        body: body.trim() || null,
-      };
+      const clean = richTextIsEmpty(body) ? null : body;
 
-      if (image) {
-        const { path } = await uploadDeliverableImage(accessToken, projectId ?? "", image);
-        patch.image_path = path;
-      }
-      if (doc) {
-        const up = await uploadDeliverableFile(accessToken, projectId ?? "", doc);
-        patch.file_path = up.path;
-        patch.file_name = up.name;
-        patch.file_mime = up.mime;
-        patch.file_size = up.size;
-      }
-
+      // The row has to exist before anything can be attached to it, so a new
+      // card is created first and its files follow. A failure mid-upload
+      // leaves a card with fewer attachments than intended, never an orphaned
+      // file with no card.
+      let id = existing?.id;
       if (existing) {
-        await updateDeliverable(accessToken, existing.id, patch as never);
-      } else {
-        await createDeliverable(accessToken, projectId!, {
+        await updateDeliverable(accessToken, existing.id, {
           title: title.trim(),
-          body: body.trim() || null,
-          image_path: (patch.image_path as string | undefined) ?? null,
-          file_path: (patch.file_path as string | undefined) ?? null,
-          file_name: (patch.file_name as string | undefined) ?? null,
-          file_mime: (patch.file_mime as string | undefined) ?? null,
-          file_size: (patch.file_size as number | undefined) ?? null,
+          body: clean,
+        } as never);
+      } else {
+        const made = await createDeliverable(accessToken, projectId!, {
+          title: title.trim(),
+          body: clean,
+          image_path: null,
+          file_path: null,
+          file_name: null,
+          file_mime: null,
+          file_size: null,
           kind: "session_image",
           section: section ?? null,
           position: siblings.reduce((max, d) => Math.max(max, d.position), -1) + 1,
         });
+        id = (made as { id: string } | null)?.id ?? undefined;
+      }
+
+      if (id && staged.length > 0) {
+        const { lastImagePath } = await attachFiles(
+          accessToken,
+          projectId ?? existing?.project_id ?? "",
+          id,
+          staged.map((s) => s.file),
+          existingFiles.length
+        );
+        // "if more than one image is added, make the last one uploaded the
+        // image/thumbnail for the card."
+        if (lastImagePath) {
+          await updateDeliverable(accessToken, id, { image_path: lastImagePath } as never);
+        }
       }
       onDone();
     } catch (err) {
@@ -4926,38 +5122,24 @@ function SessionCardForm({
         className={field}
       />
 
-      <textarea
-        rows={4}
+      <RichText
         value={body}
-        onChange={(e) => setBody(e.target.value)}
-        placeholder={"Notes (optional) — what the team said, what it means.\n## Headings, - bullets and **bold** are formatted."}
-        className={`${field} font-mono text-xs leading-relaxed`}
+        onChange={setBody}
+        placeholder="Notes (optional) — what the team said, what it means."
       />
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
-            {existing?.image_path ? "Replace the image" : "Image"}
-          </span>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setImage(e.target.files?.[0] ?? null)}
-            className="w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-runfree-magentaDeep file:ring-1 file:ring-gray-300"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
-            {existing?.file_path ? "Replace the document" : "Document"}
-          </span>
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setDoc(e.target.files?.[0] ?? null)}
-            className="w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-runfree-magentaDeep file:ring-1 file:ring-gray-300"
-          />
-        </label>
-      </div>
+      <FileDrop
+        staged={staged}
+        onAdd={addFiles}
+        onRemove={removeStaged}
+        note={
+          lastImage
+            ? `"${lastImage.file.name}" will be the card's picture.`
+            : existing?.image_path
+              ? "Drop an image to replace the card's picture."
+              : undefined
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -6799,7 +6981,7 @@ function SessionRow({
         section: form.section || null,
         recording_url: form.recording_url || null,
         takeaways: form.takeaways || null,
-        recap: form.recap || null,
+        recap: richTextIsEmpty(form.recap) ? null : form.recap,
         transcript: form.transcript || null,
         published_at: form.published ? new Date().toISOString() : null,
       });
@@ -6917,19 +7099,19 @@ function SessionRow({
               </Field>
               {/* The long write-up. Sized for what actually gets pasted here:
                   Will's sample summary of a four-hour session runs to about
-                  three thousand words. Headings, bullets and **bold** are
-                  rendered; everything else falls through as paragraphs. */}
+                  three thousand words.
+                  
+                  Same editor as a module card — Andrew: "this should also be
+                  available in the Sessions tab when entering notes." Recaps
+                  written before this are Markdown and still render that way;
+                  opening one in the editor keeps its text and drops the
+                  syntax, which is the intended one-way door. */}
               <Field label="Session summary">
-                <textarea
-                  rows={10}
+                <RichText
                   value={form.recap}
-                  onChange={(e) => setForm((f) => ({ ...f, recap: e.target.value }))}
-                  placeholder={
-                    "The full recap — paste it straight in.\n\n" +
-                    "## Headings, - bullets and **bold** are formatted.\n" +
-                    "Anything the team needs to DO belongs below as a next step, not here."
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs leading-relaxed outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                  onChange={(html) => setForm((f) => ({ ...f, recap: html }))}
+                  minHeight="14rem"
+                  placeholder="The full recap — paste it straight in. Anything the team needs to DO belongs below as a next step, not here."
                 />
               </Field>
               {/* Andrew: "I typically upload a Session Recap, which would be

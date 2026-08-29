@@ -774,11 +774,60 @@ async function main() {
           .select("is_done, completed_at, title")
           .eq("id", task.id)
           .single();
+        // 053 replaced 039's editor-or-admin rule with "admin, or anyone
+        // granted it on this project". An editor is no longer enough on its
+        // own — Andrew: "Only project admins can assign tasks."
         record(
-          "18c2. an editor CAN tick a task done",
-          !editorTickErr && afterEditor?.is_done === true && !!afterEditor?.completed_at,
-          editorTickErr ? editorTickErr.message : `is_done=${afterEditor?.is_done}`
+          "18c2. an editor CANNOT tick a task without the grant (053)",
+          !!editorTickErr && afterEditor?.is_done !== true,
+          editorTickErr ? "correctly rejected" : `unexpectedly ticked: is_done=${afterEditor?.is_done}`
         );
+
+        // ...and the grant is the separate switch he asked for: "If I want a
+        // team member (or subscriber) to have access, I should be able to
+        // assign that separately than the master permission list."
+        await supabaseAdmin
+          .from("project_members")
+          .update({ can_manage_tasks: true })
+          .eq("project_id", projectA.id)
+          .eq("profile_id", viewerA.id);
+        const { error: grantedTickErr } = await asViewer.rpc("set_task_done", {
+          p_task_id: task.id,
+          p_done: true,
+        });
+        const { data: afterGrant } = await asAdmin
+          .from("project_tasks")
+          .select("is_done, completed_at")
+          .eq("id", task.id)
+          .single();
+        record(
+          "18c3. a VIEWER granted task access CAN tick it (053)",
+          !grantedTickErr && afterGrant?.is_done === true && !!afterGrant?.completed_at,
+          grantedTickErr ? grantedTickErr.message : `is_done=${afterGrant?.is_done}`
+        );
+
+        const { data: created, error: grantedCreateErr } = await asViewer
+          .from("project_tasks")
+          .insert({ project_id: projectA.id, title: `granted viewer task ${RUN}` })
+          .select("id")
+          .single();
+        record(
+          "18c4. that viewer can also create a task",
+          !grantedCreateErr && !!created,
+          grantedCreateErr ? grantedCreateErr.message : "created"
+        );
+        if (created) await supabaseAdmin.from("project_tasks").delete().eq("id", created.id);
+
+        // Put it back, so later checks see the viewer they expect.
+        await supabaseAdmin
+          .from("project_members")
+          .update({ can_manage_tasks: false })
+          .eq("project_id", projectA.id)
+          .eq("profile_id", viewerA.id);
+        await supabaseAdmin
+          .from("project_tasks")
+          .update({ is_done: false, completed_at: null } as never)
+          .eq("id", task.id);
 
         const { error: renameErr } = await asViewer
           .from("project_tasks")

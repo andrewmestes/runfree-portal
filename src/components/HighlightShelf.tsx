@@ -15,6 +15,12 @@ import type { Highlight } from "@/lib/highlights";
  * `project_tasks`. This answers *what do I read and watch*, and carries no
  * done state at all, for the same reason the reading shelf lost its
  * checkboxes: nobody is marking a church's homework.
+ *
+ * The grid uses sized tracks rather than a fixed column count. With
+ * `sm:grid-cols-3` the cards grew with the container, so three highlights on a
+ * wide dashboard rendered as three enormous posters — Andrew: "the size of the
+ * cards are a little obnoxious." Sized tracks keep a card a thumbnail at every
+ * width: two across on a phone, as many as fit on a desktop.
  */
 export default function HighlightShelf({
   highlights,
@@ -69,7 +75,7 @@ export default function HighlightShelf({
           read or watch before you next meet — a chapter, a teaching, a deck.
         </p>
       ) : (
-        <ul className="grid grid-cols-2 items-start gap-x-4 gap-y-6 sm:grid-cols-3 xl:grid-cols-4">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] items-start gap-x-4 gap-y-6">
           {highlights.map((h) => {
             const art =
               (h.thumb_path ? fileUrls[h.thumb_path] : undefined) ??

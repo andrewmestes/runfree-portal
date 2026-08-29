@@ -1256,7 +1256,7 @@ function ChurchTeamInfo({
 
           <span className="min-w-0 flex-1">
             <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
-              Who you&rsquo;re working with
+              From your church
             </span>
             <span className="block font-display text-xl font-extrabold tracking-tight text-runfree-ink">
               Church Team
@@ -3312,26 +3312,21 @@ function PrioritiesBanner({
 }) {
   const [adding, setAdding] = useState(false);
 
-  // Open by default now. Andrew: "since that only shows up in one space now
-  // (the dashboard) let's make it default to open, not collapsed."
+  // Open every time you arrive. Andrew: "make sure the 'what's important now'
+  // defaults to open, not collapsed when entering a project."
   //
-  // It used to sit above every panel, so its height was paid on every screen
-  // and folding it away was worth remembering. Now it appears once, on the
-  // panel someone opens specifically to find out what they owe — starting it
-  // shut hides the answer to the question they came with. Still collapsible,
-  // and a deliberate fold is still remembered; only the default changed.
+  // It used to remember a fold in localStorage, and that was the bug he was
+  // looking at: he had collapsed it once, months of visits later it was still
+  // shut, and the panel someone opens specifically to find out what they owe
+  // was hiding the answer. A remembered fold is only worth having when the
+  // thing is in your way on every screen, which was true when this sat above
+  // every panel and has not been true since it moved to the dashboard.
   //
-  // The stored value is read as an explicit "1", so anyone who folded it under
-  // the old behaviour is not silently re-opened, but everyone else gets open.
+  // Still collapsible — it just starts open again next time, and no stored
+  // value can override that.
   const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => {
-    setCollapsed(window.localStorage.getItem("rf-win-collapsed") === "1");
-  }, []);
   function toggle() {
-    setCollapsed((v) => {
-      window.localStorage.setItem("rf-win-collapsed", v ? "0" : "1");
-      return !v;
-    });
+    setCollapsed((v) => !v);
   }
 
   const open = detail.tasks.filter((t) => !t.is_done);
@@ -5792,7 +5787,12 @@ function ReadingShelf({
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
-    <ul className="grid grid-cols-2 items-start gap-x-4 gap-y-6 sm:grid-cols-3 xl:grid-cols-4">
+    /* auto-fill rather than a fixed column count. With `sm:grid-cols-3` the
+       cards grew with the container — on a wide screen three of them filled
+       1100px and a book jacket rendered nearly 400px tall, which Andrew called
+       "a little obnoxious", correctly. Sized tracks keep a card a thumbnail at
+       every width: two across on a phone, as many as fit on a desktop. */
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] items-start gap-x-4 gap-y-6">
       {items.map((item) =>
         editingId === item.id ? (
           <li key={item.id} className="col-span-full">
@@ -7206,7 +7206,17 @@ function TeamSection({
 
   return (
     <section id={id} className="first:mt-0 mt-20 scroll-mt-20">
-      <SectionHeading eyebrow="Who you're working with" title="Your Team" />
+      {/* No panel-level "Your Team" heading.
+          
+          It sat directly above "Your RunFree Team" in the same size and the
+          same centred style, so the page opened with two big headings back to
+          back saying nearly the same thing — and its eyebrow, "Who you're
+          working with", was repeated word for word on the Church Team card
+          below. Andrew: "the titles on this page are off."
+          
+          The two sections carry it instead, which is what they were always
+          doing: RunFree's people, then the church's. The rail already says
+          Team and the header already says which church. */}
 
       {/* RunFree leads now — a deliberate reversal, and both sides of it are
           worth keeping.
@@ -7230,9 +7240,7 @@ function TeamSection({
       {/* Same heading style as "Your Team" above it. Andrew: "I like the size
           of the title, your team. I want you to make the... your run free
           team the same style of header." */}
-      <div className="mt-14">
-        <SectionHeading eyebrow="Working alongside you" title="Your RunFree Team" />
-      </div>
+      <SectionHeading eyebrow="Working alongside you" title="Your RunFree Team" />
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {runfree.map((m) => (
           <div key={m.profileId}>

@@ -199,9 +199,17 @@ content, which is why it can be the fallback at all — every other panel is
 conditional on there being something in it, and a Younique project (no module
 track) has no `process` panel to fall back to.
 
-Dashboard carries What's Important Now, the next session date, and the most
-recent session recording. It was **removed once and brought back**, and the
-history matters because the arguments are symmetrical:
+Dashboard carries What's Important Now, the next session date, the most
+recent session recording, and the highlight shelf.
+
+**What's Important Now opens every time and remembers nothing.** It used to
+persist a fold in localStorage; one collapse months earlier left the panel
+someone opens specifically to see what they owe permanently shut. Andrew:
+"make sure the 'what's important now' defaults to open, not collapsed when
+entering a project." Do not add the persistence back.
+
+The Dashboard itself was **removed once and brought back**, and the history
+matters because the arguments are symmetrical:
 
 - Removed, because it was a landing pad whose only job was pointing at other
   panels. Its two orientation cards were floated *above* the tabs instead, so
@@ -389,10 +397,14 @@ Overview Teaching" and "Collaboration Dynamics Training" — neither of them
 preparation — ended up under Prepare Your Team.
 
 **Loom sometimes returns another video's thumbnail.** `loom.ts` only trusts a
-still whose embedded session id matches, so a video with no cover is usually
-that guard working, not a bug: the 7 Laws overview
-(`937fe2b1…`) gets handed a still belonging to `96ada777…`. The fix is an entry
-in that file's hand-picked map, which needs a real frame from the video.
+still whose embedded session id matches, so a video with no cover is that
+guard working, not a bug. **Three** teachings are affected — the 7 Laws,
+Funnel Fusion and Crowd Cloud overviews — and Loom hands all three the same
+wrong still (`96ada777…`). All three are now pinned in that file's
+`MANUAL_STILLS`, using frames that had been checked into
+`public/brand/videos` since 19 Aug and were never reachable because the map
+was empty. The other four resolve correctly and are deliberately not pinned:
+Loom's own still is fresher and survives a re-record.
 
 ## Highlighted resources are pointers, not copies
 
@@ -413,8 +425,16 @@ this is the shelf beside it. Same line as the reading shelf.
 
 - **`ResourceCard`** draws both this and Reading & Pre-Work. One component on
   purpose — `PanelRail`/`PanelStrip` is what happens otherwise. Videos get a
-  16:9 frame and object-cover, everything else 3:4 and object-contain, because
-  a book jacket and a video still do not survive each other's crop.
+  16:9 frame and object-cover, everything else **2:3** and object-contain,
+  because a book jacket and a video still do not survive each other's crop.
+  2:3 rather than 3:4 for a reason: at 3:4 a jacket floated inside its card
+  with a gutter down each side, and the gutter's width depends on the source's
+  exact ratio, so two covers of the *same* book (0.646 and 0.647) sat
+  fractionally differently and read as a bug. At 2:3 a jacket fills its card.
+- **Both shelves size their grid tracks**, `repeat(auto-fill,minmax(150px,1fr))`,
+  rather than naming a column count. With `sm:grid-cols-3` the cards grew with
+  the container, so three highlights on a wide dashboard rendered as ~380px
+  posters. Sized tracks keep a card a thumbnail at every width.
 - **`buildCatalogue`** flattens four tables and two Drive folders into one
   searchable list — 212 entries on Christ Chapel. A `template_resources` row
   with no `external_url` is still skipped, because for a handout that row is

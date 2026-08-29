@@ -62,6 +62,8 @@ export type PrepItem = {
   meeting_url: string | null;
   /** Hidden from viewers; editors and admins still see it (migration 030). */
   is_private: boolean;
+  /** Page one of `file_path`, so a shelf can show a cover (migration 044). */
+  thumb_path: string | null;
   position: number;
 };
 

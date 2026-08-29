@@ -347,6 +347,53 @@ used, both uploads 403'd, and the card was created with prose and no files.
 Re-fetch `get_attachments` immediately before downloading, and never let a
 "row already exists" check mean "this card is complete" — check the columns.
 
+## Reading & Pre-Work is a shelf, and the PDFs come from Drive
+
+Migration **044**/**045**. The group's `kind` is `reading`, which renders
+`ReadingShelf` — cards with covers, no tick-boxes, no ratio. `checklist` keeps
+its counter; there the fraction is the point. Do not "restore" the checkboxes:
+a denominator on a reading list tells a church it is behind before the first
+session, the same argument that keeps `total` off `VisionStackCard`.
+
+**The canonical list lives on `template_prep_items`, not on the project.** It
+had drifted badly — two churches on one template, nine rows between them, one
+attached file, and two rows carrying prose that *described* a video the portal
+already had a link to.
+
+The PDFs cannot live on the template, because storage RLS recovers the project
+id from `{project_id}/...` (007) and a template-owned object has no legal home
+in that bucket. So `template_prep_items.drive_file_id` records *which Drive
+file* each reading is, and:
+
+```bash
+./node_modules/.bin/tsx --env-file=.env.local scripts/seed-prep-reading.ts <project-id> --go
+```
+
+copies it into the project's own folder, renders page one to `thumb_path` with
+`pdftoppm`, and syncs titles/notes/links. Idempotent, and it has a dry run.
+**Run it for every new Pivvot project** — `stampTemplatePrepItems` copies only
+title/notes/external_url, so a fresh project gets the structure and no files.
+
+Two traps:
+
+- **`template_prep_items` has no `template_id`.** It hangs off `group_id`.
+  Filtering it by `template_id` returns nothing and looks exactly like an
+  empty table — which is what sent 044 out on a wrong premise.
+- **A link beats a file in the renderer.** Clearing `external_url` is part of
+  attaching a PDF to a row that used to be a Drive link, or it keeps sending
+  people out to Drive.
+
+The Preparation panel deliberately shows **only** `CHURCH PREPARATION`
+resources. It used to merge `PROCESS OVERVIEW` in too, which is how "Process
+Overview Teaching" and "Collaboration Dynamics Training" — neither of them
+preparation — ended up under Prepare Your Team.
+
+**Loom sometimes returns another video's thumbnail.** `loom.ts` only trusts a
+still whose embedded session id matches, so a video with no cover is usually
+that guard working, not a bug: the 7 Laws overview
+(`937fe2b1…`) gets handed a still belonging to `96ada777…`. The fix is an entry
+in that file's hand-picked map, which needs a real frame from the video.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

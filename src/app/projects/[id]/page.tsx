@@ -170,6 +170,7 @@ function signablePaths(detail: ProjectDetail): string[] {
     ...detail.deliverables.map((d) => d.image_path),
     ...detail.deliverables.map((d) => d.file_path),
     ...detail.prepItems.map((p) => p.file_path),
+    ...detail.prepItems.map((p) => p.thumb_path),
   ].filter((p): p is string => !!p);
 }
 
@@ -232,7 +233,7 @@ export default function ProjectDetailPage() {
    * modal has to be told which one to ask.
    */
   const [preview, setPreview] = useState<
-    (PreviewFile & { source?: "handout" | "book" }) | null
+    (PreviewFile & { source?: "handout" | "book" | "storage" }) | null
   >(null);
   /** Below `lg` the sidebar is a drawer. Closed on arrival, every time. */
   const [navOpen, setNavOpen] = useState(false);
@@ -359,6 +360,30 @@ export default function ProjectDetailPage() {
   const openHandout = useCallback((fileId: string, title: string) => {
     setPreview({ id: fileId, title, num: null, label: title, sizeBytes: null });
   }, []);
+
+  /**
+   * Prep reading lives in our own Storage, not Drive, so its `id` is already
+   * a signed URL rather than a Drive file id. Fetching it into a blob keeps
+   * it going through the same viewer as everything else — which is the whole
+   * point, because that viewer is the one that renders pages to a canvas on
+   * iOS instead of handing Safari an iframe it refuses to scroll.
+   */
+  const fetchStorageBlobUrl = useCallback(async (signedUrl: string) => {
+    try {
+      const res = await fetch(signedUrl);
+      if (!res.ok) return null;
+      return URL.createObjectURL(await res.blob());
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const openPrepFile = useCallback(
+    (signedUrl: string, title: string, sizeBytes: number | null) => {
+      setPreview({ id: signedUrl, title, num: null, label: title, sizeBytes, source: "storage" });
+    },
+    []
+  );
 
   /**
    * Will's books, for the church. Andrew: "we need to add Will's Books to all
@@ -496,7 +521,10 @@ export default function ProjectDetailPage() {
     const videoUrls = result.resources
       .filter((r) => r.kind === "video" && r.external_url)
       .map((r) => r.external_url!)
-      .concat(result.sessions.map((x) => x.recording_url).filter((u): u is string => !!u));
+      .concat(result.sessions.map((x) => x.recording_url).filter((u): u is string => !!u))
+      // Reading & Pre-Work carries its own videos now — the two master
+      // teachings that used to be prose telling you to go and find them.
+      .concat(result.prepItems.map((x) => x.external_url).filter((u): u is string => !!u));
     if (videoUrls.length === 0) return;
     try {
       const res = await fetch("/api/loom-thumbnails", {
@@ -859,6 +887,7 @@ export default function ProjectDetailPage() {
                 projectId={projectId}
                 canEdit={canEdit}
                 accessToken={accessToken}
+                onOpenFile={openPrepFile}
                 fileUrls={imageUrls}
                 onChanged={refresh}
                 handouts={handouts}
@@ -980,7 +1009,13 @@ export default function ProjectDetailPage() {
       {preview && (
         <FilePreview
           file={preview}
-          fetchUrl={preview.source === "book" ? fetchBookBlobUrl : fetchHandoutBlobUrl}
+          fetchUrl={
+            preview.source === "storage"
+              ? fetchStorageBlobUrl
+              : preview.source === "book"
+                ? fetchBookBlobUrl
+                : fetchHandoutBlobUrl
+          }
           onClose={() => setPreview(null)}
         />
       )}
@@ -5140,6 +5175,8 @@ function PrepCards({
   accessToken,
   fileUrls,
   onChanged,
+  thumbs,
+  onOpenFile,
   asRows = false,
   stacked = false,
   emphasised = false,
@@ -5151,6 +5188,10 @@ function PrepCards({
   accessToken: string | null;
   fileUrls: Record<string, string>;
   onChanged: () => void;
+  /** Loom stills, keyed by video URL — a reading shelf shows them. */
+  thumbs?: Record<string, string>;
+  /** Opens a stored PDF in the in-portal viewer. */
+  onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
   /** Stacked collapsible rows instead of a card grid. See below. */
   asRows?: boolean;
   /** Full-width cards, one per row, for content of very uneven length. */
@@ -5185,6 +5226,8 @@ function PrepCards({
             accessToken={accessToken}
             fileUrls={fileUrls}
             onChanged={onChanged}
+            thumbs={thumbs}
+            onOpenFile={onOpenFile}
             asRow
           />
         ))}
@@ -5213,6 +5256,8 @@ function PrepCards({
               accessToken={accessToken}
               fileUrls={fileUrls}
               onChanged={onChanged}
+              thumbs={thumbs}
+              onOpenFile={onOpenFile}
               step={i + 1}
             />
           </li>
@@ -5245,6 +5290,8 @@ function PrepCards({
           accessToken={accessToken}
           fileUrls={fileUrls}
           onChanged={onChanged}
+          thumbs={thumbs}
+          onOpenFile={onOpenFile}
           emphasised={emphasised}
         />
       ))}
@@ -5260,6 +5307,8 @@ function PrepCard({
   accessToken,
   fileUrls,
   onChanged,
+  thumbs,
+  onOpenFile,
   asRow = false,
   step,
   emphasised = false,
@@ -5271,6 +5320,8 @@ function PrepCard({
   accessToken: string | null;
   fileUrls: Record<string, string>;
   onChanged: () => void;
+  thumbs?: Record<string, string>;
+  onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
   /** A collapsible row rather than a card in a grid. */
   asRow?: boolean;
   /** Position in the sequence, when the caller is presenting one. */
@@ -5297,6 +5348,10 @@ function PrepCard({
 
   const done = items.filter((i) => i.is_done).length;
 
+  // No ratio on a shelf. A denominator beside a reading list tells a church
+  // they are behind before the first session — the same reason the Vision
+  // Stack has `ready` and no `total`. `checklist` keeps its counter because
+  // there the fraction IS the point.
   const counter = group.kind === "checklist" && items.length > 0 && (
     <span
       className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
@@ -5450,6 +5505,18 @@ function PrepCard({
               Nothing here yet.
             </p>
           )
+        ) : group.kind === "reading" ? (
+          <ReadingShelf
+            items={ordered}
+            group={group}
+            projectId={projectId}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            fileUrls={fileUrls}
+            thumbs={thumbs}
+            onOpenFile={onOpenFile}
+            onChanged={onChanged}
+          />
         ) : (
           <ul className="divide-y divide-gray-100">
             {ordered.map((item) => (
@@ -5514,6 +5581,216 @@ function prepNoun(kind: PrepGroupKind): string {
     default:
       return "an item";
   }
+}
+
+/**
+ * Reading & Pre-Work, as a shelf.
+ *
+ * Andrew: "I'm not sure that I want that to be a checkbox select. I think I
+ * want this whole preparation section to just be a standardized visual
+ * overview and resource for any church preparing for the Pivvot process."
+ *
+ * The tick-boxes were the visible half of the problem. The other half was
+ * that the rows pointed at nothing — nine of them across two churches and
+ * exactly one attached file, with two rows carrying prose that described a
+ * video the portal already had a link to. A shelf makes that impossible to
+ * ship again: a card is a picture of something, so a card with nothing
+ * behind it looks wrong on sight.
+ *
+ * Covers are page one of the PDF (migration 044), Loom stills for the
+ * videos. Portrait, and `object-contain` rather than `object-cover`, because
+ * the two shapes here are a book jacket (2:3) and a video still (16:9) and
+ * cropping either to fit the other loses the thing that makes it
+ * recognisable.
+ */
+function ReadingShelf({
+  items,
+  group,
+  projectId,
+  canEdit,
+  accessToken,
+  fileUrls,
+  thumbs,
+  onOpenFile,
+  onChanged,
+}: {
+  items: PrepItem[];
+  group: PrepGroup;
+  projectId: string;
+  canEdit: boolean;
+  accessToken: string | null;
+  fileUrls: Record<string, string>;
+  thumbs?: Record<string, string>;
+  onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
+  onChanged: () => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  return (
+    <ul className="grid grid-cols-2 items-start gap-x-4 gap-y-6 sm:grid-cols-3 xl:grid-cols-4">
+      {items.map((item) =>
+        editingId === item.id ? (
+          <li key={item.id} className="col-span-full">
+            <PrepItemForm
+              group={group}
+              projectId={projectId}
+              existing={item}
+              accessToken={accessToken}
+              onDone={() => {
+                setEditingId(null);
+                onChanged();
+              }}
+              onCancel={() => setEditingId(null)}
+            />
+          </li>
+        ) : (
+          <ReadingCard
+            key={item.id}
+            item={item}
+            cover={item.thumb_path ? fileUrls[item.thumb_path] : undefined}
+            still={item.external_url ? thumbs?.[item.external_url] : undefined}
+            fileUrl={item.file_path ? fileUrls[item.file_path] : undefined}
+            canEdit={canEdit}
+            onEdit={() => setEditingId(item.id)}
+            onOpenFile={onOpenFile}
+          />
+        )
+      )}
+    </ul>
+  );
+}
+
+function ReadingCard({
+  item,
+  cover,
+  still,
+  fileUrl,
+  canEdit,
+  onEdit,
+  onOpenFile,
+}: {
+  item: PrepItem;
+  cover?: string;
+  still?: string;
+  fileUrl?: string;
+  canEdit: boolean;
+  onEdit: () => void;
+  onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
+}) {
+  const href = safeExternalUrl(item.external_url);
+  const isVideo = !!href && /loom\.com|vimeo\.com|youtube\.com|youtu\.be/i.test(href);
+  const art = cover ?? (isVideo ? still : undefined);
+  const openable = !!fileUrl && !!onOpenFile;
+
+  const media = (
+    /* Two shapes on one shelf, each given the box it deserves. A video still
+       is 16:9 and fills a landscape box exactly; a book jacket is about 2:3
+       and fills a portrait one. Forcing either into the other's frame is what
+       made the first cut look wrong — the videos sat as a thin band inside a
+       tall grey card. The grid is items-start, so rows of different heights
+       simply sit side by side rather than stretching to match. */
+    <span
+      className={`relative block overflow-hidden rounded-xl bg-runfree-indigo/40 ring-1 ring-gray-200/80 transition group-hover:ring-runfree-magenta/40 ${
+        isVideo ? "aspect-video" : "aspect-[3/4]"
+      }`}
+    >
+      {art ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={art}
+          alt=""
+          loading="lazy"
+          className={`h-full w-full ${isVideo ? "object-cover" : "object-contain"}`}
+        />
+      ) : (
+        <span className="grid h-full w-full place-items-center text-runfree-navy/25">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="h-10 w-10" aria-hidden="true">
+            {isVideo ? (
+              <>
+                <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+                <path d="M10.5 9.5v5l4-2.5z" />
+              </>
+            ) : href ? (
+              <>
+                <path d="M13.5 10.5 21 3" />
+                <path d="M15 3h6v6" />
+                <path d="M20 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5" />
+              </>
+            ) : (
+              <>
+                <path d="M14 3v5h5" />
+                <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
+              </>
+            )}
+          </svg>
+        </span>
+      )}
+
+      {isVideo && art && (
+        <span
+          aria-hidden
+          className="absolute inset-0 grid place-items-center bg-runfree-ink/15 transition group-hover:bg-runfree-ink/25"
+        >
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-white/90 text-runfree-magentaDeep shadow-md">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-5 w-5">
+              <path d="M8 5.5v13l11-6.5z" />
+            </svg>
+          </span>
+        </span>
+      )}
+    </span>
+  );
+
+  const label = (
+    <>
+      <span className="mt-2.5 block text-sm font-semibold leading-snug text-runfree-ink">
+        {item.title}
+      </span>
+      {item.notes && (
+        <span className="mt-1 line-clamp-3 block text-xs leading-relaxed text-gray-500">
+          {item.notes}
+        </span>
+      )}
+    </>
+  );
+
+  return (
+    <li className="min-w-0">
+      {openable ? (
+        <button
+          onClick={() => onOpenFile!(fileUrl!, item.title, item.file_size)}
+          className="group block w-full text-left outline-none"
+        >
+          {media}
+          {label}
+        </button>
+      ) : href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group block outline-none"
+        >
+          {media}
+          {label}
+        </a>
+      ) : (
+        <span className="group block">
+          {media}
+          {label}
+        </span>
+      )}
+
+      {canEdit && (
+        <button
+          onClick={onEdit}
+          className="mt-1.5 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+        >
+          Edit
+        </button>
+      )}
+    </li>
+  );
 }
 
 function PrepRow({
@@ -6048,6 +6325,7 @@ function PrepareSection({
   onChanged,
   handouts,
   onOpenHandout,
+  onOpenFile,
   standalone = false,
 }: {
   id: string;
@@ -6065,8 +6343,10 @@ function PrepareSection({
   onChanged: () => void;
   handouts: HandoutLibrary | null;
   onOpenHandout: (fileId: string, title: string) => void;
+  onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
 }) {
   const extras = handouts?.extras ?? [];
+  void overview;
   /**
    * Open when it IS the panel, closed when it is a row inside another one.
    * It was built as a fold under The Process; now that Preparation has a
@@ -6078,8 +6358,17 @@ function PrepareSection({
   if (prep.length === 0 && overview.length === 0 && prepGroups.length === 0 && extras.length === 0)
     return null;
 
-  const videos = [...prep, ...overview].filter((r) => r.kind === "video" && r.external_url);
-  const reading = [...prep, ...overview].filter((r) => r.kind !== "video");
+  // Only the preparation resources. `overview` is the PROCESS OVERVIEW
+  // section, and merging it in here is why "Process Overview Teaching" and
+  // "Collaboration Dynamics Training" — neither of which is preparation —
+  // showed up under Prepare Your Team. Andrew: "I think we can remove the
+  // process overview teaching from preparation work."
+  //
+  // The one thing worth keeping from that block, the 7 Laws overview, is now
+  // a reading item with its own link, so it arrives through the shelf rather
+  // than by dragging a whole unrelated section along with it.
+  const videos = prep.filter((r) => r.kind === "video" && r.external_url);
+  const reading = prep.filter((r) => r.kind !== "video");
   const checklistHandouts = extras.filter((g) => PREP_HANDOUT.test(g.name));
 
   const itemCount =
@@ -6118,6 +6407,8 @@ function PrepareSection({
           canEdit={canEdit}
           accessToken={accessToken}
           fileUrls={fileUrls}
+          thumbs={thumbs}
+          onOpenFile={onOpenFile}
           onChanged={onChanged}
           stacked
         />

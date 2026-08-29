@@ -120,6 +120,25 @@ export default function HelpPage() {
             The work to do before we start has its own section, <strong>Preparation</strong>,
             at the top of that column.
           </Faq>
+          <Faq q="What is in Preparation, and do I tick things off?">
+            <strong>Reading &amp; Pre-Work</strong> is a shelf, not a to-do list. Each
+            thing your team reads or watches before we begin is a card with its own
+            cover — the book, the bullet book, the deck, the two short teachings from
+            Will. Tap one and it opens right there; the PDFs open in the portal rather
+            than sending you off to a download folder.
+            <br />
+            <br />
+            There are deliberately <em>no tick-boxes</em> on it, and no &ldquo;2 of
+            4&rdquo;. We are not marking your homework, and a counter beside a reading
+            list only tells a team it is behind before the first session. The one thing
+            that does carry tick-boxes is the <strong>Preparation Checklist</strong>
+            above it, because there the point really is whether it is done.
+            <br />
+            <br />
+            <strong>Previous Vision Equity</strong> is the opposite direction — that one
+            is for you to give us. Planning documents, old vision or values work,
+            anything the church has already built. Anyone on the project can add to it.
+          </Faq>
           <Faq q="What are the cards under &lsquo;From our sessions&rsquo;?">
             One card for each thing that came out of the room. A single card can hold a
             photo of a chart, a PDF and written notes all at once — so a survey and the

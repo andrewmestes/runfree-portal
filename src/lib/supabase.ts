@@ -738,6 +738,9 @@ export type Database = {
           title: string;
           notes: string | null;
           external_url: string | null;
+          /** Which Drive file this reading IS. See scripts/seed-prep-reading.ts. */
+          drive_file_id: string | null;
+          thumb_path: string | null;
           position: number;
         };
         Insert: {
@@ -746,12 +749,16 @@ export type Database = {
           title: string;
           notes?: string | null;
           external_url?: string | null;
+          drive_file_id?: string | null;
+          thumb_path?: string | null;
           position?: number;
         };
         Update: {
           title?: string;
           notes?: string | null;
           external_url?: string | null;
+          drive_file_id?: string | null;
+          thumb_path?: string | null;
           position?: number;
         };
         Relationships: [
@@ -785,6 +792,9 @@ export type Database = {
           meeting_url: string | null;
           /** Hidden from viewers; editors and admins still see it. */
           is_private: boolean;
+          /** Page one of file_path, rendered at upload. Nullable: a card
+              without one falls back to a glyph. */
+          thumb_path: string | null;
           position: number;
           created_at: string;
         };
@@ -804,6 +814,7 @@ export type Database = {
           end_on?: string | null;
           meeting_url?: string | null;
           is_private?: boolean;
+          thumb_path?: string | null;
           position?: number;
           created_at?: string;
         };
@@ -820,6 +831,7 @@ export type Database = {
           end_on?: string | null;
           meeting_url?: string | null;
           is_private?: boolean;
+          thumb_path?: string | null;
           position?: number;
         };
         Relationships: [

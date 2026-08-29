@@ -415,16 +415,22 @@ this is the shelf beside it. Same line as the reading shelf.
   purpose — `PanelRail`/`PanelStrip` is what happens otherwise. Videos get a
   16:9 frame and object-cover, everything else 3:4 and object-contain, because
   a book jacket and a video still do not survive each other's crop.
-- **`buildCatalogue`** flattens four tables and a Drive folder into one
-  searchable list. A template resource with no `external_url` is skipped: the
-  handouts and exercises are Drive-backed labels here, so highlighting one
-  would put a card on the dashboard that does nothing when tapped. **That is
-  also why there is no "Exercises & handouts" filter in practice** — it counts
-  zero and the picker hides empty filters. Wiring it up means sourcing from
-  the handouts library, not `template_resources`.
+- **`buildCatalogue`** flattens four tables and two Drive folders into one
+  searchable list — 212 entries on Christ Chapel. A `template_resources` row
+  with no `external_url` is still skipped, because for a handout that row is
+  only a label; the real sheets come from the handouts library and are added
+  separately as `source_kind: 'handout'` (**049**). That is a different Drive
+  endpoint from a book — /handouts/file vs /books/file — which is exactly why
+  it needed its own source kind rather than reusing `'book'`.
+- **`byModule` is keyed by module NUMBER**, so passing the key straight
+  through as a picker row's second line printed a bare "1" under every Funnel
+  Fusion sheet. `buildCatalogue` recovers the readable name from the sections
+  already in `detail.resources`.
 - **Opening the picker triggers the books load**, the same lazy Drive read the
-  books panel does, or "Will's Books" would be empty until someone happened to
-  visit that panel first.
+  books panel does. `picking` must stay in that effect's dependency array —
+  the gate reads it, and without it the effect never re-runs, so "Will's
+  Books" sat on "…" forever unless someone had visited that panel first. The
+  comment claimed the behaviour before the dependency existed to deliver it.
 
 **A partial unique index cannot be an ON CONFLICT target.** 046 made the index
 partial so uploads (null `source_id`) would not collide; PostgREST's upsert

@@ -2,9 +2,12 @@ import { createUserClient } from "./supabase";
 import type { ProjectDetail } from "./projects";
 import type { BooksLibrary, BookShelf } from "./books";
 import { coverFor } from "./book-covers";
+import { moduleLabel, moduleOrder, stripModuleNumber } from "./modules";
 
 export type HighlightSource =
   | "template_resource"
+  /** A sheet from the module's Drive handout folder. Served by /handouts/file. */
+  | "handout"
   | "book"
   | "deliverable"
   | "prep_item"
@@ -74,7 +77,7 @@ export function groupOf(e: CatalogueEntry): CatalogueGroup {
   if (e.source_kind === "session") return "sessions";
   if (e.source_kind === "book") return "books";
   if (e.media_kind === "video") return "videos";
-  if (e.source_kind === "template_resource") return "handouts";
+  if (e.source_kind === "handout" || e.source_kind === "template_resource") return "handouts";
   return "files";
 }
 
@@ -86,9 +89,18 @@ export function groupOf(e: CatalogueEntry): CatalogueGroup {
  * library is the one live Drive read, passed in only once that panel or the
  * picker has asked for it.
  */
+/** Just enough of the page's handout library to build catalogue entries. */
+type HandoutRef = { id: string; title: string; sizeBytes: number | null };
+export type HandoutSource = {
+  byModule: Record<string, { combined: HandoutRef | null; sheets: HandoutRef[] }>;
+  extras: { id: string; name: string; files: HandoutRef[] }[];
+  notebooks: HandoutRef[];
+} | null;
+
 export function buildCatalogue(
   detail: ProjectDetail,
-  books: BooksLibrary | null
+  books: BooksLibrary | null,
+  handouts?: HandoutSource
 ): CatalogueEntry[] {
   const out: CatalogueEntry[] = [];
 
@@ -205,6 +217,49 @@ export function buildCatalogue(
         });
       }
     }
+  }
+
+  if (handouts) {
+    // Every sheet, the per-module combined PDF, the notebooks and anything in
+    // an extras folder. Deduped by Drive id: the same sheet legitimately
+    // appears under a module and inside a notebook.
+    const seen = new Set<string>();
+    const push = (f: HandoutRef, context: string) => {
+      if (seen.has(f.id)) return;
+      seen.add(f.id);
+      out.push({
+        key: `handout:${f.id}`,
+        source_kind: "handout",
+        source_id: f.id,
+        title: f.title,
+        media_kind: "pdf",
+        context,
+        external_url: null,
+        file_path: null,
+        file_name: f.title,
+        file_mime: "application/pdf",
+        file_size: f.sizeBytes,
+        thumb_path: null,
+        thumb_url: null,
+      });
+    };
+    // byModule is keyed by module NUMBER ("1", "2"), so using the key as the
+    // second line on a picker row printed a bare "1" under every Funnel Fusion
+    // sheet. Recover the readable name from the sections we already have.
+    const moduleNames = new Map<string, string>();
+    for (const r of detail.resources) {
+      const order = moduleOrder(r.section);
+      if (order != null && !moduleNames.has(String(order))) {
+        moduleNames.set(String(order), stripModuleNumber(moduleLabel(r.section)));
+      }
+    }
+    for (const [section, group] of Object.entries(handouts.byModule)) {
+      const label = moduleNames.get(section) ?? `Module ${section}`;
+      if (group.combined) push(group.combined, label);
+      for (const f of group.sheets) push(f, label);
+    }
+    for (const g of handouts.extras) for (const f of g.files) push(f, g.name);
+    for (const f of handouts.notebooks) push(f, "Handouts");
   }
 
   return out;

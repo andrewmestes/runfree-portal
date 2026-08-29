@@ -1,0 +1,17 @@
+-- Handouts and exercises can be highlighted too.
+--
+-- 046 skipped them, and the picker ended up hiding an "Exercises & handouts"
+-- filter that counted zero. The reason was real but the conclusion was wrong:
+-- a `template_resources` row for a handout carries no link, because the actual
+-- sheets live in a Drive folder that /api/projects/{id}/handouts lists at
+-- runtime. So the resource row is a label — but the handout *files* behind it
+-- are perfectly assignable, and they are the most natural thing to hand a team
+-- between sessions.
+--
+-- They are their own source kind rather than reusing 'book': both are Drive
+-- file ids, but they are served by different endpoints (/handouts/file vs
+-- /books/file), and a highlight has to know which one to ask.
+--
+-- Run outside a transaction — ALTER TYPE ... ADD VALUE cannot be used in the
+-- same transaction that creates it.
+alter type highlight_source add value if not exists 'handout';

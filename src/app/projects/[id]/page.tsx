@@ -424,6 +424,18 @@ export default function ProjectDetailPage() {
    */
   const openHighlight = useCallback(
     (h: Highlight) => {
+      // A handout is a Drive file behind /handouts/file, which is what the
+      // preview asks for when no source is set.
+      if (h.source_kind === "handout" && h.source_id) {
+        setPreview({
+          id: h.source_id,
+          title: h.title,
+          num: null,
+          label: h.title,
+          sizeBytes: h.file_size,
+        });
+        return;
+      }
       if (h.source_kind === "book" && h.source_id) {
         setPreview({
           id: h.source_id,
@@ -561,7 +573,11 @@ export default function ProjectDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [panel, books, projectId]);
+    // `picking` belongs here: the gate above reads it, so without it in the
+    // deps the effect never re-runs when the picker opens and Will's Books
+    // stays on "…" forever unless someone visited that panel first. Caught by
+    // driving the picker and watching the count never arrive.
+  }, [panel, picking, books, projectId]);
 
   // Default to the first module once content is known, but never fight a
   // choice the person has already made.
@@ -1106,7 +1122,7 @@ export default function ProjectDetailPage() {
 
       {picking && detail && (
         <ResourcePicker
-          catalogue={buildCatalogue(detail, books)}
+          catalogue={buildCatalogue(detail, books, handouts)}
           alreadyKeys={
             new Set(
               highlights

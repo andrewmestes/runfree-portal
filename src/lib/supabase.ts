@@ -775,7 +775,7 @@ export type Database = {
         Row: {
           id: string;
           project_id: string;
-          source_kind: "template_resource" | "book" | "deliverable" | "prep_item" | "session" | "upload";
+          source_kind: "template_resource" | "handout" | "book" | "deliverable" | "prep_item" | "session" | "upload";
           /** uuid, Drive file id, or null for an upload. */
           source_id: string | null;
           title: string;
@@ -797,7 +797,7 @@ export type Database = {
         Insert: {
           id?: string;
           project_id: string;
-          source_kind: "template_resource" | "book" | "deliverable" | "prep_item" | "session" | "upload";
+          source_kind: "template_resource" | "handout" | "book" | "deliverable" | "prep_item" | "session" | "upload";
           source_id?: string | null;
           title: string;
           media_kind: "video" | "pdf" | "image" | "link" | "book";

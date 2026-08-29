@@ -86,7 +86,9 @@ export default function HighlightShelf({
                 // A stored file or a book opens in the portal's own viewer;
                 // anything else is somewhere else and says so by opening a tab.
                 onOpen={
-                  h.file_path || h.source_kind === "book" ? () => onOpen(h) : undefined
+                  h.file_path || h.source_kind === "book" || h.source_kind === "handout"
+                    ? () => onOpen(h)
+                    : undefined
                 }
                 href={h.external_url}
                 actions={

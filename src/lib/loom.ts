@@ -28,13 +28,28 @@ const TTL_MS = 6 * 60 * 60 * 1000;
 /**
  * Hand-picked stills for a recording where Loom's own thumbnail can't be
  * trusted — a black pre-roll frame, or a still that belongs to a different
- * session entirely. Empty here on purpose: CVF's seven entries were keyed to
- * its own recordings and don't apply to any RunFree client's library. Add an
- * entry the same way if a specific recording needs one — `{ loomId:
- * "/brand/videos/<id>.jpg" }` — with the real frame checked into
- * public/brand/videos.
+ * session entirely.
+ *
+ * These three are the second kind, and they fail together: Loom's oEmbed
+ * hands back a thumbnail belonging to session `96ada777…` for all of them, so
+ * `thumbnailSessionId()` rejects it and the card renders with no picture at
+ * all. Verified against the live oEmbed endpoint, not guessed.
+ *
+ * The frames were already checked into public/brand/videos — seven of them,
+ * one per teaching — and this map was left empty, so none of them were ever
+ * reachable. The other four resolve correctly from Loom and are deliberately
+ * NOT listed: Loom's own still is fresher and picks up a re-record, which a
+ * pinned frame cannot. If one of those breaks later, its file is already
+ * there and the fix is one line here.
  */
-const MANUAL_STILLS: Record<string, string> = {};
+const MANUAL_STILLS: Record<string, string> = {
+  // 7 Laws Overview Teaching
+  "937fe2b1ae6d4993bd6a73345e108f91": "/brand/videos/937fe2b1ae6d4993bd6a73345e108f91.jpg",
+  // Funnel Fusion Overview Teaching (5 min.)
+  b42d9b019edd4306897f5ee8fe060615: "/brand/videos/b42d9b019edd4306897f5ee8fe060615.jpg",
+  // Crowd Cloud Overview Teaching
+  "87e14978ff174c9baaedb5aebfd2dcd8": "/brand/videos/87e14978ff174c9baaedb5aebfd2dcd8.jpg",
+};
 
 type Entry = { at: number; url: string | null };
 

@@ -43,23 +43,26 @@ export default function ResourceCard({
   const isVideo = media === "video";
 
   const media_ = (
-    /* Two shapes on one shelf, each given the box it deserves. A video still
-       is 16:9 and fills a landscape box exactly; a book jacket is 2:3 and
-       fills a portrait one. Forcing either into the other's frame is what made
-       the first cut look wrong — the videos sat as a thin band inside a tall
-       grey card. Callers use `items-start` on the grid so rows of different
-       heights sit side by side rather than stretching to match.
+    /* One shape for every card on a shelf: 2:3.
 
-       The portrait box is 2:3, not 3:4. At 3:4 a book jacket floated inside
-       its card with a lavender gutter down each side, and because the gutter
-       depends on the source's exact ratio, two covers of the same book — the
-       Future Church excerpts measure 0.646 and 0.647 — sat fractionally
-       differently and read as a mistake. Andrew: "I'm not sure why these book
-       covers are different." They were not: the box was the wrong shape. At
-       2:3 a jacket fills its card and there is no gutter to compare. */
+       This went through both wrong answers first. At 3:4 a book jacket floated
+       with a lavender gutter down each side, and because the gutter's width
+       depends on the source's exact ratio, two covers of the SAME book (the
+       Future Church excerpts measure 0.646 and 0.647) sat fractionally
+       differently and read as a bug. Giving videos their own 16:9 box fixed
+       the jackets but broke the shelf: a row of tall books and short videos
+       put every title at a different height, which looks like a mistake even
+       though each card is individually correct.
+
+       So: 2:3 throughout. A jacket fills it exactly. A 16:9 still letterboxes
+       — but on a dark ground with a play button, which is what a video poster
+       looks like anyway, so it reads as deliberate rather than as a picture
+       that failed to fit. Every title in a row lands on the same line. */
     <span
-      className={`relative block overflow-hidden rounded-xl bg-runfree-indigo/40 ring-1 ring-gray-200/80 transition group-hover:ring-runfree-magenta/40 ${
-        isVideo ? "aspect-video" : "aspect-[2/3]"
+      className={`relative block aspect-[2/3] overflow-hidden rounded-xl ring-1 transition ${
+        isVideo
+          ? "bg-runfree-navyDeep ring-runfree-navy/20 group-hover:ring-runfree-magenta/50"
+          : "bg-runfree-indigo/40 ring-gray-200/80 group-hover:ring-runfree-magenta/40"
       }`}
     >
       {art ? (
@@ -68,10 +71,14 @@ export default function ResourceCard({
           src={art}
           alt=""
           loading="lazy"
-          className={`h-full w-full ${isVideo ? "object-cover" : "object-contain"}`}
+          className="h-full w-full object-contain"
         />
       ) : (
-        <span className="grid h-full w-full place-items-center text-runfree-navy/25">
+        <span
+          className={`grid h-full w-full place-items-center ${
+            isVideo ? "text-white/30" : "text-runfree-navy/25"
+          }`}
+        >
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -106,7 +113,7 @@ export default function ResourceCard({
       {isVideo && art && (
         <span
           aria-hidden
-          className="absolute inset-0 grid place-items-center bg-runfree-ink/15 transition group-hover:bg-runfree-ink/25"
+          className="absolute inset-0 grid place-items-center transition group-hover:bg-runfree-ink/20"
         >
           <span className="grid h-11 w-11 place-items-center rounded-full bg-white/90 text-runfree-magentaDeep shadow-md">
             <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-5 w-5">

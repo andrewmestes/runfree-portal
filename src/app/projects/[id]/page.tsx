@@ -1269,7 +1269,7 @@ function ChurchTeamInfo({
               the heading at 390px left the title a ~110px column, which broke
               the eyebrow across three lines and "Church Team" across two. */}
           <span className="flex w-full items-center gap-2 sm:w-auto">
-            {contacts.length > 0 && (
+            {contacts.length > 0 && canEdit && (
               <button
                 onClick={downloadCsv}
                 className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-ink hover:ring-runfree-magenta/40"
@@ -1286,10 +1286,23 @@ function ChurchTeamInfo({
         <div className="px-5 py-4">
             {/* "#team" used to jump down the long page. There is no such
                 anchor now — access moved into the header, next to the logo. */}
+            {/* Two audiences, two sentences.
+                
+                The note about Manage access is an instruction to whoever runs
+                the project — it names a control a viewer does not have, sitting
+                in a header they cannot open. A church team member reading their
+                own roster just needs to know what the list is. */}
             <p className="mb-3 text-xs text-gray-500">
-              Names and contact details only. Nobody here has portal access until they are added
-              through <strong className="font-semibold text-gray-600">Manage access</strong> at the
-              top of this project.
+              {canEdit ? (
+                <>
+                  Names and contact details only. Nobody here has portal access until they are
+                  added through{" "}
+                  <strong className="font-semibold text-gray-600">Manage access</strong> at the
+                  top of this project.
+                </>
+              ) : (
+                <>Names and contact details for everyone on your team.</>
+              )}
             </p>
 
             {contacts.length === 0 && (

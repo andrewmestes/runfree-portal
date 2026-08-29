@@ -14,3 +14,7 @@ update template_prep_groups
 update template_prep_groups
    set description = 'The finished pieces, added as each one is signed off.'
  where title = 'Final Documents';
+
+-- A typo the church would have read on their first visit.
+update prep_items set title = 'Preparation Checklist'
+ where title = 'Preparation Checklst';

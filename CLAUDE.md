@@ -190,7 +190,7 @@ against the live database instead of reasoning about the policy on paper.
 
 `/projects/[id]` shows **one panel at a time**, selected by `?panel=<key>`:
 `dashboard` | `prepare` | `process` | `team` | `dates` | `sessions` |
-`deliverables` | `books`. Andrew: "it should be VERY easy for someone to navigate even
+`deliverables` | `execution` | `books`. Andrew: "it should be VERY easy for someone to navigate even
 if they have no idea what is all included in the project."
 
 **Dashboard is the landing panel** and the fallback for any unrecognised key.
@@ -522,6 +522,75 @@ members or project settings.
 The migration backfills the grant to existing editors, because tightening the
 default would otherwise have taken it away mid-engagement from whoever had it
 yesterday.
+
+## Execution is the God Dreams module, and it copies Will's sheets exactly
+
+Migration **057**. Andrew: "I would love to have an ongoing section that is
+built out from the God Dreams (horizon storyline) perspective that helps
+integrate meeting activity for a church as they pursue their initiatives and
+goals ... even an ability to have a customizable scoreboard of somekind."
+
+Three tables, and **every column comes off a handout a church has already been
+given** — not off a generic project-management model:
+
+- **`initiatives`** — the *Foreground Initiative Plan Template*. Its six prose
+  blocks are `initiative`, `objective`, `key_deliverables`, `plan_of_action`,
+  `timeline`, `costs`, in that order, because that is the order they print.
+  `leader` / `team` / `start_date` / `last_review_on` / `next_review_on` are
+  the *Action Step List*'s header, which is a different sheet.
+- **`initiative_steps`** — a row of the *Action Step List*: `description`,
+  `status`, `by_when`, `cost`, `accountable`.
+- **`scoreboard_metrics`** — a row of the *Church Ministry Dashboard*, under
+  `strategy_input` or `measure_output`, with Prior Yr. / Now / Next Yr., a
+  trend arrow and a light.
+
+Constraints that are decisions, not oversights:
+
+- **No percent-complete, anywhere.** Andrew: "we want to stay away from too
+  much 4dx overlap other than keeping the foundational principles in play."
+  Will's sheets use a traffic light and a name; a number would quietly change
+  the conversation a review is meant to have. Same family of argument as the
+  missing denominator on `VisionStackCard` and the reading shelf.
+- **`by_when` and `cost` are TEXT, not date and numeric.** The printed case
+  study has "Monthly Periodic" in the By column and "$2,500", "$0" and "?" in
+  Cost. Anything that does not parse as `yyyy-mm-dd` is never counted as
+  overdue — see the digest filter in `ThisQuarter`.
+- **The scoreboard's rows are data.** `DASHBOARD_STARTER` is offered behind a
+  button and never stamped automatically: a church plant with no school should
+  not have to delete four rows before it can start.
+- **`renewalCycle()` is generated, not stored** — it is a formula off the
+  *Horizon Storyline Renewal Cycle* handout (½ day / full day / ½ day /
+  2-day retreat, three years, then a 3-day retreat), anchored on the earliest
+  live initiative's `start_date`. A stored copy would drift the moment the
+  anchor moved, and a second "when did we start" column would be a second
+  field to get wrong.
+
+**Three different write rules, on purpose.** The plan and the scoreboard are
+content (editor/admin, same as deliverables). The action steps reuse
+`may_manage_tasks()` from **053** rather than inventing a second grant — the
+person accountable for a step is usually church staff, not a portal editor,
+and Andrew already has one switch for exactly that. Everyone on the project
+**reads** all three: a scoreboard only some people can see is not a scoreboard.
+
+The panel **loads its own data when opened**, like Will's Books. What rides on
+`getProjectDetail` is a single `head: true` count, `hasExecution`, and it
+exists only so the tab can stay hidden from a church that has not reached the
+Horizon Storyline. Editors always see the tab — somebody has to start it.
+
+**The weekly email is not built.** `ThisQuarter` assembles what it *would*
+contain — every initiative, every open step with owner and date, the next
+review — and puts it on the clipboard. Andrew asked for a per-project weekly
+email; sending is blocked on `RESEND_API_KEY`, and a Send button that silently
+does nothing is worse than no button. When Resend lands, that digest is the
+payload.
+
+**Two layouts that had to differ by width, not one grid.** `MetricRow` was a
+single five-column grid at every size; at 390px it rendered "1,180" as "1,18",
+hid the Now value completely and printed "NEX" on top of the trend arrow. It
+is now three columns on a phone (label, then the numbers, then the controls,
+each on its own row) and five from `sm`. Any change to those columns has to be
+made in `MetricRow` *and* in the `sm:grid` header above it — they are two
+elements sharing one column definition.
 
 ## Checking it on a phone
 

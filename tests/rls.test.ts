@@ -1378,6 +1378,187 @@ async function main() {
       await supabaseAdmin.from("project_highlights").delete().eq("project_id", projectA.id);
     }
 
+    // ---------------------------------------------------------------------
+    // 26. Execution — initiatives, action steps, scoreboard (057)
+    //
+    // Three tables, three different rules, and the split is the point:
+    // the PLAN is content (editor), the STEPS are the moving parts and reuse
+    // may_manage_tasks() from 053, and everyone on the project reads all of
+    // it because a scoreboard only some people can see is not a scoreboard.
+    // ---------------------------------------------------------------------
+    {
+      const asAdmin = createUserClient(adminA.accessToken);
+      const asEditor = createUserClient(selfLeadEditor.accessToken);
+      const asViewer = createUserClient(viewerA.accessToken);
+      const asOutsider = createUserClient(viewerB.accessToken);
+
+      const { data: init, error: editorInitErr } = await asEditor
+        .from("initiatives")
+        .insert({ project_id: projectA.id, name: `rls initiative ${RUN}` })
+        .select("id")
+        .single();
+      record(
+        "26a. an editor can create an initiative",
+        !editorInitErr && !!init,
+        editorInitErr ? editorInitErr.message : "created"
+      );
+
+      const { error: viewerInitErr } = await asViewer
+        .from("initiatives")
+        .insert({ project_id: projectA.id, name: `viewer should not manage this ${RUN}` });
+      record(
+        "26b. a viewer CANNOT create an initiative",
+        !!viewerInitErr,
+        viewerInitErr ? "correctly rejected" : "insert unexpectedly succeeded"
+      );
+
+      const { data: viewerSees } = await asViewer
+        .from("initiatives")
+        .select("id")
+        .eq("project_id", projectA.id);
+      record(
+        "26c. a viewer CAN read initiatives",
+        (viewerSees ?? []).length > 0,
+        `${(viewerSees ?? []).length} row(s)`
+      );
+
+      const { data: outsiderSees } = await asOutsider
+        .from("initiatives")
+        .select("id")
+        .eq("project_id", projectA.id);
+      record(
+        "26d. an outsider sees no initiatives",
+        (outsiderSees ?? []).length === 0,
+        `${(outsiderSees ?? []).length} row(s) leaked`
+      );
+
+      if (init) {
+        // Steps gate on may_manage_tasks(), NOT on the editor role — so the
+        // project's own editor is deliberately not enough here.
+        const { error: editorStepErr } = await asEditor.from("initiative_steps").insert({
+          project_id: projectA.id,
+          initiative_id: init.id,
+          description: "an editor alone should not own this row",
+        });
+        record(
+          "26e. an editor CANNOT add an action step without the grant (053)",
+          !!editorStepErr,
+          editorStepErr ? "correctly rejected" : "insert unexpectedly succeeded"
+        );
+
+        const { data: step, error: adminStepErr } = await asAdmin
+          .from("initiative_steps")
+          .insert({
+            project_id: projectA.id,
+            initiative_id: init.id,
+            description: `rls action step ${RUN}`,
+          })
+          .select("id, status")
+          .single();
+        record(
+          "26f. an admin can add an action step",
+          !adminStepErr && !!step,
+          adminStepErr ? adminStepErr.message : "created"
+        );
+
+        if (step) {
+          const { error: viewerStatusErr } = await asViewer
+            .from("initiative_steps")
+            .update({ status: "green" })
+            .eq("id", step.id);
+          const { data: afterViewer } = await supabaseAdmin
+            .from("initiative_steps")
+            .select("status")
+            .eq("id", step.id)
+            .single();
+          record(
+            "26g. a viewer CANNOT change a step's status",
+            afterViewer?.status !== "green",
+            viewerStatusErr ? "correctly rejected" : `status is now ${afterViewer?.status}`
+          );
+
+          // ...and the same grant that lets someone tick a task lets them
+          // move a step. One switch, two places, exactly as 053 intended.
+          await supabaseAdmin
+            .from("project_members")
+            .update({ can_manage_tasks: true })
+            .eq("project_id", projectA.id)
+            .eq("profile_id", viewerA.id);
+          const { error: grantedStatusErr } = await asViewer
+            .from("initiative_steps")
+            .update({ status: "green" })
+            .eq("id", step.id);
+          const { data: afterGrant } = await supabaseAdmin
+            .from("initiative_steps")
+            .select("status")
+            .eq("id", step.id)
+            .single();
+          record(
+            "26h. a granted viewer CAN change a step's status (053)",
+            !grantedStatusErr && afterGrant?.status === "green",
+            grantedStatusErr ? grantedStatusErr.message : `status=${afterGrant?.status}`
+          );
+          await supabaseAdmin
+            .from("project_members")
+            .update({ can_manage_tasks: false })
+            .eq("project_id", projectA.id)
+            .eq("profile_id", viewerA.id);
+        }
+      }
+
+      const { data: metric, error: editorMetricErr } = await asEditor
+        .from("scoreboard_metrics")
+        .insert({ project_id: projectA.id, label: `rls metric ${RUN}` })
+        .select("id")
+        .single();
+      record(
+        "26i. an editor can add a scoreboard row",
+        !editorMetricErr && !!metric,
+        editorMetricErr ? editorMetricErr.message : "created"
+      );
+
+      if (metric) {
+        const { error: viewerMetricErr } = await asViewer
+          .from("scoreboard_metrics")
+          .update({ current: "999" })
+          .eq("id", metric.id);
+        const { data: afterMetric } = await supabaseAdmin
+          .from("scoreboard_metrics")
+          .select("current")
+          .eq("id", metric.id)
+          .single();
+        record(
+          "26j. a viewer CANNOT edit the scoreboard",
+          afterMetric?.current !== "999",
+          viewerMetricErr ? "correctly rejected" : `current is now ${afterMetric?.current}`
+        );
+
+        const { data: viewerReadsMetric } = await asViewer
+          .from("scoreboard_metrics")
+          .select("id")
+          .eq("id", metric.id);
+        record(
+          "26k. a viewer CAN read the scoreboard",
+          (viewerReadsMetric ?? []).length === 1,
+          `${(viewerReadsMetric ?? []).length} row(s)`
+        );
+
+        const { data: outsiderMetric } = await asOutsider
+          .from("scoreboard_metrics")
+          .select("id")
+          .eq("project_id", projectA.id);
+        record(
+          "26l. an outsider sees no scoreboard",
+          (outsiderMetric ?? []).length === 0,
+          `${(outsiderMetric ?? []).length} row(s) leaked`
+        );
+      }
+
+      // initiative_steps cascades from initiatives; metrics are their own row.
+      await supabaseAdmin.from("initiatives").delete().eq("project_id", projectA.id);
+      await supabaseAdmin.from("scoreboard_metrics").delete().eq("project_id", projectA.id);
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

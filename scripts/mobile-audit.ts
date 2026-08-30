@@ -164,7 +164,7 @@ async function main() {
   const pages: [string, string][] = [
     ["my-tasks", `${BASE}/my-work`],
     ["help", `${BASE}/help`],
-    ...(["dashboard", "prepare", "process", "team", "dates", "sessions", "deliverables", "books"] as const)
+    ...(["dashboard", "prepare", "process", "team", "dates", "sessions", "deliverables", "execution", "books"] as const)
       .map((k) => [`panel-${k}`, `${P}?panel=${k}`] as [string, string]),
   ];
 

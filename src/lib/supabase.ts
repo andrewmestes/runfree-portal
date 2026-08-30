@@ -1020,6 +1020,175 @@ export type Database = {
         };
         Relationships: [];
       };
+      /**
+       * A Foreground Initiative — the 90-day unit of work, carrying the six
+       * blocks of Will's Initiative Plan Template plus the Action Step List's
+       * header fields (leader, team, start, and the two review dates).
+       */
+      initiatives: {
+        Row: {
+          id: string;
+          project_id: string;
+          name: string;
+          initiative: string | null;
+          objective: string | null;
+          key_deliverables: string | null;
+          plan_of_action: string | null;
+          timeline: string | null;
+          costs: string | null;
+          leader: string | null;
+          team: string | null;
+          start_date: string | null;
+          last_review_on: string | null;
+          next_review_on: string | null;
+          status: "red" | "amber" | "green";
+          is_complete: boolean;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          name: string;
+          initiative?: string | null;
+          objective?: string | null;
+          key_deliverables?: string | null;
+          plan_of_action?: string | null;
+          timeline?: string | null;
+          costs?: string | null;
+          leader?: string | null;
+          team?: string | null;
+          start_date?: string | null;
+          last_review_on?: string | null;
+          next_review_on?: string | null;
+          status?: "red" | "amber" | "green";
+          is_complete?: boolean;
+          position?: number;
+        };
+        Update: {
+          name?: string;
+          initiative?: string | null;
+          objective?: string | null;
+          key_deliverables?: string | null;
+          plan_of_action?: string | null;
+          timeline?: string | null;
+          costs?: string | null;
+          leader?: string | null;
+          team?: string | null;
+          start_date?: string | null;
+          last_review_on?: string | null;
+          next_review_on?: string | null;
+          status?: "red" | "amber" | "green";
+          is_complete?: boolean;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "initiatives_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      /** One row of the Action Step List under an initiative. */
+      initiative_steps: {
+        Row: {
+          id: string;
+          initiative_id: string;
+          project_id: string;
+          description: string;
+          status: "red" | "amber" | "green";
+          /** "By" — a date on most rows, "Monthly Periodic" on some. */
+          by_when: string | null;
+          cost: string | null;
+          accountable: string | null;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          initiative_id: string;
+          project_id: string;
+          description: string;
+          status?: "red" | "amber" | "green";
+          by_when?: string | null;
+          cost?: string | null;
+          accountable?: string | null;
+          position?: number;
+        };
+        Update: {
+          description?: string;
+          status?: "red" | "amber" | "green";
+          by_when?: string | null;
+          cost?: string | null;
+          accountable?: string | null;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "initiative_steps_initiative_id_fkey";
+            columns: ["initiative_id"];
+            referencedRelation: "initiatives";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "initiative_steps_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      /**
+       * A row of the Church Ministry Dashboard. Values are text because the
+       * sheet mixes attendance counts, dollars and per-capita giving in one
+       * column.
+       */
+      scoreboard_metrics: {
+        Row: {
+          id: string;
+          project_id: string;
+          grouping: "strategy_input" | "measure_output";
+          label: string;
+          prior_year: string | null;
+          current: string | null;
+          next_year: string | null;
+          trend: "up" | "flat" | "down" | null;
+          status: "red" | "amber" | "green" | null;
+          position: number;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          grouping?: "strategy_input" | "measure_output";
+          label: string;
+          prior_year?: string | null;
+          current?: string | null;
+          next_year?: string | null;
+          trend?: "up" | "flat" | "down" | null;
+          status?: "red" | "amber" | "green" | null;
+          position?: number;
+        };
+        Update: {
+          grouping?: "strategy_input" | "measure_output";
+          label?: string;
+          prior_year?: string | null;
+          current?: string | null;
+          next_year?: string | null;
+          trend?: "up" | "flat" | "down" | null;
+          status?: "red" | "amber" | "green" | null;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "scoreboard_metrics_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {

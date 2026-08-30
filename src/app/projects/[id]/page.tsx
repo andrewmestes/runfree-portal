@@ -92,6 +92,7 @@ import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
 import AccessError from "@/components/AccessError";
 import BooksShelf from "@/components/BooksShelf";
+import ExecutionPanel from "@/components/ExecutionPanel";
 import type { BooksLibrary } from "@/lib/books";
 import { useOwedCount } from "@/lib/useOwedCount";
 
@@ -880,6 +881,14 @@ export default function ProjectDetailPage() {
     // looking like it did not belong in its own tab.
     { key: "sessions", label: "Sessions" },
     hasDeliverables ? { key: "deliverables", label: "Deliverables" } : null,
+    // Execution is the one panel that is not about the six months — it is the
+    // Horizon Storyline being run, ninety days at a time, after we leave.
+    //
+    // Shown to an editor always (somebody has to start it) and to everyone
+    // else only once there is something in it. Same rule as the Vision Frame
+    // sheet: a church three modules in should not open a tab built for the
+    // year after the engagement and find it blank.
+    detail.hasExecution || canEdit ? { key: "execution", label: "Execution" } : null,
     // Last, and unconditional. Andrew: "we need to add Will's Books to all the
     // Pivvot projects." It is reading behind the process rather than part of
     // it, so it sits after the engagement's own sections.
@@ -1178,6 +1187,20 @@ export default function ProjectDetailPage() {
                   </div>
                 )}
               </section>
+            )}
+
+            {/* `accessToken` is non-null by the time `detail` exists — the
+                fetch that produced it used the token — but the state is typed
+                nullable, and a guard is cheaper than an assertion that stops
+                being true if the load order ever changes. */}
+            {activePanel === "execution" && accessToken && (
+              <ExecutionPanel
+                projectId={projectId}
+                accessToken={accessToken}
+                canEdit={canEdit}
+                canManageSteps={canAssignTasks}
+                churchName={detail.name}
+              />
             )}
 
             {/* Archive and delete follow the roster rather than getting a

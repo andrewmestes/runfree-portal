@@ -152,6 +152,15 @@ export type ProjectDetail = {
   contacts: ChurchContact[];
   /** Homework and next steps across the whole engagement. */
   tasks: ProjectTask[];
+  /**
+   * Does this project have anything in Execution yet?
+   *
+   * A count rather than the rows: `ExecutionPanel` loads its own data when
+   * opened, and this exists only so the tab can be hidden from a church that
+   * has not reached the Horizon Storyline. Editors always see it — they are
+   * the ones who have to start it.
+   */
+  hasExecution: boolean;
 };
 
 /**
@@ -186,6 +195,7 @@ export async function getProjectDetail(
     prepItemsRes,
     contactsRes,
     tasksRes,
+    initiativesRes,
   ] = await Promise.all([
     client
       .from("project_members")
@@ -238,6 +248,12 @@ export async function getProjectDetail(
       .eq("project_id", projectId)
       .order("is_done", { ascending: true })
       .order("position", { ascending: true }),
+    // Existence only — head:true sends no rows back. The panel fetches the
+    // real data itself when it is opened.
+    client
+      .from("initiatives")
+      .select("id", { head: true, count: "exact" })
+      .eq("project_id", projectId),
   ]);
 
   if (membersRes.error) throw membersRes.error;
@@ -317,6 +333,7 @@ export async function getProjectDetail(
     prepItems: (prepItemsRes.data as PrepItem[]) ?? [],
     contacts: (contactsRes.data as ChurchContact[]) ?? [],
     tasks: (tasksRes.data as ProjectTask[]) ?? [],
+    hasExecution: (initiativesRes.count ?? 0) > 0,
   };
 }
 

@@ -174,10 +174,11 @@ export default function HelpPage() {
               <li><strong>Key Dates</strong> — everything already in the diary.</li>
               <li><strong>Sessions</strong> — every session we have held: its recording, the write-up, the charts from the room, and what came out of it.</li>
               <li><strong>Deliverables</strong> — the finished work, in the Vision Stack.</li>
+              <li><strong>Execution</strong> &mdash; what happens after the six months: your foreground initiatives, the numbers you watch, and the review rhythm.</li>
               <li><strong>Will&rsquo;s Books</strong> — visual summaries, chapters and full downloads of the books behind the process.</li>
             </ul>
             A project only shows the sections it actually has, so you may see fewer than
-            eight. Dashboard and Will&rsquo;s Books are always there.
+            nine. Dashboard and Will&rsquo;s Books are always there.
             <br />
             <br />
             Underneath them are your other projects — <strong>Starred</strong> first if you
@@ -231,6 +232,38 @@ export default function HelpPage() {
             up to the tools that put it into practice. It has its own page, linked from
             the top of your project. Items appear there as they are completed, so it
             fills in as you go.
+          </Faq>
+          <Faq q="What is Execution for?">
+            The six months produce a plan; Execution is where that plan gets run. It has
+            three parts.
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>Foreground Initiatives</strong> — what your team is doing in the
+                next ninety days. Each one has a leader, the plan behind it, and a list
+                of action steps with a person and a date against each. Every step carries
+                a red, amber or green light: not started or stuck, at risk, on track.
+              </li>
+              <li>
+                <strong>Ministry Dashboard</strong> — your scoreboard. The rows are yours
+                to name: whatever your church actually watches, against last year and
+                where you are headed.
+              </li>
+              <li>
+                <strong>Renewal Cycle</strong> — the review rhythm from the Horizon
+                Storyline, as real dates. Half a day at ninety days, a full day at six
+                months, half a day at nine, and a two-day retreat at the year, three
+                years running. This sits <em>on top of</em> your normal weekly and monthly
+                meetings, not instead of them.
+              </li>
+            </ul>
+            There is no percentage complete anywhere in it, and that is deliberate — a
+            review is a conversation about what is stuck and who is on it, and a number
+            ends that conversation early.
+          </Faq>
+          <Faq q="Why do some things say &lsquo;Monthly Periodic&rsquo; instead of a date?">
+            Because not every action step is a deadline. Some are a rhythm — record one
+            story a month, review the roster each quarter. The <em>By</em> column takes
+            either, and anything that is not a date is never counted as overdue.
           </Faq>
           <Faq q="Why can I see a session but not its notes?">
             Notes appear once your coach has finished writing them up. Until then the
@@ -391,6 +424,31 @@ export default function HelpPage() {
               part of the process by design, and a total makes a deliberate choice look
               like unfinished work — so the portal counts what is done and never what is
               missing.
+            </Faq>
+            <Faq q="Running Execution with a church">
+              Execution is the one tab that outlives the engagement, and it stays hidden
+              from the church until there is something in it — you will see it on every
+              project, they will not see it until you add the first initiative.
+              <br />
+              <br />
+              Start with the scoreboard: <strong>Start from Will&rsquo;s dashboard</strong>{" "}
+              drops in the nine rows off the printed sheet, and the church renames or
+              deletes whatever does not apply. Then add initiatives. The{" "}
+              <strong>Renewal Cycle</strong> counts from the earliest start date on a live
+              initiative, so put a real start date on the first one and the twelve review
+              dates fill themselves in.
+              <br />
+              <br />
+              <strong>Who can change what.</strong> The plan and the scoreboard are yours
+              and any editor&rsquo;s. The action steps and their lights follow the same
+              switch as tasks — admins, plus anyone you have given task access to on the
+              Access dialog. That is on purpose: the person accountable for a step is
+              usually church staff, not a portal editor.
+              <br />
+              <br />
+              <strong>Copy update</strong> at the top of the tab puts the whole picture —
+              every initiative, every open step with its owner and date, and the next
+              review — on your clipboard as plain text, ready to paste into an email.
             </Faq>
             <Faq q="Keeping your own projects in order">
               The star on each project pins it to the top of your list. It is yours

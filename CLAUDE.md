@@ -584,6 +584,36 @@ email; sending is blocked on `RESEND_API_KEY`, and a Send button that silently
 does nothing is worse than no button. When Resend lands, that digest is the
 payload.
 
+**The Horizon Storyline is the band above all of it** (**058**). 057 shipped
+the Foreground and nothing over it, which left a church's ninety-day
+initiatives laddering up to nothing. `The_Horizon_Storyline_Template.pdf` is
+one page with four bands, and `horizon_storyline` holds three of them —
+Beyond the Horizon (5–20 years, one box), Background Vision (3 years, four
+boxes), Midground Milestone (1 year, one box). One row per box, keyed
+`(project_id, horizon, position)` and upserted, the same shape as
+`vision_frame` (055), because a storyline is written a box at a time across a
+retreat and there is no moment where a "create it" step would belong.
+
+**The fourth band is not stored.** It renders `initiatives`. Copying the names
+into a row here would give a church two places to rename an initiative, and
+one of them would be wrong by the afternoon.
+
+`HORIZONS[].boxes` is enforced, not advisory — four Background boxes and four
+Foreground. That is the discipline the method exists for, so the "add" control
+disappears at four rather than growing the grid. If Andrew wants it loosened,
+that is the one line to change.
+
+**Both grids pad to four cells.** With `gap-px` over a `bg-gray-200`
+container, a missing cell shows the container through as a flat grey
+rectangle that reads as a rendering fault. Empty white filler cells make an
+unwritten box look like the empty box it is — which is what the sheet prints
+— and padding to four lands on a whole row at 1, 2 and 4 columns.
+
+`hasExecution` counts `horizon_storyline` **as well as** `initiatives`: the
+storyline usually lands first (it comes out of the retreat, the initiatives
+come out of it), so counting initiatives alone would hide the tab from a
+church whose vision is already written.
+
 **Two layouts that had to differ by width, not one grid.** `MetricRow` was a
 single five-column grid at every size; at 390px it rendered "1,180" as "1,18",
 hid the Now value completely and printed "NEX" on top of the trend arrow. It
@@ -603,7 +633,28 @@ image actually decoded, nothing in the console.
 ./node_modules/.bin/tsx --env-file=.env.local scripts/mobile-audit.ts <project-id>
 ```
 
-It creates and deletes a throwaway account the way `tests/rls.test.ts` does,
+`scripts/panel-shot.ts` is the other half, and the half that catches a
+different class of bug:
+
+```bash
+./node_modules/.bin/tsx --env-file=.env.local scripts/panel-shot.ts \
+    <project-id> execution viewer 1440 4000 expand
+```
+
+Same throwaway account, but you choose its **role**, the width, and whether to
+open every disclosure first. Andrew, after a run of avoidable bugs: "I feel
+like a lot of these are common sense mistakes ... do a full audit again."
+Almost all of them were invisible from an admin session — editor-facing copy
+shown to a church ("add what you actually watch" on a panel they cannot edit),
+or layout that only breaks once a card is expanded. **Check both roles before
+calling a panel done.**
+
+The `height` argument is not a detail. On `lg` the project page is
+`h-screen overflow-hidden` with the content column scrolling inside it, so
+`captureBeyondViewport` returns exactly one viewport. Set it taller than the
+panel or you will screenshot the top third and believe you have seen the page.
+
+`mobile-audit.ts` creates and deletes a throwaway account the way `tests/rls.test.ts` does,
 so it needs nobody's password and leaves no extra face in the Team panel. A
 spill inside an ancestor that clips or scrolls is ignored on purpose — the
 books rail is a carousel, not a bug.

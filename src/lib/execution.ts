@@ -79,11 +79,62 @@ export type ScoreboardMetric = {
   position: number;
 };
 
+export type HorizonBand = "beyond" | "background" | "midground";
+
+export type HorizonBox = {
+  id: string;
+  project_id: string;
+  horizon: HorizonBand;
+  body: string | null;
+  position: number;
+  updated_at: string;
+};
+
 export type ExecutionData = {
   initiatives: Initiative[];
   steps: InitiativeStep[];
   metrics: ScoreboardMetric[];
+  horizon: HorizonBox[];
 };
+
+/**
+ * The Horizon Storyline Template, top to bottom, as it prints.
+ *
+ * `boxes` is how many the sheet gives you. Four for the Background Vision and
+ * four for the Foreground is not an arbitrary limit — it is the discipline the
+ * method is for. A church that can name nine three-year priorities has not
+ * finished choosing.
+ */
+export const HORIZONS: {
+  key: HorizonBand;
+  label: string;
+  span: string;
+  boxes: number;
+  prompt: string;
+}[] = [
+  {
+    key: "beyond",
+    label: "Beyond the Horizon",
+    span: "5–20 years",
+    boxes: 1,
+    prompt:
+      "The long-range dream. What would people say about this church a generation from now?",
+  },
+  {
+    key: "background",
+    label: "Background Vision",
+    span: "3 years",
+    boxes: 4,
+    prompt: "The handful of things that must be true in three years.",
+  },
+  {
+    key: "midground",
+    label: "Midground Milestone",
+    span: "1 year",
+    boxes: 1,
+    prompt: "The one marker that says this year counted.",
+  },
+];
 
 /**
  * The six blocks of the plan, in the order they print.
@@ -153,18 +204,21 @@ export async function getExecutionData(
   projectId: string
 ): Promise<ExecutionData> {
   const client = createUserClient(accessToken);
-  const [inits, steps, metrics] = await Promise.all([
+  const [inits, steps, metrics, horizon] = await Promise.all([
     client.from("initiatives").select("*").eq("project_id", projectId).order("position"),
     client.from("initiative_steps").select("*").eq("project_id", projectId).order("position"),
     client.from("scoreboard_metrics").select("*").eq("project_id", projectId).order("position"),
+    client.from("horizon_storyline").select("*").eq("project_id", projectId).order("position"),
   ]);
   if (inits.error) throw inits.error;
   if (steps.error) throw steps.error;
   if (metrics.error) throw metrics.error;
+  if (horizon.error) throw horizon.error;
   return {
     initiatives: (inits.data ?? []) as Initiative[],
     steps: (steps.data ?? []) as InitiativeStep[],
     metrics: (metrics.data ?? []) as ScoreboardMetric[],
+    horizon: (horizon.data ?? []) as HorizonBox[],
   };
 }
 
@@ -294,6 +348,35 @@ export const DASHBOARD_STARTER: { grouping: ScoreboardGroup; label: string }[] =
   { grouping: "strategy_input", label: "New Givers" },
   { grouping: "strategy_input", label: "Giving per Cap" },
 ];
+
+/**
+ * Write one box. Upsert on (project_id, horizon, position) so the first save
+ * and every later edit are one call — a storyline is written a box at a time
+ * across a retreat, so there is no moment where "create it" would belong.
+ */
+export async function saveHorizonBox(
+  accessToken: string,
+  projectId: string,
+  horizon: HorizonBand,
+  position: number,
+  body: string | null
+): Promise<void> {
+  const { error } = await createUserClient(accessToken)
+    .from("horizon_storyline")
+    .upsert(
+      { project_id: projectId, horizon, position, body, updated_at: new Date().toISOString() },
+      { onConflict: "project_id,horizon,position" }
+    );
+  if (error) throw error;
+}
+
+export async function deleteHorizonBox(accessToken: string, id: string): Promise<void> {
+  const { error } = await createUserClient(accessToken)
+    .from("horizon_storyline")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
 
 /* --------------------------------------------------------- renewal cycle */
 

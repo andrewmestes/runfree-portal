@@ -5,6 +5,7 @@ import RichText, { RichTextView } from "./RichText";
 import { richTextIsEmpty } from "@/lib/rich-text";
 import {
   DASHBOARD_STARTER,
+  HORIZONS,
   PLAN_FIELDS,
   RAG_DOT,
   RAG_LABEL,
@@ -12,16 +13,19 @@ import {
   createInitiative,
   createMetric,
   createStep,
+  deleteHorizonBox,
   deleteInitiative,
   deleteMetric,
   deleteStep,
   getExecutionData,
   nextRenewalStop,
   renewalCycle,
+  saveHorizonBox,
   updateInitiative,
   updateMetric,
   updateStep,
   type ExecutionData,
+  type HorizonBand,
   type Initiative,
   type InitiativeStep,
   type RagStatus,
@@ -120,6 +124,13 @@ export default function ExecutionPanel({
       ) : (
         <>
           <ThisQuarter data={data} />
+          <HorizonStoryline
+            data={data}
+            projectId={projectId}
+            accessToken={accessToken}
+            canEdit={canEdit}
+            onChanged={load}
+          />
           <Initiatives
             data={data}
             projectId={projectId}
@@ -428,6 +439,223 @@ function Stat({ n, label, tone }: { n: number; label: string; tone?: "amber" | "
       </dd>
       <dt className="mt-1.5 text-[11px] uppercase tracking-wide text-white/50">{label}</dt>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The Horizon Storyline                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Horizon Storyline Template, on screen, in the order it prints.
+ *
+ * Four bands: Beyond the Horizon (5–20 years, one box), Background Vision
+ * (3 years, four boxes), Midground Milestone (1 year, one box), and Foreground
+ * Action Initiatives (90 days, four boxes).
+ *
+ * The Foreground band is NOT editable here — it renders the live `initiatives`
+ * rows. Two places to rename an initiative would mean one of them is wrong by
+ * the afternoon, and the detail lives directly below this anyway.
+ *
+ * The box counts come off the sheet and are enforced: four Background boxes,
+ * four Foreground. That is the discipline the method exists for — a church
+ * that can name nine three-year priorities has not finished choosing yet — so
+ * the "add" control disappears at four rather than growing the grid.
+ */
+function HorizonStoryline({
+  data,
+  projectId,
+  accessToken,
+  canEdit,
+  onChanged,
+}: {
+  data: ExecutionData;
+  projectId: string;
+  accessToken: string;
+  canEdit: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const byKey = new Map(data.horizon.map((h) => [`${h.horizon}:${h.position}`, h]));
+  const written = data.horizon.filter((h) => !richTextIsEmpty(h.body)).length;
+  const live = data.initiatives.filter((i) => !i.is_complete);
+
+  // Nothing written and nobody who could write it. Same rule as the Vision
+  // Frame sheet: an empty template is informative to the person who has to
+  // fill it in and noise to everyone else.
+  if (written === 0 && live.length === 0 && !canEdit) return null;
+
+  const save = async (horizon: HorizonBand, position: number, body: string | null) => {
+    setBusy(true);
+    try {
+      await saveHorizonBox(accessToken, projectId, horizon, position, body);
+      await onChanged();
+      setEditing(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="mt-12">
+      <BlockHeading
+        eyebrow="The whole picture"
+        title="Horizon Storyline"
+        note="Four horizons on one page — the long-range dream, the three-year vision, this year's milestone, and what your team is doing about it in the next ninety days."
+      />
+
+      <div className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
+        {HORIZONS.map((band) => {
+          const boxes = Array.from({ length: band.boxes }, (_, n) => n);
+          const used = boxes.filter((n) => byKey.has(`${band.key}:${n}`));
+          // Show every written box, plus one empty one to write into.
+          const lastUsed = used.length ? Math.max(...used) : -1;
+          const visible =
+            band.boxes === 1
+              ? [0]
+              : boxes.filter((n) => n <= lastUsed || (canEdit && n === lastUsed + 1));
+
+          return (
+            <div key={band.key}>
+              <div className="flex flex-wrap items-baseline gap-x-3 bg-runfree-navyDeep px-4 py-2 sm:px-5">
+                <p className="font-display text-sm font-extrabold tracking-tight text-white">
+                  {band.label}
+                </p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-white/50">
+                  {band.span}
+                </p>
+              </div>
+
+              <div
+                className={`grid gap-px bg-gray-200 ${
+                  band.boxes === 1 ? "" : "sm:grid-cols-2 lg:grid-cols-4"
+                }`}
+              >
+                {/* Pad to the four boxes the sheet prints.
+                    Without this the grid's own background shows through where
+                    a cell is missing, and an unfilled box reads as a grey
+                    rectangle that looks like a rendering fault rather than a
+                    box nobody has written in yet. Padding to 4 also lands on
+                    a whole row at every breakpoint — 1, 2 and 4 columns. */}
+                {visible.map((n) => {
+                  const key = `${band.key}:${n}`;
+                  const row = byKey.get(key);
+                  const blank = richTextIsEmpty(row?.body);
+                  const isEditing = editing === key;
+
+                  return (
+                    <div key={key} className="bg-white px-4 py-3.5 sm:px-5">
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <RichText
+                            value={draft}
+                            onChange={setDraft}
+                            minHeight="6rem"
+                            placeholder={band.prompt}
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              disabled={busy}
+                              onClick={() =>
+                                void save(band.key, n, richTextIsEmpty(draft) ? null : draft)
+                              }
+                              className="rounded-lg bg-runfree-grad px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                            >
+                              {busy ? "Saving…" : "Save"}
+                            </button>
+                            <button
+                              onClick={() => setEditing(null)}
+                              className="px-2 py-2 text-xs text-gray-500 transition hover:text-runfree-ink"
+                            >
+                              Cancel
+                            </button>
+                            {row && !blank && (
+                              <button
+                                onClick={async () => {
+                                  await deleteHorizonBox(accessToken, row.id);
+                                  await onChanged();
+                                  setEditing(null);
+                                }}
+                                className="ml-auto text-xs font-semibold text-gray-400 transition hover:text-rose-600"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : blank ? (
+                        <p className="text-xs italic leading-relaxed text-gray-400">
+                          {band.prompt}
+                        </p>
+                      ) : (
+                        <RichTextView html={row!.body!} className="text-runfree-ink" />
+                      )}
+
+                      {canEdit && !isEditing && (
+                        <button
+                          onClick={() => {
+                            setDraft(row?.body ?? "");
+                            setEditing(key);
+                          }}
+                          className="mt-1.5 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+                        >
+                          {blank ? "Write it" : "Edit"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                {Array.from({ length: Math.max(0, band.boxes - visible.length) }, (_, k) => (
+                  <div key={`pad-${k}`} aria-hidden className="bg-white px-4 py-3.5 sm:px-5" />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* The fourth band, fed by the initiatives below rather than typed. */}
+        <div className="flex flex-wrap items-baseline gap-x-3 bg-runfree-navyDeep px-4 py-2 sm:px-5">
+          <p className="font-display text-sm font-extrabold tracking-tight text-white">
+            Foreground Action Initiatives
+          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/50">
+            90 days
+          </p>
+        </div>
+        {live.length === 0 ? (
+          <p className="bg-white px-4 py-3.5 text-xs italic text-gray-400 sm:px-5">
+            {canEdit
+              ? "Add initiatives below and they appear here."
+              : "Nothing in the foreground right now."}
+          </p>
+        ) : (
+          <div className="grid gap-px bg-gray-200 sm:grid-cols-2 lg:grid-cols-4">
+            {live.map((i) => (
+              <div key={i.id} className="bg-white px-4 py-3.5 sm:px-5">
+                <p className="flex items-start gap-2 text-sm font-semibold leading-snug text-runfree-ink">
+                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${RAG_DOT[i.status]}`} />
+                  <span className="min-w-0">{i.name}</span>
+                </p>
+                {i.leader && <p className="mt-1 pl-4 text-xs text-gray-500">{i.leader}</p>}
+              </div>
+            ))}
+            {Array.from({ length: Math.max(0, 4 - live.length) }, (_, k) => (
+              <div key={`pad-${k}`} aria-hidden className="bg-white px-4 py-3.5 sm:px-5" />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {live.length > 4 && canEdit && (
+        <p className="mt-2 text-[11px] text-gray-400">
+          Will&rsquo;s template gives four foreground boxes. {live.length} are live — worth
+          asking which of them is really this quarter&rsquo;s work.
+        </p>
+      )}
+    </section>
   );
 }
 

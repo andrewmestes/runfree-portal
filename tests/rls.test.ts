@@ -1554,9 +1554,62 @@ async function main() {
         );
       }
 
+      // --- The Horizon Storyline (058): read by all, written by editor+.
+      const { data: box, error: editorBoxErr } = await asEditor
+        .from("horizon_storyline")
+        .insert({ project_id: projectA.id, horizon: "midground", body: "<p>one year</p>" })
+        .select("id")
+        .single();
+      record(
+        "26m. an editor can write a horizon box",
+        !editorBoxErr && !!box,
+        editorBoxErr ? editorBoxErr.message : "created"
+      );
+
+      const { error: viewerBoxErr } = await asViewer
+        .from("horizon_storyline")
+        .insert({ project_id: projectA.id, horizon: "beyond", body: "<p>nope</p>" });
+      record(
+        "26n. a viewer CANNOT write a horizon box",
+        !!viewerBoxErr,
+        viewerBoxErr ? "correctly rejected" : "insert unexpectedly succeeded"
+      );
+
+      const { data: viewerBoxes } = await asViewer
+        .from("horizon_storyline")
+        .select("id")
+        .eq("project_id", projectA.id);
+      record(
+        "26o. a viewer CAN read the storyline",
+        (viewerBoxes ?? []).length === 1,
+        `${(viewerBoxes ?? []).length} row(s)`
+      );
+
+      const { data: outsiderBoxes } = await asOutsider
+        .from("horizon_storyline")
+        .select("id")
+        .eq("project_id", projectA.id);
+      record(
+        "26p. an outsider sees no storyline",
+        (outsiderBoxes ?? []).length === 0,
+        `${(outsiderBoxes ?? []).length} row(s) leaked`
+      );
+
+      // One box per (project, horizon, position) — the upsert in
+      // saveHorizonBox depends on this being inferable.
+      const { error: dupErr } = await asEditor
+        .from("horizon_storyline")
+        .insert({ project_id: projectA.id, horizon: "midground", position: 0, body: "<p>again</p>" });
+      record(
+        "26q. the same horizon box cannot be written twice",
+        !!dupErr,
+        dupErr ? "correctly rejected" : "duplicate unexpectedly created"
+      );
+
       // initiative_steps cascades from initiatives; metrics are their own row.
       await supabaseAdmin.from("initiatives").delete().eq("project_id", projectA.id);
       await supabaseAdmin.from("scoreboard_metrics").delete().eq("project_id", projectA.id);
+      await supabaseAdmin.from("horizon_storyline").delete().eq("project_id", projectA.id);
     }
 
   } finally {

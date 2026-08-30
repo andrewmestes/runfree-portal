@@ -1189,6 +1189,42 @@ export type Database = {
           },
         ];
       };
+      /**
+       * One box of the Horizon Storyline Template. Beyond and Midground have
+       * a single box each (position 0); Background has four (0-3). The
+       * Foreground band is `initiatives`, not a row here.
+       */
+      horizon_storyline: {
+        Row: {
+          id: string;
+          project_id: string;
+          horizon: "beyond" | "background" | "midground";
+          body: string | null;
+          position: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          horizon: "beyond" | "background" | "midground";
+          body?: string | null;
+          position?: number;
+          updated_at?: string;
+        };
+        Update: {
+          body?: string | null;
+          position?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "horizon_storyline_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {

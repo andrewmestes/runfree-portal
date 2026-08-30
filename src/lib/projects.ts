@@ -196,6 +196,7 @@ export async function getProjectDetail(
     contactsRes,
     tasksRes,
     initiativesRes,
+    horizonRes,
   ] = await Promise.all([
     client
       .from("project_members")
@@ -252,6 +253,14 @@ export async function getProjectDetail(
     // real data itself when it is opened.
     client
       .from("initiatives")
+      .select("id", { head: true, count: "exact" })
+      .eq("project_id", projectId),
+    // The storyline usually lands BEFORE the first initiative — it comes out
+    // of the retreat, the initiatives come out of the storyline — so counting
+    // initiatives alone would hide the tab from a church whose vision is
+    // already written.
+    client
+      .from("horizon_storyline")
       .select("id", { head: true, count: "exact" })
       .eq("project_id", projectId),
   ]);
@@ -333,7 +342,7 @@ export async function getProjectDetail(
     prepItems: (prepItemsRes.data as PrepItem[]) ?? [],
     contacts: (contactsRes.data as ChurchContact[]) ?? [],
     tasks: (tasksRes.data as ProjectTask[]) ?? [],
-    hasExecution: (initiativesRes.count ?? 0) > 0,
+    hasExecution: (initiativesRes.count ?? 0) > 0 || (horizonRes.count ?? 0) > 0,
   };
 }
 

@@ -78,6 +78,8 @@ export type Database = {
           certification_access: boolean;
           /** Headshot, in the deliverable-images bucket. One face per person, not per project. */
           avatar_path: string | null;
+          /** Last time they loaded the portal (056). Coarse, hourly. */
+          last_seen_at: string | null;
           /**
            * Who someone is portal-wide (migration 031). Distinct from
            * project_members.role, which is what they may do on ONE project.
@@ -777,6 +779,42 @@ export type Database = {
           },
         ];
       };
+      /** The Vision Frame as text, one row per element (055). */
+      vision_frame: {
+        Row: {
+          id: string;
+          project_id: string;
+          element:
+            | "problem_statement" | "kingdom_concept" | "mission" | "measures"
+            | "strategy" | "values" | "vision_proper";
+          body: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          element:
+            | "problem_statement" | "kingdom_concept" | "mission" | "measures"
+            | "strategy" | "values" | "vision_proper";
+          body?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          body?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "vision_frame_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       /** Attachments on a module card — however many there are (051). */
       deliverable_files: {
         Row: {
@@ -1000,6 +1038,15 @@ export type Database = {
        */
       set_project_pinned: {
         Args: { p_project_id: string; p_pinned: boolean };
+        Returns: undefined;
+      };
+      /**
+       * Stamps profiles.last_seen_at for the caller, at most hourly (056).
+       * A function rather than a policy so the throttle lives with the write
+       * and update_profiles does not have to widen.
+       */
+      touch_last_seen: {
+        Args: Record<string, never>;
         Returns: undefined;
       };
     };

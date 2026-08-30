@@ -20,6 +20,11 @@ export type ProjectMember = {
    * be able to assign that separately than the master permission list."
    */
   canManageTasks: boolean;
+  /**
+   * Last time they loaded the portal (056), or null if never.
+   * The useful half is the null: "hasn't signed in yet".
+   */
+  lastSeenAt: string | null;
   fullName: string | null;
   email: string;
   avatarPath: string | null;
@@ -184,7 +189,7 @@ export async function getProjectDetail(
   ] = await Promise.all([
     client
       .from("project_members")
-      .select("profile_id, role, org_role, is_lead, can_manage_tasks, profiles(full_name, email, is_staff, avatar_path)")
+      .select("profile_id, role, org_role, is_lead, can_manage_tasks, profiles(full_name, email, is_staff, avatar_path, last_seen_at)")
       .eq("project_id", projectId),
     // Date first, because that is how a coach thinks about ten sessions
     // delivered over months. position only breaks ties — two sessions on one
@@ -289,6 +294,7 @@ export async function getProjectDetail(
         email: string;
         is_staff: boolean;
         avatar_path: string | null;
+        last_seen_at: string | null;
       } | null;
       return {
         profileId: m.profile_id,
@@ -300,6 +306,7 @@ export async function getProjectDetail(
         fullName: profile?.full_name ?? null,
         email: profile?.email ?? "",
         avatarPath: profile?.avatar_path ?? null,
+        lastSeenAt: profile?.last_seen_at ?? null,
       };
     }),
     sessions: sessionsRes.data ?? [],
@@ -1169,6 +1176,22 @@ export async function updateMemberRole(
  * able to assign that separately than the master permission list." Admins have
  * it inherently, so this only ever matters for viewers and editors.
  */
+/**
+ * Record that this person is here, at most once an hour (056).
+ *
+ * Fire-and-forget: it runs after the page has already rendered and a failure
+ * is invisible, because nothing on screen depends on it. The same reasoning as
+ * the /my-work badge — a nicety must never be able to delay or break a load.
+ */
+export async function touchLastSeen(accessToken: string): Promise<void> {
+  try {
+    await createUserClient(accessToken).rpc("touch_last_seen");
+  } catch {
+    // Never surfaced. An admin seeing a stale "last seen" is a smaller
+    // problem than a church seeing an error because a timestamp failed.
+  }
+}
+
 export async function setMemberCanManageTasks(
   accessToken: string,
   projectId: string,

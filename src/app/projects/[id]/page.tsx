@@ -32,6 +32,7 @@ import {
   updateAvatar,
   updateMemberDetails,
   updateMemberRole,
+  touchLastSeen,
   setMemberCanManageTasks,
   updateContact,
   updatePrepItem,
@@ -60,6 +61,13 @@ import { MODULE_META, moduleLabel, moduleOrder } from "@/lib/modules";
 import ModuleNav, { type NavModule } from "@/components/ModuleNav";
 import FilePreview, { type PreviewFile } from "@/components/FilePreview";
 import ResourceCard from "@/components/ResourceCard";
+import VisionFramePanel from "@/components/VisionFramePanel";
+import {
+  listVisionFrame,
+  saveVisionFrameElement,
+  type VisionFrameElement,
+  type VisionFrameRow,
+} from "@/lib/vision-frame";
 import RichText, { RichTextView } from "@/components/RichText";
 import FileDrop, { isImageFile, type StagedFile } from "@/components/FileDrop";
 import { richTextIsEmpty, isRichText } from "@/lib/rich-text";
@@ -195,6 +203,25 @@ function signablePaths(detail: ProjectDetail): string[] {
   ].filter((p): p is string => !!p);
 }
 
+/**
+ * "Hasn't signed in yet" / "Here today" / "3 days ago".
+ *
+ * Coarse on purpose. last_seen_at is only written hourly (056), and an admin's
+ * question is whether an invitation landed, not what minute someone read
+ * something — a church board is no place for read receipts.
+ */
+function lastSeenLabel(iso: string | null): string {
+  if (!iso) return "Hasn\u2019t signed in yet";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "Signed in";
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return "Here today";
+  if (days === 1) return "Here yesterday";
+  if (days < 30) return `Last here ${days} days ago`;
+  const months = Math.floor(days / 30);
+  return `Last here ${months} month${months === 1 ? "" : "s"} ago`;
+}
+
 function prettySize(bytes: number | null): string | null {
   if (!bytes) return null;
   const mb = bytes / 1024 / 1024;
@@ -257,6 +284,8 @@ export default function ProjectDetailPage() {
   const [picking, setPicking] = useState(false);
   /** Attachments on module cards (051), keyed by deliverable in the panel. */
   const [cardFiles, setCardFiles] = useState<DeliverableFile[]>([]);
+  /** The Vision Frame as text (055) — the church's own words, searchable. */
+  const [visionFrame, setVisionFrame] = useState<VisionFrameRow[]>([]);
   /**
    * Highlighted video URLs, for loadThumbs.
    *
@@ -331,6 +360,7 @@ export default function ProjectDetailPage() {
       highlightUrlsRef.current = hl.map((h) => h.external_url).filter((u): u is string => !!u);
       const cf = await listDeliverableFiles(session.access_token, projectId).catch(() => []);
       setCardFiles(cf);
+      setVisionFrame(await listVisionFrame(session.access_token, projectId).catch(() => []));
 
       // Logo and every session image in a single signing request.
       setImageUrls(
@@ -345,6 +375,10 @@ export default function ProjectDetailPage() {
       // the handouts: a video card is usable without its picture, and waiting
       // on an external provider before showing anything is the wrong trade.
       loadThumbs(result, session.access_token);
+
+      // "Was anyone here?" — recorded after paint, never awaited. Nothing on
+      // screen depends on it (056).
+      void touchLastSeen(session.access_token);
 
       // Handouts come from Drive and are the slowest part of the page, so
       // they load after the render rather than blocking it — a module shows
@@ -666,6 +700,7 @@ export default function ProjectDetailPage() {
     highlightUrlsRef.current = hl.map((h) => h.external_url).filter((u): u is string => !!u);
     const cf = await listDeliverableFiles(accessToken, projectId).catch(() => []);
     setCardFiles(cf);
+    setVisionFrame(await listVisionFrame(accessToken, projectId).catch(() => []));
     setImageUrls(
       await getSignedImageUrls(accessToken, [
         ...signablePaths(result),
@@ -1116,6 +1151,18 @@ export default function ProjectDetailPage() {
                     layers={detail.stackLayers}
                   />
                 )}
+                {/* The church's own words, under the stack of what they
+                    built. Andrew: "I like the ability to input text so it's
+                    searchable at some level." */}
+                <VisionFramePanel
+                  rows={visionFrame}
+                  canEdit={canEdit}
+                  onSave={async (element, body) => {
+                    if (!accessToken) return;
+                    await saveVisionFrameElement(accessToken, projectId, element, body);
+                    setVisionFrame(await listVisionFrame(accessToken, projectId));
+                  }}
+                />
                 {deliverableGroups.length > 0 && (
                   <div className="mt-6">
                     <PrepCards
@@ -2910,6 +2957,17 @@ function ProjectAccess({
                       )}
                     </span>
                     <span className="block truncate text-xs text-gray-500">{m.email}</span>
+                    {/* The single most useful fact here is the absence of a
+                        date: someone invited who never got in. Andrew asked
+                        for "some kind of indicator that the project admin
+                        sees ... in the project access section." */}
+                    <span
+                      className={`block truncate text-[11px] ${
+                        m.lastSeenAt ? "text-gray-400" : "font-semibold text-runfree-magentaDeep"
+                      }`}
+                    >
+                      {lastSeenLabel(m.lastSeenAt)}
+                    </span>
                   </span>
                   <select
                     value={m.role}

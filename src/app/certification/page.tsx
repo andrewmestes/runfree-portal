@@ -149,8 +149,8 @@ export default function CertificationHubPage() {
           <HubCard
             href="/books"
             icon={<BooksIcon />}
-            title="Will's Books"
-            description="Visual summaries, chapters, and full downloads of Will's books."
+            title="Books"
+            description="Visual summaries, chapters, and full downloads of the books behind the process."
           />
           <HubCard
             href="/guide"
@@ -159,10 +159,10 @@ export default function CertificationHubPage() {
             description="The complete training playbook in one file, always current."
           />
           <HubCard
-            comingSoon
+            href="/keynotes"
             icon={<KeynotesIcon />}
-            title="Keynotes"
-            description="Keynote presentation files for teams and cohorts."
+            title="Keynote Presentations"
+            description="The decks you teach from, in Keynote and PowerPoint."
           />
         </div>
       </main>

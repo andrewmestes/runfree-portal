@@ -155,7 +155,7 @@ export default function ResourcePicker({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-6">
           {group === "books" && booksLoading && (
             <p className="py-6 text-center text-sm text-gray-500">
-              Fetching Will&rsquo;s Books&hellip;
+              Fetching books&hellip;
             </p>
           )}
 

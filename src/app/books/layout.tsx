@@ -8,7 +8,7 @@ import type { Metadata } from "next";
  * "RunFree Portal" and every open tab looked identical.
  */
 export const metadata: Metadata = {
-  title: "Will's Books · RunFree Portal",
+  title: "Books · RunFree Portal",
   description: "Visual summaries, chapters and full downloads.",
 };
 

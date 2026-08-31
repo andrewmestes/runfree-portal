@@ -68,7 +68,7 @@ export type CatalogueGroup = "videos" | "handouts" | "books" | "files" | "sessio
 export const CATALOGUE_GROUPS: { key: CatalogueGroup; label: string }[] = [
   { key: "videos", label: "Videos" },
   { key: "handouts", label: "Exercises & handouts" },
-  { key: "books", label: "Will’s Books" },
+  { key: "books", label: "Books" },
   { key: "files", label: "This church’s files" },
   { key: "sessions", label: "Sessions" },
 ];

@@ -892,7 +892,7 @@ export default function ProjectDetailPage() {
     // Last, and unconditional. Andrew: "we need to add Will's Books to all the
     // Pivvot projects." It is reading behind the process rather than part of
     // it, so it sits after the engagement's own sections.
-    { key: "books", label: "Will's Books" },
+    { key: "books", label: "Books" },
   ].filter((x): x is { key: string; label: string } => x !== null);
 
   // Landing on Overview. Andrew: "when someone logs in to their project, it
@@ -1015,7 +1015,7 @@ export default function ProjectDetailPage() {
 
             {activePanel === "books" && (
               <section id="books">
-                <SectionHeading eyebrow="The reading behind it" title="Will&rsquo;s Books" />
+                <SectionHeading eyebrow="The reading behind it" title="Books" />
                 <div className="mt-8">
                   {books ? (
                     <BooksShelf

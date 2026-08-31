@@ -205,7 +205,7 @@ export default function BooksPage() {
         backLabel="Certification hub"
         framer={framer}
         onSignOut={handleSignOut}
-        title="Will's Books"
+        title="Books"
         subtitle="Visual summaries, chapters, and full downloads"
         badge
       />

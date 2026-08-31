@@ -175,10 +175,10 @@ export default function HelpPage() {
               <li><strong>Sessions</strong> — every session we have held: its recording, the write-up, the charts from the room, and what came out of it.</li>
               <li><strong>Deliverables</strong> — the finished work, in the Vision Stack.</li>
               <li><strong>Execution</strong> &mdash; what happens after the six months: your foreground initiatives, the numbers you watch, and the review rhythm.</li>
-              <li><strong>Will&rsquo;s Books</strong> — visual summaries, chapters and full downloads of the books behind the process.</li>
+              <li><strong>Books</strong> — visual summaries, chapters and full downloads of the books behind the process.</li>
             </ul>
             A project only shows the sections it actually has, so you may see fewer than
-            nine. Dashboard and Will&rsquo;s Books are always there.
+            nine. Dashboard and Books are always there.
             <br />
             <br />
             Underneath them are your other projects — <strong>Starred</strong> first if you
@@ -471,7 +471,7 @@ export default function HelpPage() {
             </Faq>
             <Faq q="Where the certification material lives">
               <strong>Certification</strong> in the top bar opens the Certified Vision
-              Framer Hub — Process Handouts, Training Videos, Will&rsquo;s Books and the
+              Framer Hub — Process Handouts, Training Videos, Books, Keynote Presentations and the
               Digital Facilitator&rsquo;s Guide. It is a separate section from your
               projects, and the pages there carry the Pivvot mark so you can tell at a
               glance which side of the portal you are on. <em>Your projects</em> under

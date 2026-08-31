@@ -1200,6 +1200,8 @@ export default function ProjectDetailPage() {
                 canEdit={canEdit}
                 canManageSteps={canAssignTasks}
                 churchName={detail.name}
+                members={detail.members}
+                onGoTo={goPanel}
               />
             )}
 

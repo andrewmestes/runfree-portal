@@ -234,31 +234,68 @@ export default function HelpPage() {
             fills in as you go.
           </Faq>
           <Faq q="What is Execution for?">
-            The six months produce a plan; Execution is where that plan gets run. It has
-            three parts.
+            The six months produce a plan; Execution is where that plan gets run. It is
+            built for one meeting a week, about fifteen minutes long.
+            <br />
+            <br />
+            The centre of the page is your <strong>Horizon Storyline</strong> — the same
+            one-page sheet from the retreat, with four bands:
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>
-                <strong>Foreground Initiatives</strong> — what your team is doing in the
-                next ninety days. Each one has a leader, the plan behind it, and a list
-                of action steps with a person and a date against each. Every step carries
-                a red, amber or green light: not started or stuck, at risk, on track.
+                <strong>Beyond the Horizon</strong> (5–20 years) — the long-range dream,
+                and the one or two of Will&rsquo;s twelve vision templates that describe it.
               </li>
               <li>
-                <strong>Ministry Dashboard</strong> — your scoreboard. The rows are yours
-                to name: whatever your church actually watches, against last year and
-                where you are headed.
+                <strong>Background Vision</strong> (3 years) — four priorities. Open any
+                one and you get its notes: where we stand, where we&rsquo;re headed, and
+                how we&rsquo;ll get there.
               </li>
               <li>
-                <strong>Renewal Cycle</strong> — the review rhythm from the Horizon
-                Storyline, as real dates. Half a day at ninety days, a full day at six
-                months, half a day at nine, and a two-day retreat at the year, three
-                years running. This sits <em>on top of</em> your normal weekly and monthly
-                meetings, not instead of them.
+                <strong>Midground Milestone</strong> (1 year) — the one marker that says
+                this year counted, <em>and</em> the numbers behind it. Each measure runs
+                from a baseline to a target and you log where it is as the year goes on.
+              </li>
+              <li>
+                <strong>Foreground Initiatives</strong> (90 days) — up to four, each with
+                a leader, a plan, and action steps carrying a person, a date and a light.
               </li>
             </ul>
+            <strong>Click any box and it opens underneath.</strong> That is the whole
+            navigation — the sheet is the menu.
+            <br />
+            <br />
+            Below it, the <strong>Ministry Dashboard</strong> is your standing scoreboard
+            (the rows are yours to name), and the <strong>Renewal Cycle</strong> turns the
+            review rhythm into real dates — half a day at ninety days, a full day at six
+            months, half a day at nine, a two-day retreat at the year, three years
+            running. That sits <em>on top of</em> your normal weekly and monthly meetings,
+            not instead of them.
+            <br />
+            <br />
             There is no percentage complete anywhere in it, and that is deliberate — a
             review is a conversation about what is stuck and who is on it, and a number
             ends that conversation early.
+          </Faq>
+          <Faq q="What are the three kinds of initiative?">
+            They come straight from God Dreams, and the difference is who carries it and
+            how many steps to expect.
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>Cross-Functional Emphasis</strong> — 5 to 15 steps, owned by a
+                team, cuts across departments. Reviewed by a direct report or the
+                leadership team.
+              </li>
+              <li>
+                <strong>Ministry Area Subgoal</strong> — 3 to 8 steps, lives inside one
+                ministry area.
+              </li>
+              <li>
+                <strong>All Staff Driver</strong> — one step, one person, reviewed peer to
+                peer in staff meetings. The whole staff carries one of these.
+              </li>
+            </ul>
+            A church of 400–1,200 typically runs one cross-functional, one all-staff
+            driver and two ministry subgoals at a time.
           </Faq>
           <Faq q="Why do some things say &lsquo;Monthly Periodic&rsquo; instead of a date?">
             Because not every action step is a deadline. Some are a rhythm — record one
@@ -424,6 +461,23 @@ export default function HelpPage() {
               part of the process by design, and a total makes a deliberate choice look
               like unfinished work — so the portal counts what is done and never what is
               missing.
+            </Faq>
+            <Faq q="Scoring the Midground Milestone">
+              The milestone is half qualitative and half quantitative, which is how Will
+              teaches it — every example on his sheet has a number inside the sentence
+              (&ldquo;from 12 percent of the congregation to 25 percent&rdquo;).
+              <br />
+              <br />
+              So write the sentence in the Midground box, then add a{" "}
+              <strong>measure</strong> under it with the baseline and the target pulled
+              out of that sentence. <strong>Log this week&rsquo;s number</strong> records a
+              dated reading and moves the gauge; after two readings you get a trend line.
+              <br />
+              <br />
+              Progress is counted <em>from the baseline</em>, not from zero — 12 heading
+              for 25 shows 0%, not 48%. Logging a reading follows the same permission as
+              ticking a task, so a church staffer who knows the number can enter it
+              without being an editor.
             </Faq>
             <Faq q="Running Execution with a church">
               Execution is the one tab that outlives the engagement, and it stays hidden

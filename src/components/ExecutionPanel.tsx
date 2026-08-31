@@ -1,64 +1,49 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import RichText, { RichTextView } from "./RichText";
-import { richTextIsEmpty } from "@/lib/rich-text";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ProjectMember } from "@/lib/projects";
 import {
-  DASHBOARD_STARTER,
-  HORIZONS,
-  PLAN_FIELDS,
   RAG_DOT,
   RAG_LABEL,
-  RAG_RING,
   createInitiative,
-  createMetric,
-  createStep,
-  deleteHorizonBox,
-  deleteInitiative,
-  deleteMetric,
-  deleteStep,
   getExecutionData,
+  updateInitiative,
+  measureProgress,
   nextRenewalStop,
   renewalCycle,
-  saveHorizonBox,
-  updateInitiative,
-  updateMetric,
-  updateStep,
   type ExecutionData,
-  type HorizonBand,
-  type Initiative,
-  type InitiativeStep,
-  type RagStatus,
-  type ScoreboardGroup,
-  type ScoreboardMetric,
 } from "@/lib/execution";
+import HorizonBoard, { VisionFrameMark, type Selection } from "./execution/HorizonBoard";
+import BeyondDetail from "./execution/BeyondDetail";
+import BackgroundDetail from "./execution/BackgroundDetail";
+import MidgroundDetail from "./execution/MidgroundDetail";
+import InitiativeDetail from "./execution/InitiativeDetail";
+import MinistryDashboard from "./execution/MinistryDashboard";
+import RenewalCycle from "./execution/RenewalCycle";
+import { BlockHeading, Cell, isDateish, prettyDate, todayIso } from "./execution/ui";
 
 /**
- * Execution — the Horizon Storyline once the engagement is over.
+ * Execution — the Horizon Storyline, run.
  *
- * This is the one panel that is not about the six months. Andrew: "I would
- * love to have an ongoing section that is built out from the God Dreams
- * (horizon storyline) perspective that helps integrate meeting activity for a
- * church as they pursue their initiatives and goals ... even an ability to
- * have a customizable scoreboard of somekind would be amazing."
+ * Andrew, on what this is for: "I'm thinking of an organization visiting this
+ * on a weekly basis, emphasizing the important over the urgent, over the
+ * whirlwind, accessible for a 15-min standup meeting, keeping the cadence of
+ * accountability, all within the God Dreams / Horizon Storyline framework."
  *
- * Four blocks, in the order a team uses them:
+ * So the page is ordered the way that meeting runs:
  *
- *   This Quarter   — what is at risk and what is due, assembled from the rest.
- *   Foreground Initiatives — the Initiative Plan and its Action Step List.
- *   Ministry Dashboard     — the scoreboard, whose rows the church names.
- *   Renewal Cycle          — the twelve dates off Will's cadence handout.
+ *   This week      — what is red, what is overdue, when the next review is
+ *   Horizon Board  — the 1:4:1:4 sheet, and the navigator for everything below
+ *   (detail)       — whichever box is selected, in full
+ *   Ministry Dashboard — the monthly numbers
+ *   Renewal Cycle  — the rhythm, as dates
  *
- * Deliberately absent, per Andrew — "we want to stay away from too much 4dx
- * overlap other than keeping the foundational principles in play": no WIG, no
- * lead/lag split, no commitment counter, no percent-complete. Where 4DX would
- * put a number, Will's sheets put a traffic light and a name, so this does
- * too. The foundational principles survive in the shape — few initiatives, a
- * visible scoreboard, a person against every step, a fixed rhythm.
+ * The board doubling as the navigator is what removed the duplicated
+ * "Foreground Initiatives" heading Andrew flagged: there is now one place
+ * initiatives are listed, and one detail area under it.
  *
  * It loads its own data when opened rather than riding on `getProjectDetail`,
- * for the same reason Will's Books does: most visits to a project are not
- * this panel, and three more queries on every page load buys nothing.
+ * for the same reason the books panel does.
  */
 export default function ExecutionPanel({
   projectId,
@@ -66,17 +51,22 @@ export default function ExecutionPanel({
   canEdit,
   canManageSteps,
   churchName,
+  members,
+  onGoTo,
 }: {
   projectId: string;
   accessToken: string;
-  /** editor or admin: owns the plan and the scoreboard. */
+  /** editor or admin: owns the storyline, the plans and the scoreboard. */
   canEdit: boolean;
-  /** may_manage_tasks: owns the action step rows and their status. */
+  /** may_manage_tasks: owns action steps, their lights, and measure readings. */
   canManageSteps: boolean;
   churchName: string;
+  members: ProjectMember[];
+  onGoTo: (panel: string) => void;
 }) {
   const [data, setData] = useState<ExecutionData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Selection | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -90,56 +80,141 @@ export default function ExecutionPanel({
     void load();
   }, [load]);
 
-  if (error) {
-    return <p className="py-10 text-center text-sm text-gray-500">{error}</p>;
-  }
-  if (!data) {
-    return <p className="py-10 text-center text-sm text-gray-400">Loading…</p>;
-  }
+  /**
+   * What is open when you arrive.
+   *
+   * The first live initiative, because this panel exists for a weekly meeting
+   * and the foreground is what that meeting is about. Falling back up the
+   * bands means a church that has written its storyline but not yet chosen
+   * initiatives still lands on something written rather than on an empty
+   * detail area.
+   */
+  useEffect(() => {
+    if (!data || selected) return;
+    const live = data.initiatives.filter((i) => !i.is_complete);
+    if (live.length > 0) setSelected({ band: "foreground", id: live[0].id });
+    else if (data.horizon.some((h) => h.horizon === "midground")) setSelected({ band: "midground" });
+    else if (data.horizon.length > 0 || canEdit) setSelected({ band: "beyond" });
+  }, [data, selected, canEdit]);
 
-  const empty =
-    data.initiatives.length === 0 && data.metrics.length === 0;
+  // A selected initiative that has since been deleted would leave the detail
+  // area blank with no way back — fall to the first one that still exists.
+  useEffect(() => {
+    if (!data || selected?.band !== "foreground") return;
+    if (!data.initiatives.some((i) => i.id === selected.id)) setSelected(null);
+  }, [data, selected]);
+
+  if (error) return <p className="py-10 text-center text-sm text-gray-500">{error}</p>;
+  if (!data) return <p className="py-10 text-center text-sm text-gray-400">Loading…</p>;
+
+  const written =
+    data.horizon.length + data.initiatives.length + data.metrics.length + data.templates.length;
 
   return (
     <section className="pb-16">
       <header className="text-center">
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
-          Making it happen
+        <VisionFrameMark className="mx-auto h-9 w-9 text-runfree-navy" />
+        <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
+          The Horizon Storyline, run
         </p>
-        <h2 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
+        <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
           Execution
         </h2>
         <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-gray-500">
-          The Horizon Storyline, ninety days at a time. Foreground initiatives, the
-          numbers you watch, and the rhythm that keeps them both in front of the
-          team.
+          One page for the weekly fifteen minutes: what the church is becoming, what
+          that means this year, and what four things are moving in the next ninety
+          days.
         </p>
       </header>
 
-      {empty && !canEdit ? (
+      {written === 0 && !canEdit ? (
         <p className="mt-10 text-center text-sm text-gray-500">
-          Nothing here yet. Your team will fill this in once the Horizon Storyline
-          is set.
+          Nothing here yet. Your team will fill this in once the Horizon Storyline is
+          set.
         </p>
       ) : (
         <>
-          <ThisQuarter data={data} />
-          <HorizonStoryline
-            data={data}
-            projectId={projectId}
-            accessToken={accessToken}
-            canEdit={canEdit}
-            onChanged={load}
-          />
-          <Initiatives
-            data={data}
-            projectId={projectId}
-            accessToken={accessToken}
-            canEdit={canEdit}
-            canManageSteps={canManageSteps}
-            onChanged={load}
-          />
-          <Scoreboard
+          <ThisWeek data={data} />
+
+          <section className="mt-10">
+            <BlockHeading
+              eyebrow="One page, four horizons"
+              title="Horizon Storyline"
+              note="Click any box to open it. Beyond the horizon sets the direction, the three-year vision names the priorities, this year's milestone makes it measurable, and the ninety-day initiatives are what your team is actually doing about it."
+            />
+            <HorizonBoard
+              data={data}
+              selected={selected}
+              onSelect={setSelected}
+              canEdit={canEdit}
+            />
+            {canEdit && <AddInitiative data={data} projectId={projectId} accessToken={accessToken} onChanged={load} />}
+          </section>
+
+          {selected && (
+            <DetailShell
+              title={detailTitle(selected, data)}
+              eyebrow={detailEyebrow(selected)}
+              onClose={() => setSelected(null)}
+              onRename={
+                selected.band === "foreground" && canEdit
+                  ? async (v) => {
+                      await updateInitiative(accessToken, selected.id, { name: v });
+                      await load();
+                    }
+                  : undefined
+              }
+            >
+              {selected.band === "beyond" && (
+                <BeyondDetail
+                  data={data}
+                  projectId={projectId}
+                  accessToken={accessToken}
+                  canEdit={canEdit}
+                  onChanged={load}
+                />
+              )}
+              {selected.band === "background" && (
+                <BackgroundDetail
+                  data={data}
+                  position={selected.position}
+                  projectId={projectId}
+                  accessToken={accessToken}
+                  canEdit={canEdit}
+                  onChanged={load}
+                />
+              )}
+              {selected.band === "midground" && (
+                <MidgroundDetail
+                  data={data}
+                  projectId={projectId}
+                  accessToken={accessToken}
+                  canEdit={canEdit}
+                  canLog={canManageSteps}
+                  onChanged={load}
+                />
+              )}
+              {selected.band === "foreground" &&
+                (() => {
+                  const i = data.initiatives.find((x) => x.id === selected.id);
+                  if (!i) return null;
+                  return (
+                    <InitiativeDetail
+                      initiative={i}
+                      data={data}
+                      members={members}
+                      projectId={projectId}
+                      accessToken={accessToken}
+                      canEdit={canEdit}
+                      canManageSteps={canManageSteps}
+                      onChanged={load}
+                    />
+                  );
+                })()}
+            </DetailShell>
+          )}
+
+          <MinistryDashboard
             data={data}
             projectId={projectId}
             accessToken={accessToken}
@@ -147,7 +222,10 @@ export default function ExecutionPanel({
             churchName={churchName}
             onChanged={load}
           />
+
           <RenewalCycle data={data} canEdit={canEdit} />
+
+          <Framework onGoTo={onGoTo} />
         </>
       )}
     </section>
@@ -155,221 +233,215 @@ export default function ExecutionPanel({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Small shared pieces                                                        */
-/* -------------------------------------------------------------------------- */
 
-/** Local calendar date, not UTC — a US evening is tomorrow in UTC. */
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function prettyDate(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return iso;
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-/**
- * The sheet's three radio circles.
- *
- * Not a single button that cycles: the printed Action Step List shows all
- * three states at once with one filled, and a cycling control hides the two
- * you are not on — which matters in a room where someone is reading the screen
- * over a shoulder and needs to see that "green" was a choice among three.
- */
-function RagPicker({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: RagStatus;
-  onChange: (s: RagStatus) => void;
-  disabled?: boolean;
-}) {
-  const options: RagStatus[] = ["red", "amber", "green"];
-  return (
-    <span className="inline-flex items-center" role="radiogroup" aria-label="Today's status">
-      {options.map((s) => {
-        const on = value === s;
-        return (
-          /* The dot stays 16px, but the thing you tap is 28. A 16px target is
-             about a third of the minimum a thumb can hit reliably, and this
-             gets used standing up in a room, not sitting at a desk. */
-          <button
-            key={s}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            aria-label={RAG_LABEL[s]}
-            title={RAG_LABEL[s]}
-            disabled={disabled}
-            onClick={() => !disabled && onChange(s)}
-            className={`grid h-7 w-7 place-items-center rounded-full ${
-              disabled ? "cursor-default" : "cursor-pointer"
-            }`}
-          >
-            <span
-              className={`h-4 w-4 rounded-full ring-1 transition ${
-                on ? `${RAG_DOT[s]} ring-transparent` : "bg-gray-100 ring-gray-300"
-              }`}
-            />
-          </button>
-        );
-      })}
-    </span>
-  );
-}
-
-/**
- * A text field that saves when you leave it, and only if it changed.
- *
- * Save-on-blur rather than debounced-as-you-type: this gets edited live in a
- * review meeting, where a half-typed value flushing to the database and then
- * being corrected produces two writes and a visible flicker on everyone
- * else's screen.
- */
-function Cell({
-  value,
-  onSave,
-  placeholder,
-  disabled,
-  className = "",
-  align = "left",
-  display,
-}: {
-  value: string | null;
-  onSave: (next: string | null) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  className?: string;
-  align?: "left" | "right";
-  /**
-   * How to render the value when it is read-only. The editable field always
-   * shows the raw stored string — you edit what is there — but a viewer
-   * should see "Aug 18, 2026" rather than "2026-08-18".
-   */
-  display?: (v: string) => string;
-}) {
-  const [draft, setDraft] = useState(value ?? "");
-  // Re-seed when the row's value changes underneath (a reload, another editor).
-  useEffect(() => setDraft(value ?? ""), [value]);
-
-  if (disabled) {
-    return (
-      <span className={`block truncate text-sm text-gray-600 ${align === "right" ? "text-right" : ""} ${className}`}>
-        {value ? (display ? display(value) : value) : <span className="text-gray-300">—</span>}
-      </span>
-    );
+function detailEyebrow(s: Selection): string {
+  switch (s.band) {
+    case "beyond":
+      return "Beyond the horizon · 5–20 years";
+    case "background":
+      return "Background vision · 3 years";
+    case "midground":
+      return "Midground milestone · 1 year";
+    case "foreground":
+      return "Foreground initiative · 90 days";
   }
-
-  return (
-    <input
-      value={draft}
-      placeholder={placeholder}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        const next = draft.trim() === "" ? null : draft.trim();
-        if ((value ?? null) !== next) onSave(next);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        if (e.key === "Escape") {
-          setDraft(value ?? "");
-          (e.target as HTMLInputElement).blur();
-        }
-      }}
-      className={`w-full min-w-0 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm text-runfree-ink outline-none transition placeholder:text-gray-300 hover:border-gray-200 focus:border-runfree-magenta focus:bg-white ${
-        align === "right" ? "text-right" : ""
-      } ${className}`}
-    />
-  );
 }
 
-function BlockHeading({ eyebrow, title, note }: { eyebrow: string; title: string; note?: string }) {
-  return (
-    <header className="mb-4">
-      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
-        {eyebrow}
-      </p>
-      <h3 className="mt-1 font-display text-xl font-extrabold tracking-tight text-runfree-ink">
-        {title}
-      </h3>
-      {note && <p className="mt-1 text-sm leading-relaxed text-gray-500">{note}</p>}
-    </header>
-  );
+function detailTitle(s: Selection, data: ExecutionData): string {
+  if (s.band === "foreground") {
+    return data.initiatives.find((i) => i.id === s.id)?.name ?? "Initiative";
+  }
+  if (s.band === "background") return `Priority ${s.position + 1}`;
+  if (s.band === "midground") return "This year's milestone";
+  return "The long-range vision";
 }
-
-/* -------------------------------------------------------------------------- */
-/* This Quarter                                                               */
-/* -------------------------------------------------------------------------- */
 
 /**
- * The digest, assembled rather than written.
+ * The one detail area, under the board.
  *
- * Andrew: "this is actually where I think a weekly email could be beneficial
- * if a team wants to use and customize that moving forward. this would be
- * customized per project."
- *
- * The send is not built — that is blocked on `RESEND_API_KEY`, and shipping a
- * Send button that silently does nothing is worse than not shipping one. What
- * IS built is the thing the email would contain, on the page, with a copy
- * button: everything off track, everything due, and the next renewal date.
- * When Resend is configured this block is the payload; until then it is
- * something a leader can paste into their own Monday email.
+ * A single shell rather than four differently-shaped panels: whatever you
+ * click lands in the same place, at the same width, with the same way out.
  */
-function ThisQuarter({ data }: { data: ExecutionData }) {
+function DetailShell({
+  eyebrow,
+  title,
+  onClose,
+  onRename,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  onClose: () => void;
+  /** Supplied only where the title is a name someone owns — an initiative. */
+  onRename?: (v: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-200">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3.5 sm:px-6">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
+            {eyebrow}
+          </p>
+          {onRename ? (
+            <Cell
+              value={title}
+              onSave={(v) => v && onRename(v)}
+              className="!px-0 font-display !text-lg font-extrabold tracking-tight !text-runfree-ink"
+            />
+          ) : (
+            <h3 className="mt-0.5 font-display text-lg font-extrabold tracking-tight text-runfree-ink">
+              {title}
+            </h3>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-gray-400 transition hover:bg-gray-100 hover:text-runfree-ink"
+        >
+          Close
+        </button>
+      </div>
+      <div className="px-4 py-5 sm:px-6">{children}</div>
+    </section>
+  );
+}
+
+function AddInitiative({
+  data,
+  projectId,
+  accessToken,
+  onChanged,
+}: {
+  data: ExecutionData;
+  projectId: string;
+  accessToken: string;
+  onChanged: () => Promise<void>;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const live = data.initiatives.filter((i) => !i.is_complete).length;
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-3">
+      {adding ? (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!name.trim()) return;
+            await createInitiative(accessToken, projectId, name.trim(), data.initiatives.length);
+            setName("");
+            setAdding(false);
+            await onChanged();
+          }}
+          className="flex w-full flex-wrap items-center gap-2"
+        >
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Name this initiative"
+            className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-runfree-grad px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+          >
+            Add
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAdding(false);
+              setName("");
+            }}
+            className="px-2 py-2 text-xs text-gray-500 transition hover:text-runfree-ink"
+          >
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <>
+          <button
+            onClick={() => setAdding(true)}
+            className="rounded-lg px-3 py-2 text-xs font-semibold text-runfree-magentaDeep transition hover:bg-runfree-pink"
+          >
+            + Add an initiative
+          </button>
+          {live > 4 && (
+            <p className="text-[11px] text-gray-400">
+              The sheet gives four boxes. {live} are live — worth asking which are
+              really this quarter&rsquo;s.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The weekly standup, assembled.
+ *
+ * Andrew asked for a per-project weekly email; sending is blocked on
+ * `RESEND_API_KEY`, and a Send button that silently does nothing is worse
+ * than no button. What is built is the thing that email would contain, on the
+ * page, with a copy button — so it is already useful, and it is the payload
+ * the moment Resend is configured.
+ */
+function ThisWeek({ data }: { data: ExecutionData }) {
   const today = todayIso();
   const [copied, setCopied] = useState(false);
 
   const live = data.initiatives.filter((i) => !i.is_complete);
   const attention = live.filter((i) => i.status !== "green");
-  const stepsOf = (id: string) => data.steps.filter((s) => s.initiative_id === id);
+  const due = data.steps.filter(
+    (s) => s.status !== "green" && isDateish(s.by_when) && (s.by_when as string) <= today
+  );
 
-  // "Due" means a By that parses as a date and has arrived. The column also
-  // holds "Monthly Periodic", which is a cadence rather than a deadline and
-  // must not be reported as overdue every single week.
-  const due = data.steps.filter((s) => {
-    if (s.status === "green") return false;
-    return /^\d{4}-\d{2}-\d{2}$/.test(s.by_when ?? "") && (s.by_when as string) <= today;
-  });
-
-  const anchor = live.map((i) => i.start_date).filter(Boolean).sort()[0] ?? null;
+  const anchor = useMemo(
+    () => live.map((i) => i.start_date).filter((d): d is string => !!d).sort()[0] ?? null,
+    [live]
+  );
   const next = anchor ? nextRenewalStop(renewalCycle(anchor), today) : null;
 
-  if (live.length === 0) return null;
+  const behind = data.measures.filter((m) => {
+    const p = measureProgress(m, null);
+    return p != null && p < 0.5;
+  }).length;
 
-  const lines: string[] = [];
-  lines.push(`Where we are — ${prettyDate(today)}`, "");
+  if (live.length === 0 && data.measures.length === 0) return null;
+
+  const lines: string[] = [`Where we are — ${prettyDate(today)}`, ""];
   for (const i of live) {
     lines.push(`${i.name} — ${RAG_LABEL[i.status]}${i.leader ? ` (${i.leader})` : ""}`);
-    for (const s of stepsOf(i.id).filter((s) => s.status !== "green")) {
+    for (const s of data.steps.filter((s) => s.initiative_id === i.id && s.status !== "green")) {
       lines.push(
         `   • ${s.description}${s.accountable ? ` — ${s.accountable}` : ""}${
-          s.by_when ? ` — by ${/^\d{4}-\d{2}-\d{2}$/.test(s.by_when) ? prettyDate(s.by_when) : s.by_when}` : ""
+          s.by_when ? ` — by ${isDateish(s.by_when) ? prettyDate(s.by_when) : s.by_when}` : ""
         }`
       );
     }
     lines.push("");
   }
-  if (next) lines.push(`Next review: ${prettyDate(next.on)} — ${next.length}, ${next.marker} in.`);
+  for (const m of data.measures) {
+    lines.push(`${m.label}: ${m.current ?? "—"}${m.unit ?? ""} of ${m.target ?? "—"}${m.unit ?? ""}`);
+  }
+  if (next) lines.push("", `Next review: ${prettyDate(next.on)} — ${next.length}, ${next.marker} in.`);
   const digest = lines.join("\n").trim();
 
   return (
-    <section className="mt-10">
+    <section className="mt-8">
       <div className="rounded-2xl bg-runfree-navyDeep px-5 py-5 text-white sm:px-6 sm:py-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/50">
-              Where we are
+              This week
             </p>
             <h3 className="mt-1 font-display text-xl font-extrabold tracking-tight">
-              {live.length} initiative{live.length === 1 ? "" : "s"} in the foreground
+              {attention.length === 0 && due.length === 0
+                ? "Everything is on track"
+                : `${attention.length + due.length} thing${attention.length + due.length === 1 ? "" : "s"} to talk about`}
             </h3>
           </div>
           <button
@@ -390,14 +462,18 @@ function ThisQuarter({ data }: { data: ExecutionData }) {
 
         <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat n={live.length} label="In flight" />
-          <Stat n={attention.length} label="Need attention" tone={attention.length > 0 ? "amber" : undefined} />
-          <Stat n={due.length} label="Past due" tone={due.length > 0 ? "rose" : undefined} />
-          <div className="rounded-xl bg-white/5 px-3 py-3">
-            <dd className="font-display text-sm font-extrabold leading-tight">
-              {next ? prettyDate(next.on) : "—"}
-            </dd>
-            <dt className="mt-1 text-[11px] uppercase tracking-wide text-white/50">Next review</dt>
-          </div>
+          <Stat n={attention.length} label="Need attention" tone={attention.length ? "amber" : undefined} />
+          <Stat n={due.length} label="Past due" tone={due.length ? "rose" : undefined} />
+          {data.measures.length > 0 ? (
+            <Stat n={behind} label="Measures behind" tone={behind ? "amber" : undefined} />
+          ) : (
+            <div className="rounded-xl bg-white/5 px-3 py-3">
+              <dd className="font-display text-sm font-extrabold leading-tight">
+                {next ? prettyDate(next.on) : "—"}
+              </dd>
+              <dt className="mt-1 text-[11px] uppercase tracking-wide text-white/50">Next review</dt>
+            </div>
+          )}
         </dl>
 
         {(attention.length > 0 || due.length > 0) && (
@@ -406,7 +482,8 @@ function ThisQuarter({ data }: { data: ExecutionData }) {
               <li key={i.id} className="flex items-start gap-2 text-sm text-white/80">
                 <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${RAG_DOT[i.status]}`} />
                 <span>
-                  <span className="font-semibold text-white">{i.name}</span> — {RAG_LABEL[i.status].toLowerCase()}
+                  <span className="font-semibold text-white">{i.name}</span> —{" "}
+                  {RAG_LABEL[i.status].toLowerCase()}
                   {i.leader ? ` · ${i.leader}` : ""}
                 </span>
               </li>
@@ -421,6 +498,12 @@ function ThisQuarter({ data }: { data: ExecutionData }) {
               </li>
             ))}
           </ul>
+        )}
+
+        {next && data.measures.length > 0 && (
+          <p className="mt-4 border-t border-white/10 pt-3 text-xs text-white/50">
+            Next review {prettyDate(next.on)} — {next.length.toLowerCase()}, {next.marker} in.
+          </p>
         )}
       </div>
     </section>
@@ -442,1149 +525,45 @@ function Stat({ n, label, tone }: { n: number; label: string; tone?: "amber" | "
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* The Horizon Storyline                                                       */
-/* -------------------------------------------------------------------------- */
-
 /**
- * The Horizon Storyline Template, on screen, in the order it prints.
+ * Where the framework itself lives.
  *
- * Four bands: Beyond the Horizon (5–20 years, one box), Background Vision
- * (3 years, four boxes), Midground Milestone (1 year, one box), and Foreground
- * Action Initiatives (90 days, four boxes).
- *
- * The Foreground band is NOT editable here — it renders the live `initiatives`
- * rows. Two places to rename an initiative would mean one of them is wrong by
- * the afternoon, and the detail lives directly below this anyway.
- *
- * The box counts come off the sheet and are enforced: four Background boxes,
- * four Foreground. That is the discipline the method exists for — a church
- * that can name nine three-year priorities has not finished choosing yet — so
- * the "add" control disappears at four rather than growing the grid.
+ * Andrew: "give a few quicklinks to either the book, visual summary, key
+ * chapters, etc." All three of those are files on the Books panel, which is
+ * one in-portal click away and instant — where a direct Drive link would
+ * mean a ~7s live read on the panel a church opens weekly. So: one card, the
+ * real cover, and an honest list of what is behind the link.
  */
-function HorizonStoryline({
-  data,
-  projectId,
-  accessToken,
-  canEdit,
-  onChanged,
-}: {
-  data: ExecutionData;
-  projectId: string;
-  accessToken: string;
-  canEdit: boolean;
-  onChanged: () => Promise<void>;
-}) {
-  const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const byKey = new Map(data.horizon.map((h) => [`${h.horizon}:${h.position}`, h]));
-  const written = data.horizon.filter((h) => !richTextIsEmpty(h.body)).length;
-  const live = data.initiatives.filter((i) => !i.is_complete);
-
-  // Nothing written and nobody who could write it. Same rule as the Vision
-  // Frame sheet: an empty template is informative to the person who has to
-  // fill it in and noise to everyone else.
-  if (written === 0 && live.length === 0 && !canEdit) return null;
-
-  const save = async (horizon: HorizonBand, position: number, body: string | null) => {
-    setBusy(true);
-    try {
-      await saveHorizonBox(accessToken, projectId, horizon, position, body);
-      await onChanged();
-      setEditing(null);
-    } finally {
-      setBusy(false);
-    }
-  };
-
+function Framework({ onGoTo }: { onGoTo: (panel: string) => void }) {
   return (
     <section className="mt-12">
-      <BlockHeading
-        eyebrow="The whole picture"
-        title="Horizon Storyline"
-        note="Four horizons on one page — the long-range dream, the three-year vision, this year's milestone, and what your team is doing about it in the next ninety days."
-      />
-
-      <div className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
-        {HORIZONS.map((band) => {
-          const boxes = Array.from({ length: band.boxes }, (_, n) => n);
-          const used = boxes.filter((n) => byKey.has(`${band.key}:${n}`));
-          // Show every written box, plus one empty one to write into.
-          const lastUsed = used.length ? Math.max(...used) : -1;
-          const visible =
-            band.boxes === 1
-              ? [0]
-              : boxes.filter((n) => n <= lastUsed || (canEdit && n === lastUsed + 1));
-
-          return (
-            <div key={band.key}>
-              <div className="flex flex-wrap items-baseline gap-x-3 bg-runfree-navyDeep px-4 py-2 sm:px-5">
-                <p className="font-display text-sm font-extrabold tracking-tight text-white">
-                  {band.label}
-                </p>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-white/50">
-                  {band.span}
-                </p>
-              </div>
-
-              <div
-                className={`grid gap-px bg-gray-200 ${
-                  band.boxes === 1 ? "" : "sm:grid-cols-2 lg:grid-cols-4"
-                }`}
-              >
-                {/* Pad to the four boxes the sheet prints.
-                    Without this the grid's own background shows through where
-                    a cell is missing, and an unfilled box reads as a grey
-                    rectangle that looks like a rendering fault rather than a
-                    box nobody has written in yet. Padding to 4 also lands on
-                    a whole row at every breakpoint — 1, 2 and 4 columns. */}
-                {visible.map((n) => {
-                  const key = `${band.key}:${n}`;
-                  const row = byKey.get(key);
-                  const blank = richTextIsEmpty(row?.body);
-                  const isEditing = editing === key;
-
-                  return (
-                    <div key={key} className="bg-white px-4 py-3.5 sm:px-5">
-                      {isEditing ? (
-                        <div className="space-y-2">
-                          <RichText
-                            value={draft}
-                            onChange={setDraft}
-                            minHeight="6rem"
-                            placeholder={band.prompt}
-                          />
-                          <div className="flex items-center gap-2">
-                            <button
-                              disabled={busy}
-                              onClick={() =>
-                                void save(band.key, n, richTextIsEmpty(draft) ? null : draft)
-                              }
-                              className="rounded-lg bg-runfree-grad px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-                            >
-                              {busy ? "Saving…" : "Save"}
-                            </button>
-                            <button
-                              onClick={() => setEditing(null)}
-                              className="px-2 py-2 text-xs text-gray-500 transition hover:text-runfree-ink"
-                            >
-                              Cancel
-                            </button>
-                            {row && !blank && (
-                              <button
-                                onClick={async () => {
-                                  await deleteHorizonBox(accessToken, row.id);
-                                  await onChanged();
-                                  setEditing(null);
-                                }}
-                                className="ml-auto text-xs font-semibold text-gray-400 transition hover:text-rose-600"
-                              >
-                                Clear
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ) : blank ? (
-                        <p className="text-xs italic leading-relaxed text-gray-400">
-                          {band.prompt}
-                        </p>
-                      ) : (
-                        <RichTextView html={row!.body!} className="text-runfree-ink" />
-                      )}
-
-                      {canEdit && !isEditing && (
-                        <button
-                          onClick={() => {
-                            setDraft(row?.body ?? "");
-                            setEditing(key);
-                          }}
-                          className="mt-1.5 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
-                        >
-                          {blank ? "Write it" : "Edit"}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-                {Array.from({ length: Math.max(0, band.boxes - visible.length) }, (_, k) => (
-                  <div key={`pad-${k}`} aria-hidden className="bg-white px-4 py-3.5 sm:px-5" />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-
-        {/* The fourth band, fed by the initiatives below rather than typed. */}
-        <div className="flex flex-wrap items-baseline gap-x-3 bg-runfree-navyDeep px-4 py-2 sm:px-5">
-          <p className="font-display text-sm font-extrabold tracking-tight text-white">
-            Foreground Action Initiatives
-          </p>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-white/50">
-            90 days
-          </p>
-        </div>
-        {live.length === 0 ? (
-          <p className="bg-white px-4 py-3.5 text-xs italic text-gray-400 sm:px-5">
-            {canEdit
-              ? "Add initiatives below and they appear here."
-              : "Nothing in the foreground right now."}
-          </p>
-        ) : (
-          <div className="grid gap-px bg-gray-200 sm:grid-cols-2 lg:grid-cols-4">
-            {live.map((i) => (
-              <div key={i.id} className="bg-white px-4 py-3.5 sm:px-5">
-                <p className="flex items-start gap-2 text-sm font-semibold leading-snug text-runfree-ink">
-                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${RAG_DOT[i.status]}`} />
-                  <span className="min-w-0">{i.name}</span>
-                </p>
-                {i.leader && <p className="mt-1 pl-4 text-xs text-gray-500">{i.leader}</p>}
-              </div>
-            ))}
-            {Array.from({ length: Math.max(0, 4 - live.length) }, (_, k) => (
-              <div key={`pad-${k}`} aria-hidden className="bg-white px-4 py-3.5 sm:px-5" />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {live.length > 4 && canEdit && (
-        <p className="mt-2 text-[11px] text-gray-400">
-          Will&rsquo;s template gives four foreground boxes. {live.length} are live — worth
-          asking which of them is really this quarter&rsquo;s work.
-        </p>
-      )}
-    </section>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Foreground Initiatives                                                     */
-/* -------------------------------------------------------------------------- */
-
-function Initiatives({
-  data,
-  projectId,
-  accessToken,
-  canEdit,
-  canManageSteps,
-  onChanged,
-}: {
-  data: ExecutionData;
-  projectId: string;
-  accessToken: string;
-  canEdit: boolean;
-  canManageSteps: boolean;
-  onChanged: () => Promise<void>;
-}) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [showDone, setShowDone] = useState(false);
-
-  const live = data.initiatives.filter((i) => !i.is_complete);
-  const done = data.initiatives.filter((i) => i.is_complete);
-
-  return (
-    <section className="mt-12">
-      <BlockHeading
-        eyebrow="The next 90 days"
-        title="Foreground Initiatives"
-        note="Each one is a plan with an owner, a set of action steps, and a light that says where it stands today."
-      />
-
-      {live.length === 0 && !adding && (
-        <p className="rounded-2xl bg-gray-50 px-5 py-8 text-center text-sm text-gray-500">
-          {canEdit
-            ? "No initiatives yet. Add the first one your team committed to."
-            : "No initiatives in the foreground right now."}
-        </p>
-      )}
-
-      <div className="space-y-4">
-        {live.map((i) => (
-          <InitiativeCard
-            key={i.id}
-            initiative={i}
-            steps={data.steps.filter((s) => s.initiative_id === i.id)}
-            projectId={projectId}
-            accessToken={accessToken}
-            canEdit={canEdit}
-            canManageSteps={canManageSteps}
-            onChanged={onChanged}
-          />
-        ))}
-      </div>
-
-      {canEdit && (
-        <div className="mt-4">
-          {adding ? (
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!name.trim()) return;
-                await createInitiative(accessToken, projectId, name.trim(), data.initiatives.length);
-                setName("");
-                setAdding(false);
-                await onChanged();
-              }}
-              className="flex flex-wrap items-center gap-2"
-            >
-              <input
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Name this initiative"
-                className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-              />
-              <button
-                type="submit"
-                className="rounded-lg bg-runfree-grad px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-90"
-              >
-                Add
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAdding(false);
-                  setName("");
-                }}
-                className="px-2 py-2 text-xs text-gray-500 transition hover:text-runfree-ink"
-              >
-                Cancel
-              </button>
-            </form>
-          ) : (
-            <button
-              onClick={() => setAdding(true)}
-              className="rounded-lg px-3 py-2 text-xs font-semibold text-runfree-magentaDeep transition hover:bg-runfree-pink"
-            >
-              + Add an initiative
-            </button>
-          )}
-        </div>
-      )}
-
-      {done.length > 0 && (
-        <div className="mt-8">
-          <button
-            onClick={() => setShowDone((v) => !v)}
-            className="text-xs font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
-          >
-            {showDone ? "Hide" : "Show"} {done.length} finished initiative
-            {done.length === 1 ? "" : "s"}
-          </button>
-          {showDone && (
-            <div className="mt-4 space-y-4">
-              {done.map((i) => (
-                <InitiativeCard
-                  key={i.id}
-                  initiative={i}
-                  steps={data.steps.filter((s) => s.initiative_id === i.id)}
-                  projectId={projectId}
-                  accessToken={accessToken}
-                  canEdit={canEdit}
-                  canManageSteps={canManageSteps}
-                  onChanged={onChanged}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function InitiativeCard({
-  initiative: i,
-  steps,
-  projectId,
-  accessToken,
-  canEdit,
-  canManageSteps,
-  onChanged,
-}: {
-  initiative: Initiative;
-  steps: InitiativeStep[];
-  projectId: string;
-  accessToken: string;
-  canEdit: boolean;
-  canManageSteps: boolean;
-  onChanged: () => Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<(typeof PLAN_FIELDS)[number]["key"] | null>(null);
-  const [draft, setDraft] = useState("");
-  const [newStep, setNewStep] = useState("");
-
-  const patch = async (p: Parameters<typeof updateInitiative>[2]) => {
-    await updateInitiative(accessToken, i.id, p);
-    await onChanged();
-  };
-
-  const openSteps = steps.filter((s) => s.status !== "green").length;
-
-  return (
-    <article
-      className={`overflow-hidden rounded-2xl ring-1 transition ${
-        i.is_complete ? "bg-gray-50 ring-gray-200" : "bg-white ring-gray-200"
-      }`}
-    >
-      {/* The head row. Everything a leader needs without opening anything. */}
-      <div className="flex flex-wrap items-start gap-x-4 gap-y-3 px-4 py-4 sm:px-5">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            {canEdit ? (
-              <Cell
-                value={i.name}
-                onSave={(v) => v && patch({ name: v })}
-                className="!px-0 font-display !text-base font-extrabold tracking-tight !text-runfree-ink"
-              />
-            ) : (
-              <h4 className="font-display text-base font-extrabold tracking-tight text-runfree-ink">
-                {i.name}
-              </h4>
-            )}
-          </div>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-            {/* The status word, not just the colour. On a phone the three
-                dots are the only indicator otherwise, and a filled circle
-                with no label is a colour, not a status. */}
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${RAG_RING[i.status]}`}
-            >
-              {RAG_LABEL[i.status]}
-            </span>
-            {i.leader && <span>Led by {i.leader}</span>}
-            {i.team && <span>{i.team}</span>}
-            {i.next_review_on && <span>Next review {prettyDate(i.next_review_on)}</span>}
-            <span>
-              {openSteps} of {steps.length} step{steps.length === 1 ? "" : "s"} open
-            </span>
-          </p>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-3">
-          <RagPicker
-            value={i.status}
-            onChange={(s) => void patch({ status: s })}
-            disabled={!canEdit}
-          />
-          <button
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-runfree-ink"
-            title={open ? "Collapse" : "Open the plan"}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {open && (
-        <div className="border-t border-gray-200 bg-gray-50/60 px-4 py-5 sm:px-5">
-          {/* Header fields, as they sit on the Action Step List sheet. */}
-          <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Leader">
-              <Cell value={i.leader} onSave={(v) => void patch({ leader: v })} disabled={!canEdit} placeholder="Who owns this" />
-            </Field>
-            <Field label="Team">
-              <Cell value={i.team} onSave={(v) => void patch({ team: v })} disabled={!canEdit} placeholder="Who is on it" />
-            </Field>
-            <Field label="Start date">
-              <DateCell value={i.start_date} onSave={(v) => void patch({ start_date: v })} disabled={!canEdit} />
-            </Field>
-            <Field label="Next review">
-              <DateCell value={i.next_review_on} onSave={(v) => void patch({ next_review_on: v })} disabled={!canEdit} />
-            </Field>
-          </div>
-
-          {/* The six blocks of the plan template. */}
-          <div className="mt-6 space-y-4">
-            {PLAN_FIELDS.map((f) => {
-              const body = i[f.key];
-              const isEditing = editingPlan === f.key;
-              const blank = richTextIsEmpty(body);
-              if (blank && !canEdit) return null;
-              return (
-                <div key={f.key} className="rounded-xl bg-white px-4 py-3.5 ring-1 ring-gray-200">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-                    {f.label}
-                  </p>
-                  {isEditing ? (
-                    <div className="mt-2 space-y-2">
-                      <RichText value={draft} onChange={setDraft} minHeight="6rem" placeholder={f.hint} />
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={async () => {
-                            await patch({ [f.key]: richTextIsEmpty(draft) ? null : draft });
-                            setEditingPlan(null);
-                          }}
-                          className="rounded-lg bg-runfree-grad px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-90"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setEditingPlan(null)}
-                          className="px-2 py-2 text-xs text-gray-500 transition hover:text-runfree-ink"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : blank ? (
-                    <p className="mt-1 text-xs italic text-gray-400">{f.hint}</p>
-                  ) : (
-                    <div className="mt-1.5">
-                      <RichTextView html={body!} className="text-runfree-ink" />
-                    </div>
-                  )}
-                  {canEdit && !isEditing && (
-                    <button
-                      onClick={() => {
-                        setDraft(body ?? "");
-                        setEditingPlan(f.key);
-                      }}
-                      className="mt-1.5 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
-                    >
-                      {blank ? "Write it" : "Edit"}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* The Action Step List. */}
-          <div className="mt-7">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-              Action Steps
-            </p>
-
-            {steps.length === 0 ? (
-              <p className="mt-2 text-xs italic text-gray-400">
-                No steps yet. These are the specific moves, each with a person and a date.
-              </p>
-            ) : (
-              <ul className="mt-2.5 space-y-1.5">
-                {steps.map((s, n) => (
-                  <StepRow
-                    key={s.id}
-                    step={s}
-                    n={n + 1}
-                    accessToken={accessToken}
-                    canManage={canManageSteps}
-                    onChanged={onChanged}
-                  />
-                ))}
-              </ul>
-            )}
-
-            {canManageSteps && (
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!newStep.trim()) return;
-                  await createStep(accessToken, projectId, i.id, newStep.trim(), steps.length);
-                  setNewStep("");
-                  await onChanged();
-                }}
-                className="mt-3 flex flex-wrap items-center gap-2"
-              >
-                <input
-                  value={newStep}
-                  onChange={(e) => setNewStep(e.target.value)}
-                  placeholder="Add an action step"
-                  className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink"
-                >
-                  Add
-                </button>
-              </form>
-            )}
-          </div>
-
-          {canEdit && (
-            <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-gray-200 pt-4">
-              <button
-                onClick={() => void patch({ is_complete: !i.is_complete })}
-                className="text-xs font-semibold text-gray-500 transition hover:text-runfree-ink"
-              >
-                {i.is_complete ? "Reopen this initiative" : "Mark this initiative finished"}
-              </button>
-              <button
-                onClick={async () => {
-                  if (!confirm(`Delete “${i.name}” and its action steps? This cannot be undone.`)) return;
-                  await deleteInitiative(accessToken, i.id);
-                  await onChanged();
-                }}
-                className="text-xs font-semibold text-gray-400 transition hover:text-rose-600"
-              >
-                Delete
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </article>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block min-w-0">
-      <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-        {label}
-      </span>
-      <span className="mt-0.5 block">{children}</span>
-    </label>
-  );
-}
-
-function DateCell({
-  value,
-  onSave,
-  disabled,
-}: {
-  value: string | null;
-  onSave: (v: string | null) => void;
-  disabled?: boolean;
-}) {
-  if (disabled) {
-    return (
-      <span className="block px-1.5 py-1 text-sm text-gray-600">
-        {value ? prettyDate(value) : <span className="text-gray-300">—</span>}
-      </span>
-    );
-  }
-  return (
-    <input
-      type="date"
-      value={value ?? ""}
-      onChange={(e) => onSave(e.target.value || null)}
-      className="w-full min-w-0 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm text-runfree-ink outline-none transition hover:border-gray-200 focus:border-runfree-magenta focus:bg-white"
-    />
-  );
-}
-
-/**
- * One row of the Action Step List.
- *
- * A table on desktop and a stacked card on a phone. Not a `<table>` with
- * horizontal scroll: five columns at 390px would put "Accountable" — the
- * column that makes the row mean anything — off the right edge, and the
- * mobile audit exists precisely to stop that shipping.
- */
-function StepRow({
-  step: s,
-  n,
-  accessToken,
-  canManage,
-  onChanged,
-}: {
-  step: InitiativeStep;
-  n: number;
-  accessToken: string;
-  canManage: boolean;
-  onChanged: () => Promise<void>;
-}) {
-  const patch = async (p: Parameters<typeof updateStep>[2]) => {
-    await updateStep(accessToken, s.id, p);
-    await onChanged();
-  };
-
-  return (
-    <li className="rounded-xl bg-white px-3 py-2.5 ring-1 ring-gray-200">
-      <div className="flex items-start gap-3">
-        <span className="mt-1 w-4 shrink-0 text-right text-xs tabular-nums text-gray-300">{n}</span>
-        <div className="min-w-0 flex-1">
-          <Cell
-            value={s.description}
-            onSave={(v) => v && void patch({ description: v })}
-            disabled={!canManage}
-            className="!px-0 font-medium !text-runfree-ink"
-          />
-          <div className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-3">
-            <MiniField label="By">
-              <Cell
-                value={s.by_when}
-                onSave={(v) => void patch({ by_when: v })}
-                disabled={!canManage}
-                placeholder="Date or cadence"
-                className="!text-xs"
-                // A real date reads as a date; "Monthly Periodic" passes
-                // through untouched, which is why this column is text.
-                display={(v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? prettyDate(v) : v)}
-              />
-            </MiniField>
-            <MiniField label="Accountable">
-              <Cell
-                value={s.accountable}
-                onSave={(v) => void patch({ accountable: v })}
-                disabled={!canManage}
-                placeholder="Who"
-                className="!text-xs"
-              />
-            </MiniField>
-            <MiniField label="Cost">
-              <Cell
-                value={s.cost}
-                onSave={(v) => void patch({ cost: v })}
-                disabled={!canManage}
-                placeholder="$"
-                className="!text-xs"
-              />
-            </MiniField>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
-          <RagPicker value={s.status} onChange={(v) => void patch({ status: v })} disabled={!canManage} />
-          {canManage && (
-            <button
-              onClick={async () => {
-                await deleteStep(accessToken, s.id);
-                await onChanged();
-              }}
-              className="text-[10px] font-semibold text-gray-300 transition hover:text-rose-600"
-            >
-              Remove
-            </button>
-          )}
-        </div>
-      </div>
-    </li>
-  );
-}
-
-function MiniField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <span className="flex min-w-0 items-baseline gap-1.5">
-      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-        {label}
-      </span>
-      <span className="min-w-0 flex-1">{children}</span>
-    </span>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Ministry Dashboard                                                          */
-/* -------------------------------------------------------------------------- */
-
-const GROUP_META: Record<ScoreboardGroup, { title: string; note: string }> = {
-  strategy_input: {
-    title: "Strategy (Input)",
-    note: "What the church is doing — the activity behind the numbers.",
-  },
-  measure_output: {
-    title: "Measures (Output)",
-    note: "What the Vision Frame said you would watch. The result, not the effort.",
-  },
-};
-
-function Scoreboard({
-  data,
-  projectId,
-  accessToken,
-  canEdit,
-  churchName,
-  onChanged,
-}: {
-  data: ExecutionData;
-  projectId: string;
-  accessToken: string;
-  canEdit: boolean;
-  churchName: string;
-  onChanged: () => Promise<void>;
-}) {
-  const groups: ScoreboardGroup[] = ["strategy_input", "measure_output"];
-  const [seeding, setSeeding] = useState(false);
-
-  if (data.metrics.length === 0 && !canEdit) return null;
-
-  return (
-    <section className="mt-12">
-      <BlockHeading
-        eyebrow="The scoreboard"
-        title="Ministry Dashboard"
-        note={
-          canEdit
-            ? `The rows are ${churchName}'s own — add what you actually watch, and delete what you don't.`
-            : `What ${churchName} watches, against last year and where you're headed.`
-        }
-      />
-
-      {data.metrics.length === 0 ? (
-        <div className="rounded-2xl bg-gray-50 px-5 py-8 text-center">
-          <p className="text-sm text-gray-500">
-            Nothing on the scoreboard yet.
-          </p>
-          <button
-            disabled={seeding}
-            onClick={async () => {
-              setSeeding(true);
-              try {
-                // Sequential, not Promise.all: `position` is what orders the
-                // sheet, and nine concurrent inserts land in whatever order
-                // the connection pool decides.
-                for (let n = 0; n < DASHBOARD_STARTER.length; n++) {
-                  const row = DASHBOARD_STARTER[n];
-                  await createMetric(accessToken, projectId, row.grouping, row.label, n);
-                }
-                await onChanged();
-              } finally {
-                setSeeding(false);
-              }
-            }}
-            className="mt-3 rounded-lg bg-runfree-grad px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-          >
-            {seeding ? "Adding…" : "Start from Will's dashboard"}
-          </button>
-          <p className="mt-2 text-[11px] text-gray-400">
-            Adds the nine rows off the printed sheet. Rename or remove any of them.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {groups.map((g) => {
-            const rows = data.metrics.filter((m) => m.grouping === g);
-            if (rows.length === 0 && !canEdit) return null;
-            return (
-              <MetricGroup
-                key={g}
-                grouping={g}
-                rows={rows}
-                projectId={projectId}
-                accessToken={accessToken}
-                canEdit={canEdit}
-                nextPosition={data.metrics.length}
-                onChanged={onChanged}
-              />
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function MetricGroup({
-  grouping,
-  rows,
-  projectId,
-  accessToken,
-  canEdit,
-  nextPosition,
-  onChanged,
-}: {
-  grouping: ScoreboardGroup;
-  rows: ScoreboardMetric[];
-  projectId: string;
-  accessToken: string;
-  canEdit: boolean;
-  nextPosition: number;
-  onChanged: () => Promise<void>;
-}) {
-  const [label, setLabel] = useState("");
-  const meta = GROUP_META[grouping];
-
-  return (
-    <div className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
-      <div className="bg-runfree-indigo/60 px-4 py-3 sm:px-5">
-        <p className="font-display text-sm font-extrabold tracking-tight text-runfree-ink">
-          {meta.title}
-        </p>
-        <p className="mt-0.5 text-xs text-gray-500">{meta.note}</p>
-      </div>
-
-      {/* Column headings, desktop only — on a phone each cell carries its own
-          label instead, because a four-column header over 390px leaves each
-          heading about nine characters wide. */}
-      <div className="hidden border-b border-gray-200 bg-white px-4 py-2 sm:grid sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_6.5rem] sm:gap-x-2 sm:px-5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400" />
-        <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">Prior yr.</span>
-        <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">Now</span>
-        <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">Next yr.</span>
-        <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">Status</span>
-      </div>
-
-      <ul className="divide-y divide-gray-100 bg-white">
-        {rows.map((m) => (
-          <MetricRow
-            key={m.id}
-            metric={m}
-            accessToken={accessToken}
-            canEdit={canEdit}
-            onChanged={onChanged}
-          />
-        ))}
-      </ul>
-
-      {canEdit && (
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!label.trim()) return;
-            await createMetric(accessToken, projectId, grouping, label.trim(), nextPosition);
-            setLabel("");
-            await onChanged();
-          }}
-          className="flex flex-wrap items-center gap-2 border-t border-gray-200 bg-gray-50 px-4 py-2.5 sm:px-5"
-        >
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder={grouping === "strategy_input" ? "Add a ministry — Groups, Serving, Baptisms…" : "Add a measure"}
-            className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-          />
-          <button
-            type="submit"
-            className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink"
-          >
-            Add
-          </button>
-        </form>
-      )}
-    </div>
-  );
-}
-
-const TREND_MARK: Record<"up" | "flat" | "down", string> = { up: "↑", flat: "→", down: "↓" };
-
-function MetricRow({
-  metric: m,
-  accessToken,
-  canEdit,
-  onChanged,
-}: {
-  metric: ScoreboardMetric;
-  accessToken: string;
-  canEdit: boolean;
-  onChanged: () => Promise<void>;
-}) {
-  const patch = async (p: Parameters<typeof updateMetric>[2]) => {
-    await updateMetric(accessToken, m.id, p);
-    await onChanged();
-  };
-
-  const cycleTrend = () => {
-    const order: (ScoreboardMetric["trend"])[] = [null, "up", "flat", "down"];
-    void patch({ trend: order[(order.indexOf(m.trend) + 1) % order.length] });
-  };
-
-  return (
-    /* Three columns on a phone, five on a desktop.
-     *
-     * This was one five-column grid at every width, and at 390px it put
-     * "1,180" through a 55px column as "1,18", hid the Now value entirely,
-     * and printed "NEX" underneath the trend arrow. The label and the
-     * controls each take the full width on mobile and the three numbers get
-     * a row of their own, which is the only arrangement where all three are
-     * legible at that size. */
-    <li className="grid grid-cols-3 items-center gap-x-2 gap-y-2 px-4 py-3 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_6.5rem] sm:gap-y-0 sm:px-5 sm:py-2">
-      <div className="col-span-3 min-w-0 sm:col-span-1">
-        <Cell
-          value={m.label}
-          onSave={(v) => v && void patch({ label: v })}
-          disabled={!canEdit}
-          className="!px-0 font-semibold !text-runfree-ink"
+      <button
+        onClick={() => onGoTo("books")}
+        className="group flex w-full items-center gap-4 rounded-2xl bg-white px-4 py-4 text-left ring-1 ring-gray-200 transition hover:ring-runfree-magenta/40 sm:px-5"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/god-dreams/book-cover.jpg"
+          alt=""
+          loading="lazy"
+          className="h-20 w-auto shrink-0 rounded-lg shadow-sm ring-1 ring-gray-200"
         />
-      </div>
-      <LabelledValue label="Prior">
-        <Cell value={m.prior_year} onSave={(v) => void patch({ prior_year: v })} disabled={!canEdit} align="right" className="tabular-nums" placeholder="—" />
-      </LabelledValue>
-      <LabelledValue label="Now">
-        <Cell value={m.current} onSave={(v) => void patch({ current: v })} disabled={!canEdit} align="right" className="font-semibold tabular-nums" placeholder="—" />
-      </LabelledValue>
-      <LabelledValue label="Next">
-        <Cell value={m.next_year} onSave={(v) => void patch({ next_year: v })} disabled={!canEdit} align="right" className="tabular-nums" placeholder="—" />
-      </LabelledValue>
-      <div className="col-span-3 flex items-center justify-end gap-1 sm:col-span-1">
-        <button
-          type="button"
-          onClick={canEdit ? cycleTrend : undefined}
-          disabled={!canEdit}
-          title={m.trend ? `Trending ${m.trend}` : "No trend set"}
-          className={`w-4 text-center text-sm text-gray-500 ${canEdit ? "cursor-pointer hover:text-runfree-ink" : "cursor-default"}`}
-        >
-          {m.trend ? TREND_MARK[m.trend] : <span className="text-gray-300">·</span>}
-        </button>
-        <RagPicker
-          value={m.status ?? "amber"}
-          onChange={(v) => void patch({ status: v })}
-          disabled={!canEdit}
-        />
-        {canEdit && (
-          <button
-            onClick={async () => {
-              await deleteMetric(accessToken, m.id);
-              await onChanged();
-            }}
-            title="Remove this row"
-            className="text-gray-300 transition hover:text-rose-600"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-3.5 w-3.5">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        )}
-      </div>
-    </li>
-  );
-}
-
-/**
- * On a phone each number carries its own caption, stacked above it; from `sm`
- * the column heading does that job and the caption disappears.
- *
- * Stacked rather than inline: side by side, the caption ate half of a 110px
- * column and the number it labelled got truncated, which is how "1,180"
- * became "1,18".
- */
-function LabelledValue({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <span className="flex min-w-0 flex-col items-stretch">
-      <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400 sm:hidden">
-        {label}
-      </span>
-      <span className="min-w-0">{children}</span>
-    </span>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Renewal Cycle                                                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Will's Horizon Storyline Renewal Cycle, as real dates.
- *
- * The handout is a diagram of intervals — 90 days, 180, 270, one year, three
- * times over — and a diagram is something a church reads once and files. Given
- * a start date it becomes twelve entries in a calendar, which is the thing
- * that actually changes behaviour.
- *
- * Anchored on the earliest live initiative's start date rather than a column
- * of its own: that date is already the answer to "when did we start running
- * this plan", and a second field asking the same question is a second field to
- * get wrong.
- */
-function RenewalCycle({ data, canEdit }: { data: ExecutionData; canEdit: boolean }) {
-  const today = todayIso();
-  const anchor = useMemo(
-    () =>
-      data.initiatives
-        .filter((i) => !i.is_complete)
-        .map((i) => i.start_date)
-        .filter((d): d is string => !!d)
-        .sort()[0] ?? null,
-    [data.initiatives]
-  );
-
-  if (!anchor) {
-    // Nothing to count from. Only say so to someone who can fix it — the
-    // instruction is useless to a viewer, and 052 is the migration that
-    // exists because coach-facing copy was being shown to churches.
-    if (data.initiatives.length === 0 || !canEdit) return null;
-    return (
-      <section className="mt-12">
-        <BlockHeading
-          eyebrow="The rhythm"
-          title="Renewal Cycle"
-          note="Set a start date on an initiative and the three-year cadence fills in here."
-        />
-      </section>
-    );
-  }
-
-  const stops = renewalCycle(anchor);
-  const next = nextRenewalStop(stops, today);
-
-  return (
-    <section className="mt-12">
-      <BlockHeading
-        eyebrow="The rhythm"
-        title="Renewal Cycle"
-        note="In addition to your normal weekly and monthly meetings — this is the cadence that keeps the Horizon Storyline alive."
-      />
-
-      <ol className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
-        {stops.map((s, n) => {
-          const past = s.on < today;
-          const isNext = next?.on === s.on;
-          const yearBreak = n === 0 || stops[n - 1].year !== s.year;
-          return (
-            <Fragment key={s.on + s.marker}>
-              {/* A labelled row rather than a heavier rule. The border version
-                  of this depended on `border-t-2` beating `border-t` in the
-                  generated stylesheet, which is source order rather than
-                  specificity — and it rendered as no break at all. A year
-                  heading is both unambiguous and worth reading. */}
-              {yearBreak && (
-                <li className="border-t border-gray-200 bg-gray-50 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400 first:border-t-0 sm:px-5">
-                  Year {s.year}
-                </li>
-              )}
-            <li
-              className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-gray-200 px-4 py-3 sm:px-5 ${
-                isNext ? "bg-runfree-pink/60" : past ? "bg-gray-50 text-gray-400" : "bg-white"
-              }`}
-            >
-              <span
-                className={`w-24 shrink-0 text-sm font-semibold tabular-nums ${
-                  past ? "text-gray-400" : "text-runfree-ink"
-                }`}
-              >
-                {prettyDate(s.on)}
-              </span>
-              <span
-                className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                  isNext
-                    ? "bg-runfree-magentaDeep text-white"
-                    : past
-                      ? "bg-gray-200 text-gray-500"
-                      : "bg-runfree-indigo text-runfree-navy"
-                }`}
-              >
-                {s.length}
-              </span>
-              {/* Last on a phone, third on a desktop. Left in flow it was a
-                  ~60px column with "Review the foreground." broken across
-                  five lines; given the full width it is one readable
-                  sentence under the date it belongs to. */}
-              <span
-                className={`order-last w-full min-w-0 text-sm sm:order-none sm:w-auto sm:flex-1 ${
-                  past ? "text-gray-400" : "text-gray-600"
-                }`}
-              >
-                {s.purpose}
-              </span>
-              <span className="ml-auto shrink-0 text-[11px] uppercase tracking-wide text-gray-400">
-                {s.marker}
-              </span>
-            </li>
-            </Fragment>
-          );
-        })}
-      </ol>
-
-      <p className="mt-2.5 text-[11px] text-gray-400">
-        Counted from {prettyDate(anchor)}, the earliest start date on a live initiative.
-      </p>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
+            Where this comes from
+          </span>
+          <span className="mt-0.5 block font-display text-base font-extrabold tracking-tight text-runfree-ink">
+            God Dreams
+          </span>
+          <span className="mt-1 block text-xs leading-relaxed text-gray-500">
+            The full book, the visual summary and the chapters behind each horizon —
+            including chapter 5, which introduces the Horizon Storyline.
+          </span>
+        </span>
+        <span className="shrink-0 text-sm font-semibold text-runfree-magentaDeep transition group-hover:translate-x-0.5">
+          Books →
+        </span>
+      </button>
     </section>
   );
 }

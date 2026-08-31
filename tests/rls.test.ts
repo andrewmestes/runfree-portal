@@ -1612,6 +1612,182 @@ async function main() {
       await supabaseAdmin.from("horizon_storyline").delete().eq("project_id", projectA.id);
     }
 
+    // ---------------------------------------------------------------------
+    // 27. Execution depth — templates, midground measures, readings (059)
+    //
+    // The split that matters: DEFINING a measure is authoring (editor), but
+    // LOGGING this week's number is the weekly act and reuses
+    // may_manage_tasks() like the action steps do.
+    // ---------------------------------------------------------------------
+    {
+      const asAdmin = createUserClient(adminA.accessToken);
+      const asEditor = createUserClient(selfLeadEditor.accessToken);
+      const asViewer = createUserClient(viewerA.accessToken);
+      const asOutsider = createUserClient(viewerB.accessToken);
+
+      const { data: tmpl, error: tmplErr } = await asEditor
+        .from("project_vision_templates")
+        .insert({ project_id: projectA.id, template_key: "geographic-saturation" })
+        .select("id")
+        .single();
+      record(
+        "27a. an editor can choose a vision template",
+        !tmplErr && !!tmpl,
+        tmplErr ? tmplErr.message : "created"
+      );
+
+      const { error: viewerTmplErr } = await asViewer
+        .from("project_vision_templates")
+        .insert({ project_id: projectA.id, template_key: "need-adoption" });
+      record(
+        "27b. a viewer CANNOT choose a vision template",
+        !!viewerTmplErr,
+        viewerTmplErr ? "correctly rejected" : "insert unexpectedly succeeded"
+      );
+
+      const { data: outsiderTmpl } = await asOutsider
+        .from("project_vision_templates")
+        .select("id")
+        .eq("project_id", projectA.id);
+      record(
+        "27c. an outsider sees no vision templates",
+        (outsiderTmpl ?? []).length === 0,
+        `${(outsiderTmpl ?? []).length} row(s) leaked`
+      );
+
+      // The same template cannot be chosen twice — the picker relies on this.
+      const { error: dupTmplErr } = await asEditor
+        .from("project_vision_templates")
+        .insert({ project_id: projectA.id, template_key: "geographic-saturation" });
+      record(
+        "27d. the same template cannot be chosen twice",
+        !!dupTmplErr,
+        dupTmplErr ? "correctly rejected" : "duplicate unexpectedly created"
+      );
+
+      const { data: measure, error: measureErr } = await asEditor
+        .from("midground_measures")
+        .insert({ project_id: projectA.id, label: `rls measure ${RUN}`, baseline: 12, target: 25, unit: "%" })
+        .select("id")
+        .single();
+      record(
+        "27e. an editor can define a midground measure",
+        !measureErr && !!measure,
+        measureErr ? measureErr.message : "created"
+      );
+
+      const { error: viewerMeasureErr } = await asViewer
+        .from("midground_measures")
+        .insert({ project_id: projectA.id, label: "viewer should not define this" });
+      record(
+        "27f. a viewer CANNOT define a measure",
+        !!viewerMeasureErr,
+        viewerMeasureErr ? "correctly rejected" : "insert unexpectedly succeeded"
+      );
+
+      if (measure) {
+        // Logging is gated on may_manage_tasks, NOT on the editor role — so
+        // the project's own editor is deliberately not enough here.
+        const { error: editorLogErr } = await asEditor
+          .from("measure_readings")
+          .insert({ project_id: projectA.id, measure_id: measure.id, value: 15, on_date: "2026-09-01" });
+        record(
+          "27g. an editor alone CANNOT log a reading (053 gate)",
+          !!editorLogErr,
+          editorLogErr ? "correctly rejected" : "insert unexpectedly succeeded"
+        );
+
+        const { data: reading, error: adminLogErr } = await asAdmin
+          .from("measure_readings")
+          .insert({ project_id: projectA.id, measure_id: measure.id, value: 18, on_date: "2026-09-08" })
+          .select("id")
+          .single();
+        record(
+          "27h. an admin can log a reading",
+          !adminLogErr && !!reading,
+          adminLogErr ? adminLogErr.message : "created"
+        );
+
+        await supabaseAdmin
+          .from("project_members")
+          .update({ can_manage_tasks: true })
+          .eq("project_id", projectA.id)
+          .eq("profile_id", viewerA.id);
+        const { data: granted, error: grantedLogErr } = await asViewer
+          .from("measure_readings")
+          .insert({ project_id: projectA.id, measure_id: measure.id, value: 20, on_date: "2026-09-15" })
+          .select("id")
+          .single();
+        record(
+          "27i. a granted viewer CAN log a reading (053)",
+          !grantedLogErr && !!granted,
+          grantedLogErr ? grantedLogErr.message : "created"
+        );
+        await supabaseAdmin
+          .from("project_members")
+          .update({ can_manage_tasks: false })
+          .eq("project_id", projectA.id)
+          .eq("profile_id", viewerA.id);
+
+        const { data: viewerReads } = await asViewer
+          .from("measure_readings")
+          .select("id")
+          .eq("project_id", projectA.id);
+        record(
+          "27j. a viewer CAN read the readings",
+          (viewerReads ?? []).length >= 2,
+          `${(viewerReads ?? []).length} row(s)`
+        );
+
+        const { data: outsiderReads } = await asOutsider
+          .from("measure_readings")
+          .select("id")
+          .eq("project_id", projectA.id);
+        record(
+          "27k. an outsider sees no readings",
+          (outsiderReads ?? []).length === 0,
+          `${(outsiderReads ?? []).length} row(s) leaked`
+        );
+      }
+
+      // Assigning a step to a person is a step write, so it follows the step
+      // policy rather than needing one of its own.
+      {
+        const { data: init } = await asEditor
+          .from("initiatives")
+          .insert({ project_id: projectA.id, name: `assignee host ${RUN}` })
+          .select("id")
+          .single();
+        if (init) {
+          const { data: step } = await asAdmin
+            .from("initiative_steps")
+            .insert({ project_id: projectA.id, initiative_id: init.id, description: "assign me" })
+            .select("id")
+            .single();
+          if (step) {
+            const { error: assignErr } = await asAdmin
+              .from("initiative_steps")
+              .update({ assignee_profile_id: viewerA.id })
+              .eq("id", step.id);
+            const { data: after } = await supabaseAdmin
+              .from("initiative_steps")
+              .select("assignee_profile_id")
+              .eq("id", step.id)
+              .single();
+            record(
+              "27l. an admin can assign a step to a member",
+              !assignErr && after?.assignee_profile_id === viewerA.id,
+              assignErr ? assignErr.message : `assignee=${after?.assignee_profile_id}`
+            );
+          }
+          await supabaseAdmin.from("initiatives").delete().eq("id", init.id);
+        }
+      }
+
+      await supabaseAdmin.from("project_vision_templates").delete().eq("project_id", projectA.id);
+      await supabaseAdmin.from("midground_measures").delete().eq("project_id", projectA.id);
+    }
+
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

@@ -1,4 +1,5 @@
 import { createUserClient } from "./supabase";
+import type { InitiativeKind } from "./god-dreams";
 
 /**
  * The Horizon Storyline, after the engagement ends.
@@ -49,6 +50,8 @@ export type Initiative = {
   next_review_on: string | null;
   status: RagStatus;
   is_complete: boolean;
+  /** Which of Will's three foreground types this is. */
+  kind: InitiativeKind;
   position: number;
   created_at: string;
 };
@@ -61,7 +64,10 @@ export type InitiativeStep = {
   status: RagStatus;
   by_when: string | null;
   cost: string | null;
+  /** Free text, as the printed sheet has it — "Jeff & Carolyn", "Comms". */
   accountable: string | null;
+  /** Set when that person also has a portal login, so it can reach them. */
+  assignee_profile_id: string | null;
   position: number;
   created_at: string;
 };
@@ -85,9 +91,52 @@ export type HorizonBox = {
   id: string;
   project_id: string;
   horizon: HorizonBand;
+  /** The headline statement — what prints in the box on the sheet. */
   body: string | null;
+  /** The three columns of "Background Vision Notes - 3 years". */
+  where_we_stand: string | null;
+  where_were_headed: string | null;
+  how_well_get_there: string | null;
   position: number;
   updated_at: string;
+};
+
+/**
+ * The quantitative half of the Midground Milestone.
+ *
+ * Andrew: "we always encourage people to use a qualitative and quantitative
+ * aspect of the midground, so it needs to be measurable somehow on the
+ * dashboard." Every example on Will's sheet has a number inside the sentence
+ * — "from 12 percent of the congregation to 25 percent" — so the statement
+ * lives on the horizon box and the number lives here.
+ */
+export type MidgroundMeasure = {
+  id: string;
+  project_id: string;
+  label: string;
+  unit: string | null;
+  baseline: number | null;
+  target: number | null;
+  current: number | null;
+  position: number;
+  created_at: string;
+};
+
+export type MeasureReading = {
+  id: string;
+  measure_id: string;
+  project_id: string;
+  on_date: string;
+  value: number;
+  note: string | null;
+  created_at: string;
+};
+
+export type VisionTemplateRow = {
+  id: string;
+  project_id: string;
+  template_key: string;
+  position: number;
 };
 
 export type ExecutionData = {
@@ -95,6 +144,9 @@ export type ExecutionData = {
   steps: InitiativeStep[];
   metrics: ScoreboardMetric[];
   horizon: HorizonBox[];
+  measures: MidgroundMeasure[];
+  readings: MeasureReading[];
+  templates: VisionTemplateRow[];
 };
 
 /**
@@ -204,21 +256,30 @@ export async function getExecutionData(
   projectId: string
 ): Promise<ExecutionData> {
   const client = createUserClient(accessToken);
-  const [inits, steps, metrics, horizon] = await Promise.all([
+  const [inits, steps, metrics, horizon, measures, readings, templates] = await Promise.all([
     client.from("initiatives").select("*").eq("project_id", projectId).order("position"),
     client.from("initiative_steps").select("*").eq("project_id", projectId).order("position"),
     client.from("scoreboard_metrics").select("*").eq("project_id", projectId).order("position"),
     client.from("horizon_storyline").select("*").eq("project_id", projectId).order("position"),
+    client.from("midground_measures").select("*").eq("project_id", projectId).order("position"),
+    client.from("measure_readings").select("*").eq("project_id", projectId).order("on_date"),
+    client.from("project_vision_templates").select("*").eq("project_id", projectId).order("position"),
   ]);
   if (inits.error) throw inits.error;
   if (steps.error) throw steps.error;
   if (metrics.error) throw metrics.error;
   if (horizon.error) throw horizon.error;
+  if (measures.error) throw measures.error;
+  if (readings.error) throw readings.error;
+  if (templates.error) throw templates.error;
   return {
     initiatives: (inits.data ?? []) as Initiative[],
     steps: (steps.data ?? []) as InitiativeStep[],
     metrics: (metrics.data ?? []) as ScoreboardMetric[],
     horizon: (horizon.data ?? []) as HorizonBox[],
+    measures: (measures.data ?? []) as MidgroundMeasure[],
+    readings: (readings.data ?? []) as MeasureReading[],
+    templates: (templates.data ?? []) as VisionTemplateRow[],
   };
 }
 
@@ -359,14 +420,145 @@ export async function saveHorizonBox(
   projectId: string,
   horizon: HorizonBand,
   position: number,
-  body: string | null
+  patch: Partial<Pick<HorizonBox, "body" | "where_we_stand" | "where_were_headed" | "how_well_get_there">>
 ): Promise<void> {
   const { error } = await createUserClient(accessToken)
     .from("horizon_storyline")
     .upsert(
-      { project_id: projectId, horizon, position, body, updated_at: new Date().toISOString() },
+      {
+        project_id: projectId,
+        horizon,
+        position,
+        ...patch,
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: "project_id,horizon,position" }
     );
+  if (error) throw error;
+}
+
+/* ------------------------------------------- midground measures & readings */
+
+export async function createMeasure(
+  accessToken: string,
+  projectId: string,
+  label: string,
+  position: number
+): Promise<MidgroundMeasure> {
+  const { data, error } = await createUserClient(accessToken)
+    .from("midground_measures")
+    .insert({ project_id: projectId, label, position })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as MidgroundMeasure;
+}
+
+export async function updateMeasure(
+  accessToken: string,
+  id: string,
+  patch: Partial<Omit<MidgroundMeasure, "id" | "project_id" | "created_at">>
+): Promise<void> {
+  const { error } = await createUserClient(accessToken)
+    .from("midground_measures")
+    .update(patch)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteMeasure(accessToken: string, id: string): Promise<void> {
+  const { error } = await createUserClient(accessToken)
+    .from("midground_measures")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/**
+ * Log this week's number.
+ *
+ * Writes the reading AND stamps `current`, so the gauge and the history can
+ * never disagree. Two calls rather than a trigger because the reading is
+ * gated on `may_manage_tasks` while the measure itself is editor-only — a
+ * trigger would have to run as definer and quietly widen who can move the
+ * headline number.
+ */
+export async function logReading(
+  accessToken: string,
+  projectId: string,
+  measureId: string,
+  value: number,
+  onDate: string,
+  note: string | null
+): Promise<void> {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("measure_readings").insert({
+    project_id: projectId,
+    measure_id: measureId,
+    value,
+    on_date: onDate,
+    note,
+  });
+  if (error) throw error;
+  // Best-effort: a viewer with the task grant may not be able to update the
+  // measure row itself. The reading is the record of truth either way, and
+  // `latestReading()` falls back to it.
+  await client.from("midground_measures").update({ current: value }).eq("id", measureId);
+}
+
+export async function deleteReading(accessToken: string, id: string): Promise<void> {
+  const { error } = await createUserClient(accessToken)
+    .from("measure_readings")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** The most recent reading for a measure, or null. */
+export function latestReading(
+  readings: MeasureReading[],
+  measureId: string
+): MeasureReading | null {
+  const mine = readings.filter((r) => r.measure_id === measureId);
+  if (mine.length === 0) return null;
+  return mine.reduce((a, b) => (a.on_date >= b.on_date ? a : b));
+}
+
+/**
+ * How far along a measure is, 0-1, or null when it cannot be computed.
+ *
+ * Uses baseline as the zero point rather than absolute zero: "from 12 percent
+ * to 25 percent" is 0% done at 12, not 48% done. Handles a downward target
+ * (fewer of something) by sign rather than by a separate direction column.
+ */
+export function measureProgress(m: MidgroundMeasure, current: number | null): number | null {
+  const now = current ?? m.current;
+  if (now == null || m.target == null) return null;
+  const from = m.baseline ?? 0;
+  const span = m.target - from;
+  if (span === 0) return now >= m.target ? 1 : 0;
+  return Math.max(0, Math.min(1, (now - from) / span));
+}
+
+/* --------------------------------------------------- the vision templates */
+
+export async function addVisionTemplate(
+  accessToken: string,
+  projectId: string,
+  templateKey: string,
+  position: number
+): Promise<void> {
+  const { error } = await createUserClient(accessToken)
+    .from("project_vision_templates")
+    .insert({ project_id: projectId, template_key: templateKey, position });
+  if (error) throw error;
+}
+
+export async function removeVisionTemplate(accessToken: string, id: string): Promise<void> {
+  const { error } = await createUserClient(accessToken)
+    .from("project_vision_templates")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 

@@ -224,7 +224,7 @@ matters because the arguments are symmetrical:
 Do not "simplify" this by floating the cards above the panels again without
 reading that trade — it has been made in both directions deliberately.
 
-`books` is Will's Books, and it is **the same `BooksShelf` component the
+`books` is the books shelf (labelled just **Books** since 31 Aug — Andrew: "let's change the column from 'Will's Books' to just 'Books'"), and it is **the same `BooksShelf` component the
 certification /books page renders** — Andrew asked for it to look "just like
 they are displayed in the certification area", and a second copy of that
 markup would have drifted within a week. What differs is the gate, not the
@@ -554,7 +554,7 @@ Constraints that are decisions, not oversights:
 - **`by_when` and `cost` are TEXT, not date and numeric.** The printed case
   study has "Monthly Periodic" in the By column and "$2,500", "$0" and "?" in
   Cost. Anything that does not parse as `yyyy-mm-dd` is never counted as
-  overdue — see the digest filter in `ThisQuarter`.
+  overdue — see the digest filter in `ThisWeek`.
 - **The scoreboard's rows are data.** `DASHBOARD_STARTER` is offered behind a
   button and never stamped automatically: a church plant with no school should
   not have to delete four rows before it can start.
@@ -572,12 +572,24 @@ person accountable for a step is usually church staff, not a portal editor,
 and Andrew already has one switch for exactly that. Everyone on the project
 **reads** all three: a scoreboard only some people can see is not a scoreboard.
 
-The panel **loads its own data when opened**, like Will's Books. What rides on
+`ExecutionPanel` is an orchestrator over `src/components/execution/` —
+`HorizonBoard`, the four detail views, `MinistryDashboard`, `RenewalCycle`,
+and `ui.tsx`. **`ui.tsx` holds every shared primitive** (`Cell`, `RagPicker`,
+`DateCell`, `Chip`, `EditorActions`, `prettyDate`) in ONE file on purpose:
+`PanelRail`/`PanelStrip` is the cautionary tale, and a second copy of the
+traffic light would drift the first time only one of them got a bigger tap
+target.
+
+`Cell` shows `display(value)` while it rests and the raw string once focused.
+Without that an editor stared at "2026-08-19" in the By column while a viewer
+saw "Aug 19, 2026".
+
+The panel **loads its own data when opened**, like the books shelf. What rides on
 `getProjectDetail` is a single `head: true` count, `hasExecution`, and it
 exists only so the tab can stay hidden from a church that has not reached the
 Horizon Storyline. Editors always see the tab — somebody has to start it.
 
-**The weekly email is not built.** `ThisQuarter` assembles what it *would*
+**The weekly email is not built.** `ThisWeek` assembles what it *would*
 contain — every initiative, every open step with owner and date, the next
 review — and puts it on the clipboard. Andrew asked for a per-project weekly
 email; sending is blocked on `RESEND_API_KEY`, and a Send button that silently
@@ -613,6 +625,75 @@ unwritten box look like the empty box it is — which is what the sheet prints
 storyline usually lands first (it comes out of the retreat, the initiatives
 come out of it), so counting initiatives alone would hide the tab from a
 church whose vision is already written.
+
+**The board is the navigator** (**059**). Andrew: "having two places where it
+says foreground initiatives is a bit redundant ... when someone clicks on an
+initiative, it could highlight the initiative below where all of the Action
+Steps get displayed along with a tracking sheet 'scoreboard.'"
+
+So `HorizonBoard` is the 1:4:1:4 sheet with **every box a button**, and ONE
+`DetailShell` underneath renders whatever is selected — Beyond, one of the
+four Background priorities, the Midground, or an initiative. The separate
+"Foreground Initiatives" list and its accordion are gone; there is one list
+(the board) and one detail view.
+
+Consequences worth knowing:
+
+- **The detail shell owns the title.** `InitiativeDetail` and
+  `BackgroundDetail` deliberately do NOT print the name again — that was the
+  same duplication, one level down. The shell takes `onRename` so an
+  initiative is still renamed in place.
+- **All four Background boxes exist from the start.** They used to reveal one
+  at a time as the previous one was filled. Andrew: "not intuitive." A
+  four-box sheet with three boxes hidden is not the sheet.
+- **Selection falls back up the bands** — first live initiative, else
+  midground, else beyond — so a church that has written its storyline but not
+  chosen initiatives lands on something written.
+
+**The three types of foreground initiative** (`initiatives.kind`) come off
+"Using 3 Types of Foreground Initiatives", whose own heading is "How to
+Involve Everyone, Every Week". Cross-Functional Emphasis (5–15 steps, team),
+Ministry Area Subgoal (3–8, team or individual), All Staff Driver (one step,
+individual, peer-to-peer in staff meetings). That last one is why the Action
+Step List's subtitle says "for Cross Functional Teams & Ministry Subgoal" —
+it does not apply to drivers. `FOREGROUND_MIX` carries the by-church-size
+table and is **advisory, never enforced**.
+
+**The Midground is the only quantitative horizon.** Andrew: "we always
+encourage people to use a qualitative and quantitative aspect of the
+midground." Every example on Will's sheet has a number inside the sentence
+("from 12 percent of the congregation to 25 percent"), so:
+
+- the statement is the qualitative half, on the horizon box;
+- `midground_measures` is the quantitative half — baseline → target, numeric
+  (unlike `scoreboard_metrics`, whose column mixes counts, dollars and
+  per-capita, these three values are the same quantity and must subtract);
+- `measure_readings` keeps each dated check-in, which is what makes it a
+  trajectory rather than a status.
+
+**Progress counts from the baseline, not from zero.** `measureProgress()` —
+"12% to 25%" is 0% done at 12, not 48% done. It also handles a downward
+target by sign rather than by a direction column.
+
+**Logging a reading is gated on `may_manage_tasks`, not on editor.** Defining
+a measure is authoring; logging this week's number is the weekly act, and the
+person who knows the number is usually church staff. Same split as the action
+steps. `logReading()` writes the reading and then best-effort stamps
+`current` — the second write can fail for a granted viewer and that is fine,
+the reading is the record.
+
+**The 12 Vision Templates hang off Beyond, not off the project.** The handout
+says so explicitly: "The 12 Templates are Used for the Beyond-the-Horizon
+Vision." `MAX_TEMPLATES` is 2 — Andrew called them "their two vision
+templates", and God Dreams treats it as a primary plus a secondary. One line
+to loosen.
+
+**Template icon art is recoloured, and one file is misspelt.** The source JPGs
+are a warm near-black that resamples muddy; `public/brand/god-dreams/templates/`
+holds them thresholded to two colours with the plate in RunFree navy. The
+source file for template 9 is named "Obidient Amplification"; the template is
+**Obedient Anticipation** (`obedient-anticipation.png`). That mismatch is why
+`template_key` is text validated in the app rather than a Postgres enum.
 
 **Two layouts that had to differ by width, not one grid.** `MetricRow` was a
 single five-column grid at every size; at 390px it rendered "1,180" as "1,18",

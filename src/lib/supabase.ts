@@ -1043,6 +1043,8 @@ export type Database = {
           next_review_on: string | null;
           status: "red" | "amber" | "green";
           is_complete: boolean;
+          /** Which of Will's three foreground types this is (059). */
+          kind: "cross_functional" | "ministry_subgoal" | "all_staff_driver";
           position: number;
           created_at: string;
         };
@@ -1063,6 +1065,7 @@ export type Database = {
           next_review_on?: string | null;
           status?: "red" | "amber" | "green";
           is_complete?: boolean;
+          kind?: "cross_functional" | "ministry_subgoal" | "all_staff_driver";
           position?: number;
         };
         Update: {
@@ -1080,6 +1083,7 @@ export type Database = {
           next_review_on?: string | null;
           status?: "red" | "amber" | "green";
           is_complete?: boolean;
+          kind?: "cross_functional" | "ministry_subgoal" | "all_staff_driver";
           position?: number;
         };
         Relationships: [
@@ -1103,6 +1107,8 @@ export type Database = {
           by_when: string | null;
           cost: string | null;
           accountable: string | null;
+          /** Set when the accountable person has a portal login (059). */
+          assignee_profile_id: string | null;
           position: number;
           created_at: string;
         };
@@ -1115,6 +1121,7 @@ export type Database = {
           by_when?: string | null;
           cost?: string | null;
           accountable?: string | null;
+          assignee_profile_id?: string | null;
           position?: number;
         };
         Update: {
@@ -1123,6 +1130,7 @@ export type Database = {
           by_when?: string | null;
           cost?: string | null;
           accountable?: string | null;
+          assignee_profile_id?: string | null;
           position?: number;
         };
         Relationships: [
@@ -1200,6 +1208,10 @@ export type Database = {
           project_id: string;
           horizon: "beyond" | "background" | "midground";
           body: string | null;
+          /** The Background Vision Notes sheet's three columns (059). */
+          where_we_stand: string | null;
+          where_were_headed: string | null;
+          how_well_get_there: string | null;
           position: number;
           updated_at: string;
         };
@@ -1208,17 +1220,134 @@ export type Database = {
           project_id: string;
           horizon: "beyond" | "background" | "midground";
           body?: string | null;
+          where_we_stand?: string | null;
+          where_were_headed?: string | null;
+          how_well_get_there?: string | null;
           position?: number;
           updated_at?: string;
         };
         Update: {
           body?: string | null;
+          where_we_stand?: string | null;
+          where_were_headed?: string | null;
+          how_well_get_there?: string | null;
           position?: number;
           updated_at?: string;
         };
         Relationships: [
           {
             foreignKeyName: "horizon_storyline_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      /**
+       * Which of Will's 12 Vision Templates describe this church's
+       * Beyond-the-Horizon vision. Usually two (059).
+       */
+      project_vision_templates: {
+        Row: {
+          id: string;
+          project_id: string;
+          template_key: string;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          template_key: string;
+          position?: number;
+        };
+        Update: { position?: number };
+        Relationships: [
+          {
+            foreignKeyName: "project_vision_templates_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      /**
+       * The quantitative half of the Midground Milestone — baseline to target
+       * with a current reading (059). numeric, unlike scoreboard_metrics,
+       * because these three values are the same quantity and have to subtract.
+       */
+      midground_measures: {
+        Row: {
+          id: string;
+          project_id: string;
+          label: string;
+          unit: string | null;
+          baseline: number | null;
+          target: number | null;
+          current: number | null;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          label: string;
+          unit?: string | null;
+          baseline?: number | null;
+          target?: number | null;
+          current?: number | null;
+          position?: number;
+        };
+        Update: {
+          label?: string;
+          unit?: string | null;
+          baseline?: number | null;
+          target?: number | null;
+          current?: number | null;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "midground_measures_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      /** One dated check-in against a midground measure (059). */
+      measure_readings: {
+        Row: {
+          id: string;
+          measure_id: string;
+          project_id: string;
+          on_date: string;
+          value: number;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          measure_id: string;
+          project_id: string;
+          on_date?: string;
+          value: number;
+          note?: string | null;
+        };
+        Update: {
+          on_date?: string;
+          value?: number;
+          note?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "measure_readings_measure_id_fkey";
+            columns: ["measure_id"];
+            referencedRelation: "midground_measures";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "measure_readings_project_id_fkey";
             columns: ["project_id"];
             referencedRelation: "projects";
             referencedColumns: ["id"];

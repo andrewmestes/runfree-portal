@@ -40,6 +40,8 @@ const ROLE = (process.argv[4] ?? "admin") as "viewer" | "editor" | "admin";
 const W = Number(process.argv[5] ?? 1440);
 const H = Number(process.argv[6] ?? 2400);
 const EXPAND = process.argv[7] === "expand";
+/** `click:<text>` — press the first button whose label contains <text>. */
+const CLICK = (process.argv[7] ?? "").startsWith("click:") ? process.argv[7].slice(6) : null;
 
 const BASE = process.env.AUDIT_BASE_URL ?? "http://localhost:3001";
 const SHOTS = "/tmp/runfree-panel-shot";
@@ -150,6 +152,18 @@ async function main() {
     await ev(`document.querySelectorAll('[aria-expanded="false"]').forEach((b) => b.click()); "ok"`);
     await sleep(1500);
   }
+  // `click:Some text` presses the first button whose label contains it —
+  // which is how the Execution board's detail views get captured, since each
+  // one only renders when its box is selected.
+  if (CLICK) {
+    const hit = await ev(
+      `(() => { const t = ${JSON.stringify(CLICK)}.toLowerCase();
+         const b = [...document.querySelectorAll("button")].find((x) => (x.textContent||"").toLowerCase().includes(t));
+         if (b) { b.click(); return true; } return false; })()`
+    );
+    if (!hit) console.log(`   (nothing matched "${CLICK}")`);
+    await sleep(2000);
+  }
   await sleep(2000);
 
   const a = await ev(AUDIT) as { hScroll: boolean; spills: { tag: string; text: string }[]; badImgs: string[] };
@@ -159,13 +173,13 @@ async function main() {
   if (a.spills.length) flags.push(`${a.spills.length} spill`);
   if (a.badImgs.length) flags.push(`${a.badImgs.length} broken img`);
   if (noise.length) flags.push(`${noise.length} console err`);
-  console.log(`${flags.length ? "FAIL" : "ok  "}  ${PANEL} @${W} as ${ROLE}${EXPAND ? " (expanded)" : ""}  ${flags.join(" | ") || "clean"}`);
+  console.log(`${flags.length ? "FAIL" : "ok  "}  ${PANEL} @${W} as ${ROLE}${EXPAND ? " (expanded)" : CLICK ? ` (clicked ${CLICK})` : ""}  ${flags.join(" | ") || "clean"}`);
   for (const sp of a.spills) console.log(`         spill <${sp.tag}> "${sp.text}"`);
   for (const b of a.badImgs) console.log(`         broken img ${b}`);
   for (const n of noise) console.log(`         console ${n}`);
 
   const shot = (await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true })) as { data: string };
-  const out = `${SHOTS}/${PANEL}-${W}-${ROLE}.png`;
+  const out = `${SHOTS}/${PANEL}-${W}-${ROLE}${CLICK ? "-" + CLICK.toLowerCase().replace(/[^a-z0-9]+/g, "-") : ""}.png`;
   writeFileSync(out, Buffer.from(shot.data, "base64"));
   chrome.kill();
   console.log(out);

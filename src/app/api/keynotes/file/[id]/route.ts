@@ -4,6 +4,14 @@ import { fetchDriveFile } from "@/lib/drive";
 import { listPresentationFileIds, isDriveConfigured } from "@/lib/keynotes";
 
 /**
+ * These are the largest files the portal serves — the God Dreams deck is
+ * 45MB, and streaming it took ~15s on a local connection. That is over
+ * Vercel's default function budget, so this needs the same allowance
+ * /api/library/file and /api/projects/[id]/handouts/file already take.
+ */
+export const maxDuration = 60;
+
+/**
  * GET /api/keynotes/file/{driveId}
  *
  * Gated like /api/books/file: session, certification allowlist, and a check

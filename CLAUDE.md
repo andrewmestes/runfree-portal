@@ -161,6 +161,25 @@ certification-flavored email. See `BRIEF.md`, "Invitation emails need solving
 separately" — the fix is `generateLink()` + a portal-branded send, gated on
 having `RESEND_API_KEY` (not yet configured).
 
+## Certification access is checked two different ways, client and server
+
+`hasCertificationAccess()` (client, `src/lib/auth.ts`) passes on `is_owner`,
+an allowed `account_role`, `profiles.certification_access`, **or** a
+`certified_framers` row.
+
+`requireCertificationAccess()` (server, `src/lib/api-auth.ts`) — which every
+`/api/books`, `/api/library`, `/api/guide`, `/api/videos` and `/api/keynotes`
+route uses — accepts only an allowed `account_role`
+(`admin` | `runfree_team` | `framer` | `framer_subscribed`) **or** a
+`certified_framers` row. It ignores `is_owner` and `certification_access`.
+
+So a profile with `certification_access: true` and no `account_role` renders
+the page and then gets 403 from its own API — the page shows "No certification
+access on this account" under a working header. Every one of the nine real
+profiles has an allowed `account_role`, so this does not bite in production,
+but it will bite **any throwaway test account** unless you set `account_role`
+as well. That cost a debugging round on the keynotes page.
+
 ## "Multiple GoTrueClient instances" console warning is expected, not a bug
 
 `createUserClient(accessToken)` creates a fresh Supabase client per call

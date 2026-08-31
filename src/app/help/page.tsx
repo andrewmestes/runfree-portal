@@ -177,8 +177,10 @@ export default function HelpPage() {
               <li><strong>Execution</strong> &mdash; what happens after the six months: your foreground initiatives, the numbers you watch, and the review rhythm.</li>
               <li><strong>Books</strong> — visual summaries, chapters and full downloads of the books behind the process.</li>
             </ul>
-            A project only shows the sections it actually has, so you may see fewer than
-            nine. Dashboard and Books are always there.
+            They are grouped by a faint line: where you land, then who and when, then the
+            work as it happens, then what it produced. A project only shows the sections it
+            actually has, so you may see fewer than nine. Dashboard, Team, Sessions and
+            Books are always there.
             <br />
             <br />
             Underneath them are your other projects — <strong>Starred</strong> first if you
@@ -203,6 +205,17 @@ export default function HelpPage() {
             <br />
             If you missed a session, the summary is written so you can catch up without
             watching the whole recording.
+          </Faq>
+          <Faq q="Something is assigned to me — where does it show up?">
+            If your coach assigns you an <strong>action step</strong> on an Execution
+            initiative, it appears at the top of <strong>What&rsquo;s Important Now</strong>
+            on your Dashboard, under &ldquo;Assigned to you&rdquo;, with the initiative it
+            belongs to and its date.
+            <br />
+            <br />
+            Tap the coloured dot to move it on — red to amber to green. That is the same
+            step your team sees on the Horizon Storyline board, not a copy, so moving it
+            here moves it there. Steps you have already marked green drop off the list.
           </Faq>
           <Faq q="Why do some next steps say RunFree owes them?">
             Because they do. Every task belongs either to your team or to us, and both show

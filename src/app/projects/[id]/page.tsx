@@ -93,6 +93,8 @@ import PortalFooter from "@/components/PortalFooter";
 import AccessError from "@/components/AccessError";
 import BooksShelf from "@/components/BooksShelf";
 import ExecutionPanel from "@/components/ExecutionPanel";
+import AssignedSteps from "@/components/AssignedSteps";
+import { useMyActionSteps } from "@/lib/my-steps";
 import type { BooksLibrary } from "@/lib/books";
 import { useOwedCount } from "@/lib/useOwedCount";
 
@@ -857,43 +859,58 @@ export default function ProjectDetailPage() {
   //
   // Access is absent for the same class of reason: who can get in is a
   // property of the project, and it lives in the header beside the logo.
+  /**
+   * Four groups, separated by a hairline in the rail. Andrew: "start with
+   * Dashboard then add a small subtle line ... then do Preparation / Team /
+   * Key Dates in it's own section, add another line, then do Sessions / The
+   * Process / Books as a section, then Deliverables and Execution to end."
+   *
+   * The grouping is the reading, not decoration: where you land, then who and
+   * when, then the work as it happens, then what it produced and what happens
+   * next. `group` is a number rather than a label because the rail draws a
+   * rule between them and never names them — a heading per group would cost
+   * more vertical space than the whole rail saves.
+   */
   const panelItems = [
     // Always present, and always first: it is the landing panel, and unlike
     // every other entry it does not depend on the project having any
-    // particular content — an engagement with nothing in it yet still has a
-    // "here is what happens next".
+    // particular content.
     //
     // Keyed "dashboard" since Andrew renamed it from Overview. Old
     // ?panel=overview links still work: an unrecognised key falls through to
     // fallbackPanel, which is this panel.
-    { key: "dashboard", label: "Dashboard" },
+    { key: "dashboard", label: "Dashboard", group: 1 },
+
+    // Who, and when.
     prepareGroups.length > 0 || prepResources.length > 0
-      ? { key: "prepare", label: "Preparation" }
+      ? { key: "prepare", label: "Preparation", group: 2 }
       : null,
-    modules.length > 0 ? { key: "process", label: "The Process" } : null,
-    { key: "team", label: "Team" },
-    dateGroups.length > 0 ? { key: "dates", label: "Key Dates" } : null,
+    { key: "team", label: "Team", group: 2 },
+    dateGroups.length > 0 ? { key: "dates", label: "Key Dates", group: 2 } : null,
+
+    // The work as it happens.
+    //
     // "Sessions", not "Session Recordings". Andrew: "I think I want the
     // 'session recordings' to be renamed 'sessions' and all of the
     // recordings, notes, and homework be housed there." The old name made the
     // recording the object and everything else an attachment to it — which
     // left an in-person session, where there is audio and notes and no video,
     // looking like it did not belong in its own tab.
-    { key: "sessions", label: "Sessions" },
-    hasDeliverables ? { key: "deliverables", label: "Deliverables" } : null,
+    { key: "sessions", label: "Sessions", group: 3 },
+    modules.length > 0 ? { key: "process", label: "The Process", group: 3 } : null,
+    // Reading behind the process. Unconditional, and no longer "Will's Books"
+    // — Andrew: "let's change the column from 'Will's Books' to just 'Books'."
+    { key: "books", label: "Books", group: 3 },
+
+    // What it produced, and what happens after we leave.
+    hasDeliverables ? { key: "deliverables", label: "Deliverables", group: 4 } : null,
     // Execution is the one panel that is not about the six months — it is the
     // Horizon Storyline being run, ninety days at a time, after we leave.
     //
     // Shown to an editor always (somebody has to start it) and to everyone
-    // else only once there is something in it. Same rule as the Vision Frame
-    // sheet: a church three modules in should not open a tab built for the
-    // year after the engagement and find it blank.
-    detail.hasExecution || canEdit ? { key: "execution", label: "Execution" } : null,
-    // Last, and unconditional. Andrew: "we need to add Will's Books to all the
-    // Pivvot projects." It is reading behind the process rather than part of
-    // it, so it sits after the engagement's own sections.
-    { key: "books", label: "Books" },
-  ].filter((x): x is { key: string; label: string } => x !== null);
+    // else only once there is something in it.
+    detail.hasExecution || canEdit ? { key: "execution", label: "Execution", group: 4 } : null,
+  ].filter((x): x is { key: string; label: string; group: number } => x !== null);
 
   // Landing on Overview. Andrew: "when someone logs in to their project, it
   // shows that type of information first, and then it has all the other tabs
@@ -1004,6 +1021,7 @@ export default function ProjectDetailPage() {
                 highlights={highlights}
                 canManage={canManage}
                 canAssignTasks={canAssignTasks}
+                myProfileId={profile.id}
                 fileUrls={imageUrls}
                 onOpenHighlight={openHighlight}
                 onAddHighlights={() => setPicking(true)}
@@ -1992,7 +2010,7 @@ function ProjectSidebar({
   open,
   onClose,
 }: {
-  items: { key: string; label: string }[];
+  items: { key: string; label: string; group?: number }[];
   active: string;
   onSelect: (key: string) => void;
   /** Everything this person can reach, for the switcher. */
@@ -2347,7 +2365,7 @@ function PanelRail({
   active,
   onSelect,
 }: {
-  items: { key: string; label: string }[];
+  items: { key: string; label: string; group?: number }[];
   active: string;
   onSelect: (key: string) => void;
 }) {
@@ -2356,10 +2374,14 @@ function PanelRail({
   return (
     <nav aria-label="Project sections">
       <ul className="space-y-1 lg:space-y-px">
-        {items.map((it) => {
+        {items.map((it, n) => {
           const on = active === it.key;
+          // A rule between groups, drawn on the item that starts one. Never
+          // above the first: a line at the very top of the rail reads as the
+          // header's underline rather than as a separator.
+          const startsGroup = n > 0 && it.group !== items[n - 1].group;
           return (
-            <li key={it.key}>
+            <li key={it.key} className={startsGroup ? "!mt-2 border-t border-white/10 pt-2" : ""}>
               <button
                 onClick={() => onSelect(it.key)}
                 aria-current={on ? "true" : undefined}
@@ -2408,7 +2430,9 @@ function PanelStrip({
   active,
   onSelect,
 }: {
-  items: { key: string; label: string }[];
+  // `group` rides along unused: the strip wraps horizontally, where a rule
+  // between groups would land in a different place on every screen width.
+  items: { key: string; label: string; group?: number }[];
   active: string;
   onSelect: (key: string) => void;
 }) {
@@ -3464,6 +3488,8 @@ function PrioritiesBanner({
   accessToken,
   projectId,
   moduleOptions,
+  myProfileId,
+  onGoTo,
   onChanged,
 }: {
   projectId: string;
@@ -3471,9 +3497,25 @@ function PrioritiesBanner({
   detail: ProjectDetail;
   canEdit: boolean;
   accessToken: string | null;
+  /** Whose action steps to surface here. */
+  myProfileId: string;
+  onGoTo: (key: string) => void;
   onChanged: () => void;
 }) {
   const [adding, setAdding] = useState(false);
+
+  /**
+   * The Horizon Storyline steps assigned to me, on this project.
+   *
+   * Andrew: "the Action Steps that are assigned to people, could possibly
+   * live in their 'dashboard' as tasks to complete or update, possibly
+   * syncing in some way to the team's overall view."
+   *
+   * These are the SAME rows the Execution board renders — not copies — so
+   * moving a light here moves it there. Loaded after paint, like the owed
+   * badge: a dashboard should not wait on it.
+   */
+  const { steps: mySteps, refresh: refreshSteps } = useMyActionSteps(myProfileId, projectId);
 
   // Open every time you arrive. Andrew: "make sure the 'what's important now'
   // defaults to open, not collapsed when entering a project."
@@ -3500,7 +3542,26 @@ function PrioritiesBanner({
   // hiding it.
   const ours = open.filter((t) => t.owner === "runfree");
   const theirs = open.filter((t) => t.owner !== "runfree");
-  if (!hasPriorities(detail, canEdit)) return null;
+
+  /**
+   * Preparation that has not been ticked yet.
+   *
+   * Andrew wondered whether Preparation should be folded into this card
+   * entirely, then chose to "surface it, don't move it" — so the setup work
+   * shows here while it is still outstanding, and the panel keeps everything
+   * (the reading shelf, the dates, the uploads) where it already lives.
+   *
+   * Only `checklist` groups: a reading shelf deliberately has no tick boxes
+   * (044/045), and a key date is not a thing you finish.
+   */
+  const checklistGroups = new Set(
+    detail.prepGroups.filter((g) => g.kind === "checklist").map((g) => g.id)
+  );
+  const openPrep = detail.prepItems.filter(
+    (i) => checklistGroups.has(i.group_id) && !i.is_done
+  );
+
+  if (!hasPriorities(detail, canEdit) && mySteps.length === 0 && openPrep.length === 0) return null;
 
   return (
     <section className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
@@ -3573,7 +3634,60 @@ function PrioritiesBanner({
               </div>
             )}
 
-            {theirs.length > 0 && ours.length > 0 && (
+            {mySteps.length > 0 && (
+              <div className="mb-4">
+                <button
+                  onClick={() => onGoTo("execution")}
+                  className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-runfree-pink transition hover:text-white"
+                >
+                  Assigned to you
+                  <span aria-hidden>→</span>
+                </button>
+                <AssignedSteps
+                  steps={mySteps}
+                  accessToken={accessToken}
+                  tone="navy"
+                  canUpdate={canEdit}
+                  onChanged={refreshSteps}
+                  onOpen={() => onGoTo("execution")}
+                />
+              </div>
+            )}
+
+            {openPrep.length > 0 && (
+              <div className="mb-4">
+                <button
+                  onClick={() => onGoTo("prepare")}
+                  className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 transition hover:text-white"
+                >
+                  Before you begin
+                  <span aria-hidden>→</span>
+                </button>
+                <ul className="space-y-1.5">
+                  {openPrep.map((i) => (
+                    <li
+                      key={i.id}
+                      className="flex items-start gap-3 rounded-xl bg-white/10 px-3 py-2.5"
+                    >
+                      <span
+                        aria-hidden
+                        className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-white/40"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-white">{i.title}</span>
+                        {i.due_on && (
+                          <span className="mt-0.5 block text-[11px] text-white/55">
+                            by {formatPrepDate(i.due_on)}
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {theirs.length > 0 && (ours.length > 0 || mySteps.length > 0 || openPrep.length > 0) && (
               <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
                 Your team
               </p>
@@ -3595,7 +3709,14 @@ function PrioritiesBanner({
               </p>
             )}
 
-            {detail.tasks.length === 0 && canEdit && !adding && (
+            {/* Only when the card is genuinely empty. Assigned steps and
+                outstanding prep both render above, and "Nothing set yet" under
+                them reads as a bug. */}
+            {detail.tasks.length === 0 &&
+              mySteps.length === 0 &&
+              openPrep.length === 0 &&
+              canEdit &&
+              !adding && (
               <p className="text-sm text-white/55">
                 Nothing set yet. This is the first thing your team sees — add what matters before
                 you next meet.
@@ -3869,6 +3990,7 @@ function DashboardPanel({
   highlights,
   canManage,
   canAssignTasks,
+  myProfileId,
   fileUrls,
   onOpenHighlight,
   onAddHighlights,
@@ -3886,6 +4008,7 @@ function DashboardPanel({
   canManage: boolean;
   /** Task create/edit/complete — admins plus anyone granted it (053). */
   canAssignTasks: boolean;
+  myProfileId: string;
   fileUrls: Record<string, string>;
   onOpenHighlight: (h: Highlight) => void;
   onAddHighlights: () => void;
@@ -3928,6 +4051,8 @@ function DashboardPanel({
           accessToken={accessToken}
           projectId={projectId}
           moduleOptions={availableSections(detail)}
+          myProfileId={myProfileId}
+          onGoTo={onGoTo}
           onChanged={onChanged}
         />
         <ProjectStatusCard nextDate={nextDate} onGoToDates={() => onGoTo("dates")} />

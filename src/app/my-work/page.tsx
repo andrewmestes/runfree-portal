@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { getCurrentProfile, getCurrentSession, getCurrentUser, logout } from "@/lib/auth";
 import { listTasksOwedByRunFree, setTaskDone, type OwedTask } from "@/lib/projects";
 import PortalHeader from "@/components/PortalHeader";
+import AssignedSteps from "@/components/AssignedSteps";
+import { listMyActionSteps, type MyStep } from "@/lib/my-steps";
 import PortalFooter from "@/components/PortalFooter";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
@@ -73,6 +75,17 @@ function formatDue(due: string | null): string {
 
 export default function MyWorkPage() {
   const [tasks, setTasks] = useState<OwedTask[]>([]);
+  /**
+   * Horizon Storyline steps assigned to me, across every engagement.
+   *
+   * A church person meets these on their own project dashboard; this page is
+   * RunFree-only and exists for someone carrying several engagements at once,
+   * so their steps belong here beside what they owe.
+   */
+  const [mySteps, setMySteps] = useState<MyStep[]>([]);
+  const [myId, setMyId] = useState<string | null>(null);
+  /** Held so the step list can write back without re-fetching the session. */
+  const [token, setToken] = useState<string | null>(null);
   const [profile, setProfile] = useState<Parameters<typeof PortalHeader>[0]["profile"] | null>(null);
   const [status, setStatus] = useState<"checking" | "denied" | "ready" | "error">("checking");
   const [busy, setBusy] = useState<string | null>(null);
@@ -82,6 +95,17 @@ export default function MyWorkPage() {
     const session = await getCurrentSession();
     if (!session) return;
     setTasks(await listTasksOwedByRunFree(session.access_token));
+  }, []);
+
+  const loadSteps = useCallback(async (profileId: string) => {
+    const session = await getCurrentSession();
+    if (!session) return;
+    setToken(session.access_token);
+    try {
+      setMySteps(await listMyActionSteps(session.access_token, profileId));
+    } catch {
+      // A missing list is not worth a broken page.
+    }
   }, []);
 
   useEffect(() => {
@@ -108,6 +132,9 @@ export default function MyWorkPage() {
       }
 
       setProfile(prof as never);
+      const id = (prof as { id?: string } | null)?.id ?? null;
+      setMyId(id);
+      if (id) void loadSteps(id);
       await load();
       setStatus("ready");
     }
@@ -153,7 +180,28 @@ export default function MyWorkPage() {
       />
 
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
-        {tasks.length === 0 ? (
+        {mySteps.length > 0 && (
+          <section className="mb-8">
+            <header className="mb-3 flex flex-wrap items-baseline gap-x-3">
+              <h2 className="font-display text-lg font-bold tracking-tight text-runfree-ink">
+                Assigned to you
+              </h2>
+              <span className="text-xs text-gray-500">
+                Horizon Storyline action steps with your name on them.
+              </span>
+            </header>
+            <AssignedSteps
+              steps={mySteps}
+              accessToken={token}
+              tone="light"
+              canUpdate
+              showProject
+              onChanged={() => myId && void loadSteps(myId)}
+            />
+          </section>
+        )}
+
+        {tasks.length === 0 && mySteps.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-16 text-center">
             <p className="font-display text-lg font-semibold text-runfree-ink">Nothing owed</p>
             <p className="mt-2 text-sm text-gray-500">

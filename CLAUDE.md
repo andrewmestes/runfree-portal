@@ -235,9 +235,28 @@ loads only when the panel is opened, because it is a live Drive read.
 `access` is still not a panel: who can sign in is a property of the project,
 so it is a dialog in the header.
 
+**The rail is grouped, and `group` is load-bearing.** Andrew: "start with
+Dashboard then add a small subtle line ... then do Preparation / Team / Key
+Dates in it's own section, add another line, then do Sessions / The Process /
+Books as a section, then Deliverables and Execution to end."
+
+  1. Dashboard — where you land
+  2. Preparation, Team, Key Dates — who, and when
+  3. Sessions, The Process, Books — the work as it happens
+  4. Deliverables, Execution — what it produced, and what happens after
+
+`PanelRail` draws a hairline on any item whose `group` differs from the one
+before it, and never on the first — a rule at the top of the rail reads as the
+header's underline. The groups are deliberately **unnamed**: a heading per
+group would cost more vertical height than the whole rail saves, and Andrew's
+original complaint about this column was density.
+
+`PanelStrip` takes `group` and ignores it. It wraps horizontally, so a rule
+between groups lands somewhere different at every width.
+
 Two consequences that are easy to get wrong:
 
-- **If you add a panel, add it to `panelItems`** or it will be unreachable
+- **If you add a panel, add it to `panelItems`** — *with a `group`* or it will be unreachable
   *and* silently redirect to Dashboard.
 - **Condensed view still renders everything at once** and deliberately keeps
   its `{ready}/{total}` counters. Don't "fix" those to match Dashboard:
@@ -703,6 +722,39 @@ each on its own row) and five from `sm`. Any change to those columns has to be
 made in `MetricRow` *and* in the `sm:grid` header above it — they are two
 elements sharing one column definition.
 
+## Assigned action steps show up where the person is, not as a copy
+
+Andrew: "the Action Steps that are assigned to people, could possibly live in
+their 'dashboard' as tasks to complete or update, possibly syncing in some way
+to the team's overall view of the Horizon Storyline."
+
+There is no sync, because there is nothing to copy. `listMyActionSteps()`
+reads the **same `initiative_steps` rows** the Horizon Storyline board renders,
+filtered to `assignee_profile_id`. Moving a light on the dashboard moves it on
+the board, because it is one row.
+
+Mirroring steps into `project_tasks` was the obvious-looking alternative and
+would have recreated precisely the problem 040/041 exist to end — Andrew, on
+the old portal: "currently there's three different places where they're
+looking for next steps and I need to be able to streamline that." Do not add a
+fourth.
+
+`AssignedSteps` renders in two tones because it appears on the navy What's
+Important Now card and on the white /my-work page. Its light is a **single dot
+that advances** red → amber → green, not the board's three-circle
+`RagPicker`: in a list of things you owe, three circles per row is a wall of
+dots, and the board is where you see all three and choose deliberately.
+
+**Where each audience meets them.** A church person meets their steps on the
+project Dashboard. /my-work is RunFree-only (see `project_tasks.owner`), so
+that page shows them for someone carrying several engagements at once.
+
+**Outstanding Preparation is surfaced there too**, and only `checklist` groups
+— a reading shelf deliberately has no tick boxes (044/045) and a key date is
+not a thing you finish. Andrew considered folding Preparation into this card
+entirely and chose "surface it, don't move it", so the panel keeps everything
+and the card only borrows what is still outstanding.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,
@@ -723,7 +775,13 @@ different class of bug:
 ```
 
 Same throwaway account, but you choose its **role**, the width, and whether to
-open every disclosure first. Andrew, after a run of avoidable bugs: "I feel
+open every disclosure first. `click:<text>` presses the first button whose
+label contains that text — which is how the Execution board's four detail
+views get captured, since each only renders when its box is selected. A final
+`keep` argument leaves the account in place for a two-step check (seed
+something against its profile id, then shoot again) and **prints a reminder to
+delete it** — a forgotten one shows up as a stray face in a church's Team
+panel, which is how Andrew found the last one. Andrew, after a run of avoidable bugs: "I feel
 like a lot of these are common sense mistakes ... do a full audit again."
 Almost all of them were invisible from an admin session — editor-facing copy
 shown to a church ("add what you actually watch" on a panel they cannot edit),

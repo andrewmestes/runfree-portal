@@ -42,6 +42,15 @@ const H = Number(process.argv[6] ?? 2400);
 const EXPAND = process.argv[7] === "expand";
 /** `click:<text>` — press the first button whose label contains <text>. */
 const CLICK = (process.argv[7] ?? "").startsWith("click:") ? process.argv[7].slice(6) : null;
+/**
+ * `keep` leaves the throwaway account in place after the run.
+ *
+ * For two-step checks only — seed something that references the account's
+ * profile id (an assigned action step, say), then shoot again. It prints a
+ * loud reminder because a forgotten account shows up as a stray face in a
+ * church's Team panel, which is exactly how Andrew found the last one.
+ */
+const KEEP = process.argv[8] === "keep";
 
 const BASE = process.env.AUDIT_BASE_URL ?? "http://localhost:3001";
 const SHOTS = "/tmp/runfree-panel-shot";
@@ -83,12 +92,21 @@ async function teardown() {
 }
 
 async function main() {
-  await teardown();
-  const { data: made, error } = await admin.auth.admin.createUser({
-    email: EMAIL, password: PASSWORD, email_confirm: true, user_metadata: { name: "Mobile Audit" },
-  });
-  if (error) throw error;
-  const uid = made.user.id;
+  // KEEP reuses the existing account rather than recreating it, because its
+  // profile id is the whole point of a two-step check — recreate it between
+  // runs and whatever you seeded against it is orphaned.
+  let uid: string;
+  const existing = KEEP ? (await admin.auth.admin.listUsers({ perPage: 1000 })).data.users.find((u) => u.email === EMAIL) : null;
+  if (existing) {
+    uid = existing.id;
+  } else {
+    await teardown();
+    const { data: made, error } = await admin.auth.admin.createUser({
+      email: EMAIL, password: PASSWORD, email_confirm: true, user_metadata: { name: "Mobile Audit" },
+    });
+    if (error) throw error;
+    uid = made.user.id;
+  }
   await admin.from("project_members").upsert(
     { project_id: PROJECT, profile_id: uid, role: ROLE },
     { onConflict: "project_id,profile_id" },
@@ -193,4 +211,10 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
 }
 main()
   .catch((e) => { console.error(e); process.exitCode = 1; })
-  .finally(teardown);
+  .finally(async () => {
+    if (KEEP) {
+      console.log(`\n!! ${EMAIL} was LEFT IN PLACE (keep). Delete it when you are done.`);
+      return;
+    }
+    await teardown();
+  });

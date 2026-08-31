@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import FrameSides from "./vision-stack/FrameSides";
+import type { VisionFrameElement, VisionFrameRow } from "@/lib/vision-frame";
 
 /**
  * The Vision Stack, as one thing you operate rather than four things you
@@ -78,6 +80,10 @@ export default function VisionStackExplorer({
   onOpen,
   onUpload,
   onTogglePublished,
+  frameRows,
+  onSaveFrameBody,
+  onUploadFrameImage,
+  onOpenImage,
   canEdit,
 }: {
   /** Foundation-first, as `vision_stack_layers.position` has them. */
@@ -90,6 +96,17 @@ export default function VisionStackExplorer({
   onUpload?: (item: StackEntry, file: File) => Promise<void>;
   /** Flip a deliverable between Draft and Live. Omitted for viewers. */
   onTogglePublished?: (item: StackEntry) => Promise<void>;
+  /**
+   * The church's own words for the four sides of the frame.
+   *
+   * The Vision Frame layer leads with these rather than a grid of file tiles
+   * — Andrew: "do 4 rows, one for each side of the frame." They are the same
+   * `vision_frame` rows the Deliverables panel writes, not a copy.
+   */
+  frameRows: VisionFrameRow[];
+  onSaveFrameBody: (element: VisionFrameElement, body: string | null) => Promise<void>;
+  onUploadFrameImage: (element: VisionFrameElement, file: File) => Promise<void>;
+  onOpenImage: (title: string, url: string) => void;
   canEdit: boolean;
 }) {
   /**
@@ -192,6 +209,24 @@ export default function VisionStackExplorer({
         </div>
 
         <div className="relative w-full" style={{ aspectRatio: STACK_ASPECT }}>
+          {/* Ground. Andrew: "I think a bit of shadow underneath would be
+              helpful." A soft ellipse under the base plate — four floating
+              diamonds with no contact shadow read as clip-art, and the
+              per-plate drop-shadows only separate them from each other, not
+              from the page. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-[50%]"
+            style={{
+              bottom: "-2.5%",
+              width: "64%",
+              height: "7%",
+              background: "radial-gradient(ellipse at center, rgba(19,29,69,0.22) 0%, rgba(19,29,69,0.10) 45%, rgba(19,29,69,0) 72%)",
+              filter: "blur(6px)",
+              opacity: assembled ? 1 : 0,
+              transition: reduced ? "none" : "opacity 700ms ease-out 300ms",
+            }}
+          />
           {plates.map((p, i) => {
             const isActive = p.slug === selected;
             const isHover = hovered === p.slug && !isActive;
@@ -215,30 +250,39 @@ export default function VisionStackExplorer({
                   // hover chatter, not a visual flourish.
                   clipPath: DIAMOND,
                   WebkitClipPath: DIAMOND,
+                  /* The transform lives HERE, on the clipped element.
+                   *
+                   * It used to sit on the inner span, so the selected plate
+                   * scaled up inside a clip that had not moved — the artwork
+                   * grew past its own mask and the corners vanished. Andrew:
+                   * "the gear icon looks wonky when zoomed, some of the tile
+                   * disappears." `clip-path` is applied in the element's local
+                   * coordinates and the transform maps both together, so
+                   * scaling the clipped element scales the mask with it. */
+                  transform: assembled
+                    ? `translateY(${isActive && !reduced ? -10 : 0}px) scale(${
+                        isActive ? 1.06 : isHover ? 1.02 : 1
+                      })`
+                    : "translateY(26px) scale(0.94)",
+                  // Kept nearly solid. At 0.62 the unselected plates washed
+                  // out against a light page and the stack stopped reading as
+                  // one object — prominence comes from scale and a real
+                  // shadow, which is what separation actually looks like.
+                  opacity: assembled ? (isActive ? 1 : isHover ? 0.95 : 0.84) : 0,
+                  transformOrigin: "50% 44%",
+                  transition: reduced
+                    ? "none"
+                    : "transform 620ms cubic-bezier(.22,1,.36,1), opacity 520ms cubic-bezier(.22,1,.36,1)",
+                  transitionDelay: assembled && !reduced ? "0ms" : `${(plates.length - 1 - i) * 90}ms`,
                 }}
               >
                 <span
                   className="block h-full w-full"
                   style={{
-                    transform: assembled
-                      ? `translateY(${isActive && !reduced ? -10 : 0}px) scale(${
-                          isActive ? 1.06 : isHover ? 1.02 : 1
-                        })`
-                      : "translateY(26px) scale(0.94)",
-                    // Kept nearly solid. At 0.62 the unselected plates washed
-                    // out against a light page and the stack stopped reading
-                    // as one object — prominence comes from scale and a real
-                    // shadow instead, which is what separation actually looks
-                    // like.
-                    opacity: assembled ? (isActive ? 1 : isHover ? 0.95 : 0.84) : 0,
                     filter: isActive
                       ? "drop-shadow(0 18px 26px rgba(19,29,69,0.28))"
                       : "drop-shadow(0 6px 10px rgba(19,29,69,0.10))",
-                    transition: reduced
-                      ? "none"
-                      : "transform 620ms cubic-bezier(.22,1,.36,1), opacity 520ms cubic-bezier(.22,1,.36,1), filter 480ms cubic-bezier(.22,1,.36,1)",
-                    transitionDelay: assembled && !reduced ? "0ms" : `${(plates.length - 1 - i) * 90}ms`,
-                    transformOrigin: "50% 44%",
+                    transition: reduced ? "none" : "filter 480ms cubic-bezier(.22,1,.36,1)",
                   }}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -296,6 +340,10 @@ export default function VisionStackExplorer({
             onOpen={onOpen}
             onUpload={onUpload}
             onTogglePublished={onTogglePublished}
+            frameRows={frameRows}
+            onSaveFrameBody={onSaveFrameBody}
+            onUploadFrameImage={onUploadFrameImage}
+            onOpenImage={onOpenImage}
             canEdit={canEdit}
             reduced={reduced}
           />
@@ -320,6 +368,10 @@ function LayerPanel({
   onOpen,
   onUpload,
   onTogglePublished,
+  frameRows,
+  onSaveFrameBody,
+  onUploadFrameImage,
+  onOpenImage,
   canEdit,
   reduced,
 }: {
@@ -330,6 +382,10 @@ function LayerPanel({
   onOpen: (item: StackEntry) => void;
   onUpload?: (item: StackEntry, file: File) => Promise<void>;
   onTogglePublished?: (item: StackEntry) => Promise<void>;
+  frameRows: VisionFrameRow[];
+  onSaveFrameBody: (element: VisionFrameElement, body: string | null) => Promise<void>;
+  onUploadFrameImage: (element: VisionFrameElement, file: File) => Promise<void>;
+  onOpenImage: (title: string, url: string) => void;
   canEdit: boolean;
   reduced: boolean;
 }) {
@@ -351,36 +407,61 @@ function LayerPanel({
   });
 
   const live = items.filter((d) => d.published_at).length;
+  const isFrame = layer.slug === "vision-frame";
 
   return (
     <div>
       <p style={rise(0)} className="text-[11px] font-bold uppercase tracking-[0.18em] text-runfree-magentaDeep">
         Layer {String(number).padStart(2, "0")}
       </p>
+      {/* Set large. This page is what a church puts on a screen in front of
+          its board, and a 24px heading is a form label. */}
       <h2
         style={rise(1)}
-        className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl"
+        className="mt-2 font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-runfree-ink sm:text-5xl"
       >
         {layer.name}
       </h2>
       {layer.blurb && (
-        <p style={rise(2)} className="mt-3 max-w-xl text-base leading-relaxed text-gray-600">
+        <p style={rise(2)} className="mt-4 max-w-xl text-lg leading-relaxed text-gray-500">
           {layer.blurb}
         </p>
       )}
 
-      <p style={rise(3)} className="mt-4 text-xs font-semibold text-gray-400">
-        {items.length === 0
-          ? "Nothing in this layer yet."
-          : live === 0
-            ? `${items.length} ${items.length === 1 ? "piece" : "pieces"} to come`
-            : `${live} of ${items.length} finished`}
-      </p>
+      {!isFrame && (
+        <p style={rise(3)} className="mt-5 text-xs font-semibold text-gray-400">
+          {items.length === 0
+            ? "Nothing in this layer yet."
+            : live === 0
+              ? `${items.length} ${items.length === 1 ? "piece" : "pieces"} to come`
+              : `${live} of ${items.length} finished`}
+        </p>
+      )}
+
+      {/* The Vision Frame layer leads with the words, not the filing. */}
+      {isFrame && (
+        <div style={rise(3)} className="mt-8">
+          <FrameSides
+            rows={frameRows}
+            imageUrls={imageUrls}
+            canEdit={canEdit}
+            onSaveBody={onSaveFrameBody}
+            onUploadImage={onUploadFrameImage}
+            onOpenImage={onOpenImage}
+          />
+        </div>
+      )}
+
+      {items.length > 0 && isFrame && (
+        <p style={rise(4)} className="mt-8 text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
+          Documents
+        </p>
+      )}
 
       {items.length > 0 && (
-        <ul className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-3 ${isFrame ? "mt-3" : "mt-6"}`}>
           {items.map((item, n) => (
-            <li key={item.id} style={rise(4 + n)}>
+            <li key={item.id} style={rise((isFrame ? 5 : 4) + n)}>
               <StackTile
                 item={item}
                 imageUrl={item.image_path ? imageUrls[item.image_path] : undefined}

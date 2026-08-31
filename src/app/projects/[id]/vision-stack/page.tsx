@@ -11,6 +11,11 @@ import {
   type ProjectRole,
 } from "@/lib/projects";
 import { getSignedImageUrls, replaceDeliverableImage, uploadDeliverableFile } from "@/lib/storage";
+import {
+  listVisionFrame,
+  saveVisionFrameElement,
+  type VisionFrameRow,
+} from "@/lib/vision-frame";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
@@ -62,6 +67,14 @@ export default function VisionStackPage() {
    * still never publicly reachable.
    */
   const [preview, setPreview] = useState<PreviewFile | null>(null);
+  /**
+   * The four sides of the frame, in the church's own words.
+   *
+   * The same `vision_frame` rows the Deliverables panel writes — this page
+   * reads them rather than keeping a second copy, so a mission statement
+   * edited in either place is edited everywhere.
+   */
+  const [frameRows, setFrameRows] = useState<VisionFrameRow[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -89,9 +102,13 @@ export default function VisionStackPage() {
       setDetail(result);
       setStatus("ready");
 
+      const frame = await listVisionFrame(session.access_token, projectId);
+      setFrameRows(frame);
+
       const paths = [
         ...result.deliverables.map((d) => d.image_path),
         ...result.deliverables.map((d) => d.file_path),
+        ...frame.map((f) => f.image_path),
       ].filter((p): p is string => !!p);
       setImageUrls(await getSignedImageUrls(session.access_token, paths));
     } catch (err) {
@@ -166,32 +183,40 @@ export default function VisionStackPage() {
           the main area where Andrew asked for it — "bring this functionality
           down into the main area". A tall banner above it would push the
           thing you came to use below the fold. */}
-      <div className="relative overflow-hidden bg-runfree-navy">
-        <div aria-hidden className="absolute inset-0 bg-runfree-sunset opacity-25" />
+      {/* One field, one sentence, set large.
+          The gradient wash and the blurred magenta blob went: two overlapping
+          effects behind white type muddied the middle of the field and read
+          as decoration rather than as a ground. What carries this now is the
+          scale of the type and the space around it. */}
+      <div className="relative overflow-hidden bg-runfree-navyDeep">
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-24 -top-32 h-96 w-96 rounded-full bg-runfree-magenta/25 blur-3xl"
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(120% 90% at 12% 0%, #24397F 0%, #16224F 45%, #131D45 100%)",
+          }}
         />
-        <div className="relative mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-          <p className="font-display text-lg font-bold tracking-tight text-runfree-pink sm:text-xl">
+        <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-runfree-pink">
             {church}
           </p>
-          <h1 className="mt-1.5 font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
+          <h1 className="mt-4 font-display text-5xl font-extrabold leading-[0.95] tracking-[-0.03em] text-white sm:text-6xl lg:text-7xl">
             The Vision Stack
           </h1>
-          <p className="mt-4 max-w-xl text-base leading-relaxed text-white/75">
-            Everything your team has built, from the convictions underneath it all to
-            the tools that put it to work.
+          <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/60 sm:text-xl">
+            Everything your team has built — from the convictions underneath it all
+            to the tools that put it to work.
           </p>
           {ready > 0 && (
-            <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-semibold text-white ring-1 ring-white/20">
+            <p className="mt-8 text-sm font-semibold text-white/50">
               {ready} {ready === 1 ? "piece" : "pieces"} finished
             </p>
           )}
         </div>
       </div>
 
-      <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+      <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <VisionStackExplorer
           layers={detail.stackLayers.map((l) => ({
             slug: l.slug,
@@ -250,6 +275,26 @@ export default function VisionStackPage() {
                   await load();
                 }
               : undefined
+          }
+          frameRows={frameRows}
+          onSaveFrameBody={async (element, body) => {
+            if (!accessToken) return;
+            await saveVisionFrameElement(accessToken, projectId, element, { body });
+            await load();
+          }}
+          onUploadFrameImage={async (element, file) => {
+            if (!accessToken) return;
+            // `replaceDeliverableImage` is named for its first caller but is
+            // generic: it writes to `{project_id}/...` in the shared bucket
+            // and removes the old object. Storage RLS keys on the project id
+            // in the path, not on which table points at it.
+            const existing = frameRows.find((r) => r.element === element)?.image_path ?? null;
+            const { path } = await replaceDeliverableImage(accessToken, existing, projectId, file);
+            await saveVisionFrameElement(accessToken, projectId, element, { image_path: path });
+            await load();
+          }}
+          onOpenImage={(title, url) =>
+            setPreview({ id: url, title, num: null, label: title, sizeBytes: null })
           }
         />
       </main>

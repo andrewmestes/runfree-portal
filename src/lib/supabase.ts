@@ -788,6 +788,8 @@ export type Database = {
             | "problem_statement" | "kingdom_concept" | "mission" | "measures"
             | "strategy" | "values" | "vision_proper";
           body: string | null;
+          /** The visual strategy sketch (060). Storage path, not a URL. */
+          image_path: string | null;
           updated_at: string;
           updated_by: string | null;
         };
@@ -798,11 +800,13 @@ export type Database = {
             | "problem_statement" | "kingdom_concept" | "mission" | "measures"
             | "strategy" | "values" | "vision_proper";
           body?: string | null;
+          image_path?: string | null;
           updated_at?: string;
           updated_by?: string | null;
         };
         Update: {
           body?: string | null;
+          image_path?: string | null;
           updated_at?: string;
           updated_by?: string | null;
         };

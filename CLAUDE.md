@@ -814,6 +814,32 @@ Geometry comes from the source artwork (503x900 for four plates): plate height
 line lives **inside** the aspect-ratio box, because that is the element the
 plates' percentages resolve against.
 
+**The transform must live on the element that carries the clip.** It sat on an
+inner span, so a selected plate scaled up inside a mask that had not moved and
+the artwork's corners vanished — Andrew: "the gear icon looks wonky when
+zoomed, some of the tile disappears." `clip-path` resolves in the element's
+local coordinates and the transform maps both together, so putting `scale()`
+on the same element scales the mask with it. The drop-shadow stays on the
+inner span; that one wants to follow the art, not the box.
+
+**The Vision Frame layer is four rows, not tiles** (**060**). Andrew: "do 4
+rows, one for each side of the frame ... the only different one would be the
+Strategy, where an image is able to be uploaded." `FrameSides` reads the SAME
+`vision_frame` rows the Deliverables panel writes — there is one copy of a
+church's mission statement in this portal. Strategy alone carries
+`vision_frame.image_path`, because Mission, Values and Measures come out of a
+session as sentences and Strategy comes out as a napkin sketch.
+
+`FRAME_SIDES` is a deliberate subset of `VISION_FRAME`: Problem Statement and
+Kingdom Concept are Paradigm Convictions and Vision Proper is the Horizon
+Storyline, so only four of the seven belong on this layer. Deliverable files
+on that layer still render, demoted under a "Documents" heading.
+
+The four side icons (`public/brand/vision-frame/`) are the RunFree-drawn marks
+— compass, fire, flashlight, bullseye. They also light up `VisionFramePanel`
+on the Deliverables tab, which had been rendering `onError`-hidden `<img>`
+placeholders since 055 waiting for exactly these files.
+
 **A Draft/Live toggle only renders once there is a file to publish.** On a
 stack where nothing is uploaded — which is every new project — it was a wall
 of pink DRAFT pills over empty tiles, announcing a state nobody could change.

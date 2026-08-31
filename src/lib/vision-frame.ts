@@ -23,8 +23,32 @@ export type VisionFrameRow = {
   project_id: string;
   element: VisionFrameElement;
   body: string | null;
+  /** The visual strategy sketch (060). Storage path, not a URL. */
+  image_path: string | null;
   updated_at: string;
 };
+
+/**
+ * The four sides of the frame, in the order they are taught.
+ *
+ * A subset of `VISION_FRAME` — the Problem Statement and Kingdom Concept sit
+ * *under* the frame (they are Paradigm Convictions), and Vision Proper is the
+ * Horizon Storyline. These four are the frame itself, which is why the Vision
+ * Stack's Vision Frame layer renders exactly these as its four rows.
+ *
+ * Andrew: "do 4 rows, one for each side of the frame."
+ */
+export const FRAME_SIDES: VisionFrameElement[] = ["mission", "values", "strategy", "measures"];
+
+/**
+ * Which side is a drawing rather than a sentence.
+ *
+ * Andrew: "the only different one would be the Strategy, where an image is
+ * able to be uploaded for the visual strategy to show up." It comes out of
+ * the room as a napkin sketch, so a text box alone would be the wrong shape
+ * for it.
+ */
+export const FRAME_SIDE_IS_VISUAL: Record<string, boolean> = { strategy: true };
 
 export const VISION_FRAME: {
   key: VisionFrameElement;
@@ -110,12 +134,15 @@ export async function saveVisionFrameElement(
   accessToken: string,
   projectId: string,
   element: VisionFrameElement,
-  body: string | null
+  patch: string | null | Partial<Pick<VisionFrameRow, "body" | "image_path">>
 ): Promise<void> {
+  // A bare string still means "set the body" — the Deliverables panel has
+  // called it that way since 055 and there is no reason to churn it.
+  const fields = typeof patch === "string" || patch === null ? { body: patch } : patch;
   const { error } = await createUserClient(accessToken)
     .from("vision_frame")
     .upsert(
-      { project_id: projectId, element, body, updated_at: new Date().toISOString() },
+      { project_id: projectId, element, ...fields, updated_at: new Date().toISOString() },
       { onConflict: "project_id,element" }
     );
   if (error) throw error;

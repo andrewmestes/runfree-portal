@@ -755,6 +755,55 @@ not a thing you finish. Andrew considered folding Preparation into this card
 entirely and chose "surface it, don't move it", so the panel keeps everything
 and the card only borrows what is still outstanding.
 
+## The Vision Stack is one interactive object, and the plates are real art
+
+Andrew: "bring this functionality down into the main area, so when I click on
+each icon, the corresponding text and elements expand out and are clickable to
+open a PDF in a modal ... almost Apple.com style."
+
+`VisionStackExplorer` replaced `VisionStackGraphic` (a CSS-3D approximation)
+and the four-accordion list under it. The plates are Andrew's own Pivvot
+artwork; the composition is his printed reference made live — exploded stack
+and label rail on the left, dashed leader line, that layer's contents on the
+right. One layer open at a time, selection by click.
+
+**Two things are load-bearing, not styling:**
+
+- **`clip-path` on each plate button.** The plates are transparent PNGs whose
+  visible diamond fills about half a rectangle that overlaps its neighbours
+  heavily. As rectangles, moving the pointer across the stack crosses several
+  invisible boxes and the hover state chatters — Andrew: "it glitches
+  significantly back and forth when the mouse goes over it." `clip-path`
+  changes hit-testing as well as painting, so the hoverable area becomes
+  exactly the visible diamond.
+- **Selection never moves the plate under the cursor.** The old component
+  lifted the element carrying `onMouseEnter`, so hovering moved it out from
+  under the pointer → `onMouseLeave` → back under the pointer → forever. Here
+  hover only changes brightness; the lift belongs to the *selected* plate,
+  which is chosen by click and cannot oscillate. **Do not animate geometry on
+  hover in this component.**
+
+**The plate PNGs are pre-normalised.** They were exported at different times
+with different shadow padding — the diamond's waist sat between 44% and 53%
+down its own file, so stacked they drifted and no single clip-path fitted all
+four. `public/brand/vision-stack/*.png` are all 800x567 with the diamond at
+identical coordinates. If a plate is ever re-exported it has to be
+re-normalised to that canvas or the clip and the art stop agreeing.
+
+Geometry comes from the source artwork (503x900 for four plates): plate height
+39.67% of the container, step 20.11%, so 3 x 20.11 + 39.67 = 100%. The leader
+line lives **inside** the aspect-ratio box, because that is the element the
+plates' percentages resolve against.
+
+**A Draft/Live toggle only renders once there is a file to publish.** On a
+stack where nothing is uploaded — which is every new project — it was a wall
+of pink DRAFT pills over empty tiles, announcing a state nobody could change.
+
+**Headless Chrome cannot render a PDF in an iframe.** A blank modal body in a
+desktop screenshot is the test environment, not a bug: `useCanvasPdf()`
+branches on the engine, so shooting with the iOS user agent takes the pdf.js
+canvas path and the document renders. Verify PDF previews on the mobile run.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

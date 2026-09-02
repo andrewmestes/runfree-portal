@@ -57,6 +57,7 @@ import {
   uploadProjectLogo,
 } from "@/lib/storage";
 import { extractLoomId } from "@/lib/loom";
+import { useFocusTrap } from "@/lib/useFocusTrap";
 import { MODULE_META, moduleLabel, moduleOrder } from "@/lib/modules";
 import ModuleNav, { type NavModule } from "@/components/ModuleNav";
 import FilePreview, { type PreviewFile } from "@/components/FilePreview";
@@ -260,7 +261,15 @@ export default function ProjectDetailPage() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  /**
+   * Which initiative Execution should open on, when someone arrives from one
+   * of their assigned steps on the dashboard. Cleared by any other panel
+   * change so a later visit from the rail lands on the default again.
+   */
+  const [executionFocus, setExecutionFocus] = useState<string | null>(null);
+
   const goPanel = useCallback((next: string) => {
+    if (next !== "execution") setExecutionFocus(null);
     setPanel(next);
     const url = new URL(window.location.href);
     url.searchParams.set("panel", next);
@@ -538,6 +547,8 @@ export default function ProjectDetailPage() {
    * just done to get "Checking access" down from eleven round-trips to two.
    */
   const [books, setBooks] = useState<BooksLibrary | null>(null);
+  const [booksError, setBooksError] = useState<string | null>(null);
+  const [booksNonce, setBooksNonce] = useState(0);
   const [activeBookId, setActiveBookId] = useState<string>("");
 
   const fetchBookBlobUrl = useCallback(
@@ -605,7 +616,11 @@ export default function ProjectDetailPage() {
       const res = await fetch(`/api/projects/${projectId}/books`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      if (!res.ok || cancelled) return;
+      if (cancelled) return;
+      if (!res.ok) {
+        setBooksError("The library could not be reached just now.");
+        return;
+      }
 
       const body = await res.json();
       if (cancelled) return;
@@ -618,8 +633,9 @@ export default function ProjectDetailPage() {
       setBooks(library);
       setActiveBookId((prev) => prev || library.books[0]?.id || "");
     })().catch(() => {
-      // The panel shows its empty state; a church does not need a stack trace
-      // because Drive was briefly unreachable.
+      // No stack trace for a church because Drive was briefly unreachable —
+      // but "Loading the library…" forever was not an empty state either.
+      if (!cancelled) setBooksError("The library could not be reached just now.");
     });
 
     return () => {
@@ -629,7 +645,7 @@ export default function ProjectDetailPage() {
     // deps the effect never re-runs when the picker opens and Will's Books
     // stays on "…" forever unless someone visited that panel first. Caught by
     // driving the picker and watching the count never arrive.
-  }, [panel, picking, books, projectId]);
+  }, [panel, picking, books, projectId, booksNonce]);
 
   // Default to the first module once content is known, but never fight a
   // choice the person has already made.
@@ -693,17 +709,28 @@ export default function ProjectDetailPage() {
     }
   }
 
+  /**
+   * Monotonic: two overlapping refreshes — a tick, then a rename before the
+   * first one's round-trip lands — used to resolve in whichever order the
+   * network chose, and the older detail overwrote the newer, visibly
+   * reverting the second write until the next reload.
+   */
+  const refreshSeq = useRef(0);
   async function refresh() {
     if (!accessToken) return;
+    const seq = ++refreshSeq.current;
     const result = await getProjectDetail(accessToken, projectId);
-    if (!result) return;
+    if (!result || seq !== refreshSeq.current) return;
     setDetail(result);
     const hl = await listHighlights(accessToken, projectId).catch(() => []);
+    if (seq !== refreshSeq.current) return;
     setHighlights(hl);
     highlightUrlsRef.current = hl.map((h) => h.external_url).filter((u): u is string => !!u);
     const cf = await listDeliverableFiles(accessToken, projectId).catch(() => []);
+    if (seq !== refreshSeq.current) return;
     setCardFiles(cf);
     setVisionFrame(await listVisionFrame(accessToken, projectId).catch(() => []));
+    if (seq !== refreshSeq.current) return;
     setImageUrls(
       await getSignedImageUrls(accessToken, [
         ...signablePaths(result),
@@ -928,7 +955,10 @@ export default function ProjectDetailPage() {
     detail.prepItems
       .filter((i) => i.due_on && dateGroups.some((g) => g.id === i.group_id))
       .sort((a, b) => (a.due_on! < b.due_on! ? -1 : 1))
-      .find((i) => (parseLocalDate(i.due_on)?.getTime() ?? 0) >= startOfToday()) ?? null;
+      // A two-day retreat is still "next" on its second morning. DateTile
+      // already treats a span as current through end_on; this did not, so a
+      // multi-day key date vanished from the dashboard after its first day.
+      .find((i) => (parseLocalDate(i.end_on ?? i.due_on)?.getTime() ?? 0) >= startOfToday()) ?? null;
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 lg:h-screen lg:overflow-hidden">
@@ -1022,6 +1052,10 @@ export default function ProjectDetailPage() {
                 canManage={canManage}
                 canAssignTasks={canAssignTasks}
                 myProfileId={profile.id}
+                onOpenStep={(initiativeId) => {
+                  setExecutionFocus(initiativeId);
+                  goPanel("execution");
+                }}
                 fileUrls={imageUrls}
                 onOpenHighlight={openHighlight}
                 onAddHighlights={() => setPicking(true)}
@@ -1043,6 +1077,19 @@ export default function ProjectDetailPage() {
                       onOpen={openBook}
                       fetchBytes={fetchBookBytes}
                     />
+                  ) : booksError ? (
+                    <div className="rounded-2xl border border-dashed border-gray-200 py-12 text-center text-sm text-gray-500">
+                      <p>{booksError}</p>
+                      <button
+                        onClick={() => {
+                          setBooksError(null);
+                          setBooksNonce((n) => n + 1);
+                        }}
+                        className="mt-3 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink"
+                      >
+                        Try again
+                      </button>
+                    </div>
                   ) : (
                     <p className="rounded-2xl border border-dashed border-gray-200 py-12 text-center text-sm text-gray-400">
                       Loading the library&hellip;
@@ -1058,6 +1105,7 @@ export default function ProjectDetailPage() {
                 detail={detail}
                 imageUrls={imageUrls}
                 canManage={canManage}
+                canEditAvatars={profile.is_owner || profile.account_role === "admin"}
                 canEdit={canEdit}
                 teamGroups={teamGroups}
                 accessToken={accessToken}
@@ -1068,9 +1116,13 @@ export default function ProjectDetailPage() {
 
             {activePanel === "dates" && dateGroups.length > 0 && (
               <section id="dates">
-                <SectionHeading eyebrow="The calendar" title="Key dates" />
+                <SectionHeading eyebrow="The calendar" title="Key Dates" />
                 <div className="mt-8">
+                  {/* soloTitle: the one dates group is the whole panel, and
+                      "Key Dates" printed twice in a row — once as the section
+                      heading, once as the card's own title. */}
                   <PrepCards
+                    soloTitle
                     groups={dateGroups}
                     items={detail.prepItems}
                     projectId={projectId}
@@ -1162,6 +1214,7 @@ export default function ProjectDetailPage() {
                 thumbs={thumbs}
                 moduleOptions={availableSections(detail)}
                 canEdit={canEdit}
+                canAssignTasks={canAssignTasks}
                 accessToken={accessToken}
                 projectId={projectId}
                 onChanged={refresh}
@@ -1217,9 +1270,12 @@ export default function ProjectDetailPage() {
                 accessToken={accessToken}
                 canEdit={canEdit}
                 canManageSteps={canAssignTasks}
-                churchName={detail.name}
+                // The church, not the engagement: "Christ Chapel", not
+                // "Christ Chapel - Pivvot Vision Framing's own".
+                churchName={detail.name.replace(/\s*-\s*.*$/, "")}
                 members={detail.members}
                 onGoTo={goPanel}
+                focusInitiativeId={executionFocus}
               />
             )}
 
@@ -1533,20 +1589,10 @@ function Modal({
   children: React.ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    panel.current?.focus();
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
+  // Escape, scroll lock, Tab kept inside, focus handed back on close — the
+  // same contract FilePreview and the picker use. This had the first two and
+  // let Tab walk into the page behind the dialog.
+  useFocusTrap(panel, onClose);
 
   return (
     <div
@@ -1717,6 +1763,16 @@ function ChurchHero({
     website_url: detail.websiteUrl ?? "",
     about: detail.about ?? "",
   });
+  // Re-seed on open: seeded once at mount, a cancelled edit came back next
+  // time and a value saved by a colleague never showed up in the form.
+  useEffect(() => {
+    if (!editing) return;
+    setForm({
+      location: detail.location ?? "",
+      website_url: detail.websiteUrl ?? "",
+      about: detail.about ?? "",
+    });
+  }, [editing, detail.location, detail.websiteUrl, detail.about]);
 
   async function uploadLogo(file: File | undefined) {
     if (!file || !accessToken) return;
@@ -1767,6 +1823,15 @@ function ChurchHero({
           {/* Works for any engagement: a church's logo, or the person's
               photo on a Younique or coaching project. */}
           <div
+            role={canManage ? "button" : undefined}
+            tabIndex={canManage ? 0 : undefined}
+            aria-label={canManage ? (logoUrl ? "Replace the logo" : "Add a logo") : undefined}
+            onKeyDown={(e) => {
+              if (canManage && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                logoInput.current?.click();
+              }
+            }}
             onClick={() => canManage && logoInput.current?.click()}
             onDragOver={(e) => canManage && e.preventDefault()}
             onDrop={(e) => {
@@ -1775,8 +1840,10 @@ function ChurchHero({
               uploadLogo(e.dataTransfer.files?.[0]);
             }}
             title={canManage ? "Upload a logo or photo" : undefined}
-            className={`group relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-200 ${
-              canManage ? "cursor-pointer hover:ring-runfree-magenta/40" : ""
+            className={`group relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-200 outline-none ${
+              canManage
+                ? "cursor-pointer hover:ring-runfree-magenta/40 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+                : ""
             }`}
           >
             {logoUrl ? (
@@ -1789,7 +1856,18 @@ function ChurchHero({
             )}
             {canManage && (
               <>
-                <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep opacity-0 transition group-hover:opacity-100">
+                {/* Hover reveals it on a pointer; on touch there is no hover,
+                    so a phone showed a bare grey tile with no hint it was
+                    tappable. And "Uploading…" must never be hover-gated. */}
+                <span
+                  className={`pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep transition ${
+                    busy
+                      ? "opacity-100"
+                      : logoUrl
+                        ? "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                        : "opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 group-focus-visible:opacity-100"
+                  }`}
+                >
                   {busy ? "Uploading…" : logoUrl ? "Replace" : "Add logo"}
                 </span>
                 <input
@@ -1834,7 +1912,7 @@ function ChurchHero({
                     href={safeExternalUrl(detail.websiteUrl)!}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-medium text-runfree-magentaDeep hover:underline"
+                    className="-my-2 inline-block py-2 font-medium text-runfree-magentaDeep hover:underline"
                   >
                     {prettyDomain(detail.websiteUrl!)}
                   </a>
@@ -1847,7 +1925,7 @@ function ChurchHero({
               <div className="flex shrink-0 items-center gap-3">
                 <button
                   onClick={() => setEditing(true)}
-                  className="text-xs font-medium text-runfree-magentaDeep outline-none hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+                  className="-my-2 py-2 text-xs font-medium text-runfree-magentaDeep outline-none hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
                 >
                   Edit details
                 </button>
@@ -2171,7 +2249,7 @@ function ProjectSidebar({
           <span className="min-w-0 flex-1">
             <a
               href="/account"
-              className="block truncate text-[13px] font-semibold text-white outline-none hover:underline focus-visible:ring-2 focus-visible:ring-white/60"
+              className="-my-1 block truncate py-1 text-[13px] font-semibold text-white outline-none hover:underline focus-visible:ring-2 focus-visible:ring-white/60"
             >
               {profile.full_name || profile.email}
             </a>
@@ -2622,7 +2700,7 @@ function TaskList({
                   ? `"${t.title}" is complete`
                   : `"${t.title}" is not complete`
             }
-            className={`relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${
+            className={`relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition before:absolute before:-inset-2 before:content-[''] ${
               canEdit ? "before:absolute before:-inset-2 before:content-['']" : ""
             } ${
               t.is_done
@@ -3489,6 +3567,7 @@ function PrioritiesBanner({
   projectId,
   moduleOptions,
   myProfileId,
+  onOpenStep,
   onGoTo,
   onChanged,
 }: {
@@ -3499,6 +3578,8 @@ function PrioritiesBanner({
   accessToken: string | null;
   /** Whose action steps to surface here. */
   myProfileId: string;
+  /** Open Execution on that step's initiative, not on the default one. */
+  onOpenStep?: (initiativeId: string) => void;
   onGoTo: (key: string) => void;
   onChanged: () => void;
 }) {
@@ -3649,7 +3730,7 @@ function PrioritiesBanner({
                   tone="navy"
                   canUpdate={canEdit}
                   onChanged={refreshSteps}
-                  onOpen={() => onGoTo("execution")}
+                  onOpen={(s) => (onOpenStep ? onOpenStep(s.initiative_id) : onGoTo("execution"))}
                 />
               </div>
             )}
@@ -3658,7 +3739,7 @@ function PrioritiesBanner({
               <div className="mb-4">
                 <button
                   onClick={() => onGoTo("prepare")}
-                  className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45 transition hover:text-white"
+                  className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70 transition hover:text-white"
                 >
                   Before you begin
                   <span aria-hidden>→</span>
@@ -3688,7 +3769,7 @@ function PrioritiesBanner({
             )}
 
             {theirs.length > 0 && (ours.length > 0 || mySteps.length > 0 || openPrep.length > 0) && (
-              <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+              <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">
                 Your team
               </p>
             )}
@@ -3703,7 +3784,10 @@ function PrioritiesBanner({
               />
             )}
 
-            {open.length === 0 && done.length > 0 && (
+            {/* Only once the whole card is clear — this used to render under
+                a list of assigned steps and outstanding prep that were
+                visibly not done. */}
+            {open.length === 0 && done.length > 0 && mySteps.length === 0 && openPrep.length === 0 && (
               <p className="text-sm text-white/60">
                 Everything here is done. Nice work.
               </p>
@@ -3991,6 +4075,7 @@ function DashboardPanel({
   canManage,
   canAssignTasks,
   myProfileId,
+  onOpenStep,
   fileUrls,
   onOpenHighlight,
   onAddHighlights,
@@ -4009,6 +4094,8 @@ function DashboardPanel({
   /** Task create/edit/complete — admins plus anyone granted it (053). */
   canAssignTasks: boolean;
   myProfileId: string;
+  /** Open Execution on the initiative one of my steps belongs to. */
+  onOpenStep?: (initiativeId: string) => void;
   fileUrls: Record<string, string>;
   onOpenHighlight: (h: Highlight) => void;
   onAddHighlights: () => void;
@@ -4052,6 +4139,7 @@ function DashboardPanel({
           projectId={projectId}
           moduleOptions={availableSections(detail)}
           myProfileId={myProfileId}
+          onOpenStep={onOpenStep}
           onGoTo={onGoTo}
           onChanged={onChanged}
         />
@@ -4123,10 +4211,14 @@ function LatestSessionCard({
   return (
     <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
       <div className="h-1.5 bg-runfree-grad" />
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-4 px-5 py-4">
-        {thumb ? <SessionThumb src={thumb} className="h-20 w-36" /> : null}
+      {/* Stacked below `sm`, a row from it. As one flex row at 390px the
+          144px thumbnail and the shrink-0 button left the text ~36px, and the
+          title truncated to a single glyph. The recording is the point of
+          this card, so it stays on a phone — above the words, not beside. */}
+      <div className="grid gap-4 px-5 py-4 sm:flex sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-4">
+        {thumb ? <SessionThumb src={thumb} className="h-32 w-full sm:h-20 sm:w-36" /> : null}
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 sm:flex-1">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
             Most recent session
           </p>
@@ -4141,7 +4233,7 @@ function LatestSessionCard({
 
         <button
           onClick={onGoToSessions}
-          className="group inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-runfree-pink px-3.5 py-2 text-xs font-bold text-runfree-magentaDeep outline-none transition hover:bg-runfree-magenta hover:text-white focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+          className="group inline-flex shrink-0 items-center gap-1.5 justify-self-start rounded-lg bg-runfree-pink px-3.5 py-2 text-xs font-bold text-runfree-magentaDeep outline-none transition hover:bg-runfree-magenta hover:text-white focus-visible:ring-2 focus-visible:ring-runfree-magenta"
         >
           {/* "All 5 recordings" would be a false statement on a project with
               five sessions and two recordings — not every session has one. */}
@@ -5023,6 +5115,7 @@ function SessionCard({
     return (
       <SessionCardForm
         existing={item}
+        existingFiles={files}
         accessToken={accessToken}
         onDone={() => {
           setEditing(false);
@@ -5214,10 +5307,17 @@ function SessionCardForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Object URLs are revoked when a file leaves the list and on unmount; a
-  // preview thumbnail that outlives its file is a leak in a form people open
-  // and close all day.
-  useEffect(() => () => staged.forEach((s) => s.url && URL.revokeObjectURL(s.url)), [staged]);
+  // Object URLs are revoked when a file leaves the list (removeStaged) and on
+  // unmount; a preview thumbnail that outlives its file is a leak in a form
+  // people open and close all day. Through a ref, not a [staged] dependency:
+  // keyed on the array, the cleanup ran on every add and revoked the previews
+  // of files still sitting in the list.
+  const stagedRef = useRef(staged);
+  stagedRef.current = staged;
+  useEffect(
+    () => () => stagedRef.current.forEach((s) => s.url && URL.revokeObjectURL(s.url)),
+    []
+  );
 
   function addFiles(files: File[]) {
     setError(null);
@@ -5276,6 +5376,13 @@ function SessionCardForm({
           file_size: null,
           kind: "session_image",
           section: section ?? null,
+          // Live on creation. read_deliverables hides unpublished rows from
+          // viewers, which is right for the Vision Stack's deliberate Draft/
+          // Live toggle — but these cards have no toggle and are written FOR
+          // the church, so every one a coach added was invisible to the people
+          // it was for. 062 published the eleven with content already sitting
+          // on Christ Chapel.
+          published_at: new Date().toISOString(),
           position: siblings.reduce((max, d) => Math.max(max, d.position), -1) + 1,
         });
         id = (made as { id: string } | null)?.id ?? undefined;
@@ -5746,7 +5853,10 @@ function PrepCards({
   asRows = false,
   stacked = false,
   emphasised = false,
+  soloTitle = false,
 }: {
+  /** The panel heading already names this one group — do not repeat it. */
+  soloTitle?: boolean;
   groups: PrepGroup[];
   items: PrepItem[];
   projectId: string;
@@ -5794,6 +5904,7 @@ function PrepCards({
             onChanged={onChanged}
             thumbs={thumbs}
             onOpenFile={onOpenFile}
+            soloTitle={soloTitle}
             asRow
           />
         ))}
@@ -5824,6 +5935,7 @@ function PrepCards({
               onChanged={onChanged}
               thumbs={thumbs}
               onOpenFile={onOpenFile}
+              soloTitle={soloTitle}
               step={i + 1}
             />
           </li>
@@ -5858,6 +5970,7 @@ function PrepCards({
           onChanged={onChanged}
           thumbs={thumbs}
           onOpenFile={onOpenFile}
+          soloTitle={soloTitle}
           emphasised={emphasised}
         />
       ))}
@@ -5878,6 +5991,7 @@ function PrepCard({
   asRow = false,
   step,
   emphasised = false,
+  soloTitle = false,
 }: {
   group: PrepGroup;
   items: PrepItem[];
@@ -5894,6 +6008,8 @@ function PrepCard({
   step?: number;
   /** A firmer edge, for cards sitting beside a heavy one. */
   emphasised?: boolean;
+  /** The panel heading already names this group — do not print it again. */
+  soloTitle?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   // A row opens when it has something to show. An empty group stays shut —
@@ -5930,6 +6046,11 @@ function PrepCard({
     </span>
   );
 
+  // With soloTitle and neither a description nor a counter the header is an
+  // empty flex box, and the body's top margin then reads as dead space at the
+  // top of the card.
+  const showHeader = !soloTitle || !!group.description || !!counter || step != null;
+
   if (asRow) {
     return (
       <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
@@ -5949,9 +6070,11 @@ function PrepCard({
             </svg>
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-base font-semibold tracking-tight text-runfree-ink">
-              {group.title}
-            </span>
+            {!soloTitle && (
+              <span className="block text-base font-semibold tracking-tight text-runfree-ink">
+                {group.title}
+              </span>
+            )}
             {group.description && (
               <span className="mt-0.5 block truncate text-xs text-gray-500">
                 {group.description}
@@ -6035,6 +6158,7 @@ function PrepCard({
           : "ring-1 ring-gray-200/80 hover:ring-gray-300"
       }`}
     >
+      {showHeader && (
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
           {step != null && (
@@ -6046,18 +6170,23 @@ function PrepCard({
             </span>
           )}
           <div className="min-w-0">
-          <h4 className="text-base font-semibold tracking-tight text-runfree-ink">
-            {group.title}
-          </h4>
+          {!soloTitle && (
+            <h4 className="text-base font-semibold tracking-tight text-runfree-ink">
+              {group.title}
+            </h4>
+          )}
           {group.description && (
-            <p className="mt-1 text-xs leading-relaxed text-gray-500">{group.description}</p>
+            <p className={`text-xs leading-relaxed text-gray-500 ${soloTitle ? "" : "mt-1"}`}>
+              {group.description}
+            </p>
           )}
           </div>
         </div>
         {counter}
       </header>
+      )}
 
-      <div className={ordered.length === 0 && canEdit ? "" : "mt-4 flex-1"}>
+      <div className={ordered.length === 0 && canEdit ? "" : showHeader ? "mt-4 flex-1" : "flex-1"}>
         {ordered.length === 0 ? (
           /* An editor sees only the add control: the dashed "Nothing here yet
              — add the first one" box sat directly above a dashed "+ Add a
@@ -6998,6 +7127,7 @@ function SessionsSection({
   imageUrls,
   moduleOptions,
   canEdit,
+  canAssignTasks,
   accessToken,
   projectId,
   onChanged,
@@ -7009,6 +7139,8 @@ function SessionsSection({
   imageUrls: Record<string, string>;
   moduleOptions: string[];
   canEdit: boolean;
+  /** Task create/edit/complete — admins plus anyone granted it (053). */
+  canAssignTasks: boolean;
   accessToken: string | null;
   projectId: string;
   onChanged: () => void;
@@ -7018,26 +7150,38 @@ function SessionsSection({
   const [heldOn, setHeldOn] = useState("");
   const [section, setSection] = useState("");
   const [recording, setRecording] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
-    if (!accessToken || !title.trim()) return;
-    const created = await createSession(accessToken, projectId, {
-      title: title.trim(),
-      section: section || null,
-      held_on: heldOn || null,
-    });
-    // Saved in a second call so the recording field can live on the create
-    // form without widening createSession's contract for one caller.
-    if (recording.trim() && created) {
-      await updateSession(accessToken, created.id, { recording_url: recording.trim() });
+    if (!accessToken || !title.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await createSession(accessToken, projectId, {
+        title: title.trim(),
+        section: section || null,
+        held_on: heldOn || null,
+      });
+      // Saved in a second call so the recording field can live on the create
+      // form without widening createSession's contract for one caller.
+      if (recording.trim() && created) {
+        await updateSession(accessToken, created.id, { recording_url: recording.trim() });
+      }
+      setTitle("");
+      setHeldOn("");
+      setSection("");
+      setRecording("");
+      setAdding(false);
+      onChanged();
+    } catch (err) {
+      // A double-click made two identical sessions; a refused insert made
+      // nothing and said nothing.
+      setError(err instanceof Error ? err.message : "Could not add that session.");
+    } finally {
+      setBusy(false);
     }
-    setTitle("");
-    setHeldOn("");
-    setSection("");
-    setRecording("");
-    setAdding(false);
-    onChanged();
   }
 
   return (
@@ -7062,6 +7206,7 @@ function SessionsSection({
             imageUrls={imageUrls}
             moduleOptions={moduleOptions}
             canEdit={canEdit}
+            canAssignTasks={canAssignTasks}
             thumb={s.recording_url ? thumbs[s.recording_url] : undefined}
             tasks={detail.tasks.filter((t) => t.session_id === s.id)}
             accessToken={accessToken}
@@ -7110,12 +7255,18 @@ function SessionsSection({
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
                 />
               </Field>
+              {error && (
+                <p role="alert" className="text-xs font-semibold text-rose-600">
+                  {error}
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                  disabled={busy}
+                  className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
                 >
-                  Add session
+                  {busy ? "Adding…" : "Add session"}
                 </button>
                 <button
                   type="button"
@@ -7146,6 +7297,7 @@ function SessionRow({
   imageUrls,
   moduleOptions,
   canEdit,
+  canAssignTasks,
   thumb,
   tasks,
   accessToken,
@@ -7158,6 +7310,8 @@ function SessionRow({
   imageUrls: Record<string, string>;
   moduleOptions: string[];
   canEdit: boolean;
+  /** Task create/edit/complete — admins plus anyone granted it (053). */
+  canAssignTasks: boolean;
   /** Loom still for the collapsed row. */
   thumb?: string;
   /** Homework this session produced. */
@@ -7178,6 +7332,23 @@ function SessionRow({
     transcript: session.transcript ?? "",
     published: !!session.published_at,
   });
+  // Re-seed each time the row opens. Seeded once at mount, Save wrote back
+  // whatever this tab had loaded over a colleague's newer recap.
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      title: session.title,
+      held_on: session.held_on ?? "",
+      section: session.section ?? "",
+      recording_url: session.recording_url ?? "",
+      takeaways: session.takeaways ?? "",
+      recap: session.recap ?? "",
+      transcript: session.transcript ?? "",
+      published: !!session.published_at,
+    });
+    // The session's own fields are what should re-seed it, not the object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, session.id, session.title, session.held_on, session.section, session.recording_url, session.takeaways, session.recap, session.transcript, session.published_at]);
 
   async function save() {
     if (!accessToken) return;
@@ -7191,7 +7362,8 @@ function SessionRow({
         takeaways: form.takeaways || null,
         recap: richTextIsEmpty(form.recap) ? null : form.recap,
         transcript: form.transcript || null,
-        published_at: form.published ? new Date().toISOString() : null,
+        // Keep the original publish date; every save used to re-stamp it.
+        published_at: form.published ? (session.published_at ?? new Date().toISOString()) : null,
       });
       onChanged();
       setOpen(false);
@@ -7206,6 +7378,7 @@ function SessionRow({
     <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
       <button
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
       >
         <span className="flex min-w-0 items-center gap-4">
@@ -7229,7 +7402,23 @@ function SessionRow({
               thumbnail there, and then you can click on it and it will drop
               down with any additional information." */}
           {session.recording_url && thumb ? (
-            <SessionThumb src={thumb} className="hidden h-16 w-28 sm:block" />
+            <>
+              <SessionThumb src={thumb} className="hidden h-16 w-28 sm:block" />
+              {/* The thumbnail hides below `sm` for room, which left a phone
+                  with no sign a recording existed at all. A play mark rather
+                  than a "RECORDING" pill: the pill cost 110px of a 390px row
+                  and cut every title to "Virtual Session …". */}
+              <span
+                role="img"
+                aria-label="Has a recording"
+                title="Has a recording"
+                className="grid h-7 w-7 place-items-center rounded-full bg-runfree-pink text-runfree-magentaDeep sm:hidden"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="ml-0.5 h-3 w-3" aria-hidden="true">
+                  <path d="M6 4.5v11l9-5.5z" />
+                </svg>
+              </span>
+            </>
           ) : session.recording_url ? (
             <span className="rounded-full bg-runfree-pink px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
               Recording
@@ -7333,22 +7522,28 @@ function SessionRow({
                   Next steps &amp; homework
                 </h5>
                 <div className="space-y-2.5">
+                  {/* Tasks follow the task grant (053), not the editor role —
+                      the same gate the Dashboard's What's Important Now
+                      already uses. Gating on canEdit here let an editor
+                      without the grant see a tick box that RLS then refused. */}
                   <TaskList
                     tasks={tasks}
                     accessToken={accessToken}
                     onChanged={onChanged}
-                    canEdit={canEdit}
+                    canEdit={canAssignTasks}
                     emptyLabel="Nothing assigned from this session yet."
                   />
-                  <AddTask
-                    projectId={projectId}
-                    accessToken={accessToken}
-                    siblings={tasks}
-                    section={session.section}
-                    sessionId={session.id}
-                    moduleOptions={moduleOptions}
-                    onChanged={onChanged}
-                  />
+                  {canAssignTasks && (
+                    <AddTask
+                      projectId={projectId}
+                      accessToken={accessToken}
+                      siblings={tasks}
+                      section={session.section}
+                      sessionId={session.id}
+                      moduleOptions={moduleOptions}
+                      onChanged={onChanged}
+                    />
+                  )}
                   <p className="text-[11px] text-gray-400">
                     These show at the top of the project and inside the module.
                   </p>
@@ -7579,6 +7774,7 @@ function TeamSection({
   imageUrls,
   canManage,
   canEdit = false,
+  canEditAvatars = false,
   teamGroups = [],
   accessToken,
   projectId,
@@ -7589,6 +7785,12 @@ function TeamSection({
   imageUrls: Record<string, string>;
   canManage: boolean;
   canEdit?: boolean;
+  /**
+   * Portal admins only. profiles' one UPDATE policy is manage_profiles =
+   * am_admin(), so a project admin who is not a portal admin got a zero-row
+   * update, no error, and an orphaned upload.
+   */
+  canEditAvatars?: boolean;
   /** Insights profiles and other team-coaching uploads. */
   teamGroups?: PrepGroup[];
   accessToken: string | null;
@@ -7656,7 +7858,7 @@ function TeamSection({
               email={m.email}
               highlight={m.isLead}
               avatarUrl={m.avatarPath ? imageUrls[m.avatarPath] : undefined}
-              canEditAvatar={canManage}
+              canEditAvatar={canEditAvatars}
               onAvatarPicked={async (file) => {
                 if (!accessToken) return;
                 const { path } = await uploadProjectLogo(accessToken, projectId, file);
@@ -7862,10 +8064,19 @@ function PersonCard({
       }`}
     >
       <span
+        role={canEditAvatar ? "button" : undefined}
+        tabIndex={canEditAvatar ? 0 : undefined}
+        aria-label={canEditAvatar ? `${avatarUrl ? "Change" : "Add"} ${name}'s photo` : undefined}
+        onKeyDown={(e) => {
+          if (canEditAvatar && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            fileRef.current?.click();
+          }
+        }}
         onClick={() => canEditAvatar && fileRef.current?.click()}
         title={canEditAvatar ? "Add a headshot" : undefined}
-        className={`group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-runfree-grad text-sm font-bold text-white ${
-          canEditAvatar ? "cursor-pointer" : ""
+        className={`group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-runfree-grad text-sm font-bold text-white outline-none ${
+          canEditAvatar ? "cursor-pointer focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-2" : ""
         }`}
       >
         {avatarUrl ? (

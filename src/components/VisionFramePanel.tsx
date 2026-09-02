@@ -136,7 +136,7 @@ export default function VisionFramePanel({
                     </div>
                   ) : empty ? (
                     <p className="text-sm italic text-gray-400">
-                      {canEdit ? "Not written yet." : "In process…"}
+                      Not written yet.
                     </p>
                   ) : (
                     <RichTextView html={row!.body!} className="text-runfree-ink" />

@@ -67,8 +67,11 @@ export default function MinistryDashboard({
         }
       />
 
-      {data.metrics.length === 0 ? (
-        <div className="rounded-2xl bg-gray-50 px-5 py-8 text-center">
+      {/* The seed offer AND the groups' own add rows. The groups used to
+          render only once a row existed, so an editor could not add a single
+          custom row without first accepting Will's nine and deleting eight. */}
+      {data.metrics.length === 0 && (
+        <div className="mb-6 rounded-2xl bg-gray-50 px-5 py-8 text-center">
           <p className="text-sm text-gray-500">Nothing on the scoreboard yet.</p>
           <button
             disabled={seeding}
@@ -91,12 +94,12 @@ export default function MinistryDashboard({
           >
             {seeding ? "Adding…" : "Start from Will's dashboard"}
           </button>
-          <p className="mt-2 text-[11px] text-gray-400">
-            Adds the nine rows off the printed sheet. Rename or remove any of them.
+          <p className="mt-2 text-[11px] text-gray-500">
+            Adds the nine rows off the printed sheet — or add your own rows below.
           </p>
         </div>
-      ) : (
-        <div className="space-y-6">
+      )}
+      <div className="space-y-6">
           {groups.map((g) => {
             const rows = data.metrics.filter((m) => m.grouping === g);
             if (rows.length === 0 && !canEdit) return null;
@@ -113,8 +116,7 @@ export default function MinistryDashboard({
               />
             );
           })}
-        </div>
-      )}
+      </div>
     </section>
   );
 }
@@ -251,6 +253,8 @@ function MetricRow({
           value={m.label}
           onSave={(v) => v && void patch({ label: v })}
           disabled={!canEdit}
+          required
+          ariaLabel="Row name"
           className="!px-0 font-semibold !text-runfree-ink"
         />
       </div>
@@ -259,6 +263,7 @@ function MetricRow({
           value={m.prior_year}
           onSave={(v) => void patch({ prior_year: v })}
           disabled={!canEdit}
+          ariaLabel={`${m.label} — prior year`}
           align="right"
           className="tabular-nums"
           placeholder="—"
@@ -269,6 +274,7 @@ function MetricRow({
           value={m.current}
           onSave={(v) => void patch({ current: v })}
           disabled={!canEdit}
+          ariaLabel={`${m.label} — now`}
           align="right"
           className="font-semibold tabular-nums"
           placeholder="—"
@@ -279,6 +285,7 @@ function MetricRow({
           value={m.next_year}
           onSave={(v) => void patch({ next_year: v })}
           disabled={!canEdit}
+          ariaLabel={`${m.label} — next year`}
           align="right"
           className="tabular-nums"
           placeholder="—"
@@ -296,19 +303,26 @@ function MetricRow({
         >
           {m.trend ? TREND_MARK[m.trend] : <span className="text-gray-300">·</span>}
         </button>
+        {/* No status is no status. Defaulting the picker to amber drew every
+            freshly seeded row as "At risk" — selected, announced to a screen
+            reader — before anyone had made a judgement. */}
         <RagPicker
-          value={m.status ?? "amber"}
+          value={m.status}
           onChange={(v) => void patch({ status: v })}
           disabled={!canEdit}
         />
         {canEdit && (
           <button
             onClick={async () => {
+              // Sat 4px from the green circle at 14px square, with no way
+              // back — a mis-tap on a phone erased a year of numbers.
+              if (!confirm(`Remove “${m.label}” from the scoreboard?`)) return;
               await deleteMetric(accessToken, m.id);
               await onChanged();
             }}
             title="Remove this row"
-            className="text-gray-300 transition hover:text-rose-600"
+            aria-label={`Remove ${m.label}`}
+            className="ml-1 grid h-7 w-7 place-items-center rounded-full text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
           >
             <svg
               viewBox="0 0 24 24"

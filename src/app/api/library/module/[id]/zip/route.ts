@@ -10,6 +10,10 @@ import {
   isDriveConfigured,
 } from "@/lib/drive";
 
+// A whole module through fetchDriveFile, which needed 60s for one combined
+// handout. Same allowance as /library/file and /keynotes/file.
+export const maxDuration = 60;
+
 /**
  * GET /api/library/module/{id}/zip
  *

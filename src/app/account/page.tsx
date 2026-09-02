@@ -169,14 +169,14 @@ export default function AccountPage() {
           <div className="h-1.5 bg-runfree-grad" />
           <dl className="divide-y divide-gray-100">
             <div className="flex justify-between px-6 py-4 text-sm">
-              <dt className="text-gray-500">Name</dt>
-              <dd className="font-medium text-runfree-ink">
+              <dt className="shrink-0 text-gray-500">Name</dt>
+              <dd className="min-w-0 text-right font-medium text-runfree-ink">
                 {profile?.full_name || framer?.name || "—"}
               </dd>
             </div>
             <div className="flex justify-between px-6 py-4 text-sm">
-              <dt className="text-gray-500">Email</dt>
-              <dd className="font-medium text-runfree-ink">
+              <dt className="shrink-0 text-gray-500">Email</dt>
+              <dd className="min-w-0 break-all text-right font-medium text-runfree-ink">
                 {profile?.email || framer?.email || "—"}
               </dd>
             </div>

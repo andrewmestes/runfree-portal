@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useOwedCount } from "@/lib/useOwedCount";
+import { getCurrentProfile } from "@/lib/auth";
 import Image from "next/image";
 
 type Profile = { full_name?: string | null; is_staff?: boolean; account_role?: string | null } | null;
@@ -104,8 +105,32 @@ export default function PortalHeader({
   chromeInSidebar = false,
   onMenuClick,
 }: Props) {
+  /**
+   * The certification pages pass a `framer` row, and a RunFree person with no
+   * certified_framers row has none — so on those pages the bar rendered an
+   * anonymous "?" with no My Tasks link for the people who run the place.
+   * When no profile is supplied, fetch it here after paint, the way the owed
+   * badge does: the header renders fine without it and fills in when it lands.
+   */
+  const [fetched, setFetched] = useState<Profile>(null);
+  useEffect(() => {
+    if (profile) return;
+    let cancelled = false;
+    getCurrentProfile()
+      .then((p) => {
+        if (!cancelled && p) setFetched(p as Profile);
+      })
+      .catch(() => {
+        /* the framer row, if any, still names them */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
+
   // One shape from here down, whichever prop the caller used.
-  const person = profile ?? (framer ? { full_name: framer.name ?? null, is_staff: !!framer.is_admin } : null);
+  const person =
+    profile ?? fetched ?? (framer ? { full_name: framer.name ?? null, is_staff: !!framer.is_admin } : null);
 
   // Who gets the cross-engagement view: RunFree people. A church has one
   // project and sees what we owe them on their own dashboard.
@@ -118,13 +143,19 @@ export default function PortalHeader({
   const [certOpen, setCertOpen] = useState(false);
   const [meOpen, setMeOpen] = useState(false);
 
-  // Escape closes it, matching every other dismissible surface in the portal.
+  // Escape closes either menu, matching every other dismissible surface in
+  // the portal. The account dropdown was left out, so a keyboard user's only
+  // way out of it was activating an item or tabbing into the page behind.
   useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    if (!menuOpen && !meOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      setMeOpen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
+  }, [menuOpen, meOpen]);
 
   return (
     <header className="bg-runfree-navy">
@@ -349,6 +380,31 @@ export default function PortalHeader({
               className="flex min-h-[44px] items-center rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"
             >
               Help
+            </a>
+
+            {/* The phone menu used to stop at Help and Admin, so a RunFree
+                person on a phone had no route to My Tasks or their account
+                — both of which the desktop bar shows. */}
+            {isRunFree && (
+              <a
+                href="/my-work"
+                onClick={() => setMenuOpen(false)}
+                className="flex min-h-[44px] items-center gap-2 rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"
+              >
+                My Tasks
+                {owed > 0 && (
+                  <span className="grid h-4 min-w-4 place-items-center rounded-full bg-runfree-grad px-1 text-[10px] font-bold tabular-nums text-white">
+                    {owed}
+                  </span>
+                )}
+              </a>
+            )}
+            <a
+              href="/account"
+              onClick={() => setMenuOpen(false)}
+              className="flex min-h-[44px] items-center rounded-lg px-2 text-xs font-bold uppercase tracking-wider text-white/80 outline-none ring-white/25 transition hover:bg-white/10 focus-visible:ring-2"
+            >
+              Your account
             </a>
 
             {person?.is_staff && (

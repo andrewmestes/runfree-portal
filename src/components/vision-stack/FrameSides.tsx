@@ -100,6 +100,7 @@ function FrameSide({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
   const isVisual = !!FRAME_SIDE_IS_VISUAL[element];
@@ -224,8 +225,13 @@ function FrameSide({
                     e.target.value = "";
                     if (!f) return;
                     setBusy(true);
+                    setUploadError(null);
                     try {
                       await onUploadImage(element, f);
+                    } catch (err) {
+                      setUploadError(
+                        err instanceof Error ? err.message : "That upload did not go through."
+                      );
                     } finally {
                       setBusy(false);
                     }
@@ -235,10 +241,15 @@ function FrameSide({
                   <button
                     onClick={() => input.current?.click()}
                     disabled={busy}
-                    className="mt-2 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+                    className="mt-2 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
                   >
                     {busy ? "Uploading…" : "Replace the sketch"}
                   </button>
+                )}
+                {uploadError && (
+                  <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-600">
+                    {uploadError}
+                  </p>
                 )}
               </>
             )}
@@ -251,7 +262,7 @@ function FrameSide({
               setDraft(row?.body ?? "");
               setEditing(true);
             }}
-            className="mt-3 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+            className="mt-3 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
           >
             {blank ? "Write it" : "Edit"}
           </button>

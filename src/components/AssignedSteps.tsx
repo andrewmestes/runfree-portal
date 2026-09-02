@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { RAG_DOT, RAG_LABEL, updateStep, type RagStatus } from "@/lib/execution";
 import type { MyStep } from "@/lib/my-steps";
 import { isDateish, prettyDate } from "./execution/ui";
@@ -40,45 +41,83 @@ export default function AssignedSteps({
   /** Jump to the initiative on the board. Omitted where there is nowhere to go. */
   onOpen?: (s: MyStep) => void;
 }) {
-  if (steps.length === 0) return null;
+  /**
+   * Steps ticked green during this visit.
+   *
+   * The list excludes green rows, so the moment a light went green the row
+   * vanished under the thumb that moved it — no confirmation, no way back
+   * from a mis-tap. These stay in place, struck through, with an Undo, until
+   * the page is next loaded.
+   */
+  const [justDone, setJustDone] = useState<MyStep[]>([]);
   const navy = tone === "navy";
+  const rows = [
+    ...steps,
+    ...justDone.filter((d) => !steps.some((s) => s.id === d.id)),
+  ];
+  if (rows.length === 0) return null;
 
   return (
     <ul className="space-y-1.5">
-      {steps.map((s) => {
-        const overdue = isDateish(s.by_when) && (s.by_when as string) <= todayIso();
+      {rows.map((s) => {
+        const done = s.status === "green";
+        const overdue = !done && isDateish(s.by_when) && (s.by_when as string) <= todayIso();
         return (
           <li
             key={s.id}
             className={`flex items-start gap-3 rounded-xl px-3 py-2.5 ${
               navy ? "bg-white/10" : "bg-white ring-1 ring-gray-200"
-            }`}
+            } ${done ? "opacity-70" : ""}`}
           >
             <StepLight
               value={s.status}
               navy={navy}
-              disabled={!canUpdate || !accessToken}
+              disabled={done || !canUpdate || !accessToken}
               onChange={async (v) => {
                 if (!accessToken) return;
+                if (v === "green") setJustDone((prev) => [...prev, { ...s, status: "green" }]);
                 await updateStep(accessToken, s.id, { status: v });
                 onChanged();
               }}
             />
             <div className="min-w-0 flex-1">
-              <button
-                onClick={onOpen ? () => onOpen(s) : undefined}
-                disabled={!onOpen}
-                className={`block w-full text-left text-sm font-medium ${
-                  navy ? "text-white" : "text-runfree-ink"
-                } ${onOpen ? "hover:underline" : "cursor-default"}`}
-              >
-                {s.description}
-              </button>
+              {onOpen && !done ? (
+                <button
+                  onClick={() => onOpen(s)}
+                  className={`block w-full text-left text-sm font-medium hover:underline ${
+                    navy ? "text-white" : "text-runfree-ink"
+                  }`}
+                >
+                  {s.description}
+                </button>
+              ) : (
+                <span
+                  className={`block text-sm font-medium ${navy ? "text-white" : "text-runfree-ink"} ${
+                    done ? "line-through" : ""
+                  }`}
+                >
+                  {s.description}
+                </span>
+              )}
               <p
                 className={`mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] ${
-                  navy ? "text-white/55" : "text-gray-500"
+                  navy ? "text-white/70" : "text-gray-500"
                 }`}
               >
+                {done && accessToken && (
+                  <button
+                    onClick={async () => {
+                      await updateStep(accessToken, s.id, { status: "amber" });
+                      setJustDone((prev) => prev.filter((d) => d.id !== s.id));
+                      onChanged();
+                    }}
+                    className={`font-semibold underline-offset-2 hover:underline ${
+                      navy ? "text-runfree-pink" : "text-runfree-magentaDeep"
+                    }`}
+                  >
+                    Done — undo
+                  </button>
+                )}
                 {showProject && s.project && <span>{s.project.name}</span>}
                 {s.initiative && <span>{s.initiative.name}</span>}
                 {s.by_when && (

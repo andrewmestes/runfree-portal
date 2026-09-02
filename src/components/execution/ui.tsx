@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RAG_DOT, RAG_LABEL, type RagStatus } from "@/lib/execution";
 
 /**
@@ -50,11 +50,16 @@ export function RagPicker({
   onChange,
   disabled,
 }: {
-  value: RagStatus;
+  /** null = not yet judged; all three circles render empty. */
+  value: RagStatus | null;
   onChange: (s: RagStatus) => void;
   disabled?: boolean;
 }) {
   const options: RagStatus[] = ["red", "amber", "green"];
+  // One tab stop for the group, arrows to move — the radio contract. Every
+  // circle was its own tab stop and the arrows did nothing, which is three
+  // presses per row for a keyboard user and a lie to a screen reader.
+  const tabbable = value ?? options[0];
   return (
     <span className="inline-flex items-center" role="radiogroup" aria-label="Today's status">
       {options.map((s) => {
@@ -68,9 +73,24 @@ export function RagPicker({
             aria-label={RAG_LABEL[s]}
             title={RAG_LABEL[s]}
             disabled={disabled}
+            tabIndex={disabled ? -1 : s === tabbable ? 0 : -1}
+            data-rag={s}
             onClick={(e) => {
               e.stopPropagation();
               if (!disabled) onChange(s);
+            }}
+            onKeyDown={(e) => {
+              if (disabled) return;
+              const i = options.indexOf(s);
+              let next: RagStatus | null = null;
+              if (e.key === "ArrowRight" || e.key === "ArrowDown") next = options[(i + 1) % options.length];
+              if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = options[(i + options.length - 1) % options.length];
+              if (e.key === "Home") next = options[0];
+              if (e.key === "End") next = options[options.length - 1];
+              if (!next) return;
+              e.preventDefault();
+              onChange(next);
+              (e.currentTarget.parentElement?.querySelector(`[data-rag="${next}"]`) as HTMLElement | null)?.focus();
             }}
             className={`grid h-7 w-7 place-items-center rounded-full ${
               disabled ? "cursor-default" : "cursor-pointer"
@@ -104,6 +124,9 @@ export function Cell({
   className = "",
   align = "left",
   display,
+  required = false,
+  wrap = false,
+  ariaLabel,
 }: {
   value: string | null;
   onSave: (next: string | null) => void;
@@ -113,6 +136,16 @@ export function Cell({
   align?: "left" | "right";
   /** How to render read-only. The editable field always shows the raw value. */
   display?: (v: string) => string;
+  /**
+   * Blank is not a value. The draft snaps back to what was there instead of
+   * sitting empty over a row that never saved — a caller that declined the
+   * save with `v && …` left the field looking cleared until the next reload.
+   */
+  required?: boolean;
+  /** Read-only text wraps instead of truncating — a step description is a sentence. */
+  wrap?: boolean;
+  /** For inputs whose visible caption is not a <label> (column headings, MiniField). */
+  ariaLabel?: string;
 }) {
   const [draft, setDraft] = useState(value ?? "");
   /**
@@ -124,12 +157,13 @@ export function Cell({
    * is sitting there.
    */
   const [focused, setFocused] = useState(false);
+  const discard = useRef(false);
   useEffect(() => setDraft(value ?? ""), [value]);
 
   if (disabled) {
     return (
       <span
-        className={`block truncate text-sm text-gray-600 ${align === "right" ? "text-right" : ""} ${className}`}
+        className={`block text-sm text-gray-600 ${wrap ? "whitespace-normal break-words" : "truncate"} ${align === "right" ? "text-right" : ""} ${className}`}
       >
         {value ? (display ? display(value) : value) : <span className="text-gray-300">—</span>}
       </span>
@@ -140,17 +174,32 @@ export function Cell({
     <input
       value={!focused && display && draft ? display(draft) : draft}
       placeholder={placeholder}
+      aria-label={ariaLabel}
       onChange={(e) => setDraft(e.target.value)}
       onClick={(e) => e.stopPropagation()}
       onFocus={() => setFocused(true)}
       onBlur={() => {
         setFocused(false);
+        if (discard.current) {
+          discard.current = false;
+          return;
+        }
         const next = draft.trim() === "" ? null : draft.trim();
+        if (required && next === null) {
+          setDraft(value ?? "");
+          return;
+        }
         if ((value ?? null) !== next) onSave(next);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         if (e.key === "Escape") {
+          // Discard, then blur. setState is asynchronous but blur() fires
+          // onBlur synchronously, so the old order — reset, then blur — ran
+          // the save with the abandoned draft still in scope and committed
+          // exactly the edit Escape was meant to throw away. The ref makes
+          // the blur handler skip the save this once.
+          discard.current = true;
           setDraft(value ?? "");
           (e.target as HTMLInputElement).blur();
         }

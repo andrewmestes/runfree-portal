@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectMember } from "@/lib/projects";
 import {
   RAG_DOT,
@@ -11,6 +11,7 @@ import {
   measureProgress,
   nextRenewalStop,
   renewalCycle,
+  effectiveCurrent,
   type ExecutionData,
 } from "@/lib/execution";
 import HorizonBoard, { VisionFrameMark, type Selection } from "./execution/HorizonBoard";
@@ -53,6 +54,7 @@ export default function ExecutionPanel({
   churchName,
   members,
   onGoTo,
+  focusInitiativeId = null,
 }: {
   projectId: string;
   accessToken: string;
@@ -63,10 +65,25 @@ export default function ExecutionPanel({
   churchName: string;
   members: ProjectMember[];
   onGoTo: (panel: string) => void;
+  /**
+   * Open on this initiative. Set when someone arrives from a step on the
+   * dashboard — AssignedSteps promises "jump to the initiative on the
+   * board", and landing on the first live one instead broke that promise.
+   */
+  focusInitiativeId?: string | null;
 }) {
   const [data, setData] = useState<ExecutionData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
+  /**
+   * Whether the default-selection effect has already run.
+   *
+   * Without this, Close could never close: setSelected(null) re-fired the
+   * effect, which saw no selection and picked the first initiative again,
+   * so the detail area reopened on the same paint it was dismissed.
+   */
+  const defaulted = useRef(false);
+  const [showFinished, setShowFinished] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -90,12 +107,16 @@ export default function ExecutionPanel({
    * detail area.
    */
   useEffect(() => {
-    if (!data || selected) return;
+    if (!data || selected || defaulted.current) return;
+    defaulted.current = true;
     const live = data.initiatives.filter((i) => !i.is_complete);
-    if (live.length > 0) setSelected({ band: "foreground", id: live[0].id });
+    if (focusInitiativeId && data.initiatives.some((i) => i.id === focusInitiativeId)) {
+      setSelected({ band: "foreground", id: focusInitiativeId });
+      if (data.initiatives.find((i) => i.id === focusInitiativeId)?.is_complete) setShowFinished(true);
+    } else if (live.length > 0) setSelected({ band: "foreground", id: live[0].id });
     else if (data.horizon.some((h) => h.horizon === "midground")) setSelected({ band: "midground" });
     else if (data.horizon.length > 0 || canEdit) setSelected({ band: "beyond" });
-  }, [data, selected, canEdit]);
+  }, [data, selected, canEdit, focusInitiativeId]);
 
   // A selected initiative that has since been deleted would leave the detail
   // area blank with no way back — fall to the first one that still exists.
@@ -134,7 +155,7 @@ export default function ExecutionPanel({
         </p>
       ) : (
         <>
-          <ThisWeek data={data} />
+          <ThisWeek data={data} members={members} />
 
           <section className="mt-10">
             <BlockHeading
@@ -149,6 +170,43 @@ export default function ExecutionPanel({
               canEdit={canEdit}
             />
             {canEdit && <AddInitiative data={data} projectId={projectId} accessToken={accessToken} onChanged={load} />}
+
+            {/* Finished initiatives are the record of what the church did.
+                Marking one finished used to make it vanish from the only list
+                that showed it, with no way back — "Reopen" lived on a detail
+                view you could no longer reach. */}
+            {data.initiatives.some((i) => i.is_complete) && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowFinished((v) => !v)}
+                  className="text-xs font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
+                >
+                  {showFinished ? "Hide" : "Show"}{" "}
+                  {data.initiatives.filter((i) => i.is_complete).length} finished
+                </button>
+                {showFinished && (
+                  <ul className="mt-2 flex flex-wrap gap-2">
+                    {data.initiatives
+                      .filter((i) => i.is_complete)
+                      .map((i) => (
+                        <li key={i.id}>
+                          <button
+                            onClick={() => setSelected({ band: "foreground", id: i.id })}
+                            aria-pressed={selected?.band === "foreground" && selected.id === i.id}
+                            className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
+                              selected?.band === "foreground" && selected.id === i.id
+                                ? "bg-runfree-pink text-runfree-magentaDeep ring-runfree-magenta/30"
+                                : "bg-white text-gray-600 ring-gray-200 hover:ring-runfree-magenta/40"
+                            }`}
+                          >
+                            {i.name}
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </section>
 
           {selected && (
@@ -279,7 +337,9 @@ function DetailShell({
   return (
     <section className="mt-6 overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-200">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3.5 sm:px-6">
-        <div className="min-w-0">
+        {/* flex-1 as well as min-w-0: without it the rename Cell's w-full
+            input was only as wide as the eyebrow above it. */}
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
             {eyebrow}
           </p>
@@ -287,6 +347,8 @@ function DetailShell({
             <Cell
               value={title}
               onSave={(v) => v && onRename(v)}
+              required
+              ariaLabel="Initiative name"
               className="!px-0 font-display !text-lg font-extrabold tracking-tight !text-runfree-ink"
             />
           ) : (
@@ -297,7 +359,7 @@ function DetailShell({
         </div>
         <button
           onClick={onClose}
-          className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-gray-400 transition hover:bg-gray-100 hover:text-runfree-ink"
+          className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-runfree-ink"
         >
           Close
         </button>
@@ -389,14 +451,34 @@ function AddInitiative({
  * page, with a copy button — so it is already useful, and it is the payload
  * the moment Resend is configured.
  */
-function ThisWeek({ data }: { data: ExecutionData }) {
+function ThisWeek({ data, members }: { data: ExecutionData; members: ProjectMember[] }) {
   const today = todayIso();
   const [copied, setCopied] = useState(false);
 
+  // The sheet's free-text "Accountable" first; failing that, the portal
+  // member the step is assigned to. The digest used to name only the former,
+  // so a step assigned through the dropdown went out with no owner.
+  const owner = (s: ExecutionData["steps"][number]) =>
+    s.accountable ||
+    (s.assignee_profile_id
+      ? (() => {
+          const m = members.find((x) => x.profileId === s.assignee_profile_id);
+          return m ? m.fullName || m.email : null;
+        })()
+      : null);
+
   const live = data.initiatives.filter((i) => !i.is_complete);
   const attention = live.filter((i) => i.status !== "green");
+  // Only steps on LIVE initiatives. A finished initiative's leftover red
+  // steps were still counted here, so the headline said "2 past due" over a
+  // board that showed none.
+  const liveIds = new Set(live.map((i) => i.id));
   const due = data.steps.filter(
-    (s) => s.status !== "green" && isDateish(s.by_when) && (s.by_when as string) <= today
+    (s) =>
+      liveIds.has(s.initiative_id) &&
+      s.status !== "green" &&
+      isDateish(s.by_when) &&
+      (s.by_when as string) <= today
   );
 
   const anchor = useMemo(
@@ -405,10 +487,19 @@ function ThisWeek({ data }: { data: ExecutionData }) {
   );
   const next = anchor ? nextRenewalStop(renewalCycle(anchor), today) : null;
 
+  // "Behind" needs a clock. Measured against the year since the earliest
+  // initiative started: at half the year a measure should be about halfway.
+  // The old rule — under 50%, full stop — called every measure behind on day
+  // one, under a heading that said everything was on track. With no anchor
+  // nothing can be behind, only unstarted.
+  const elapsed = anchor
+    ? Math.min(1, Math.max(0, (Date.parse(today) - Date.parse(anchor)) / (365 * 86_400_000)))
+    : null;
   const behind = data.measures.filter((m) => {
-    const p = measureProgress(m, null);
-    return p != null && p < 0.5;
+    const p = measureProgress(m, effectiveCurrent(m, data.readings));
+    return p != null && elapsed != null && p + 0.1 < elapsed;
   }).length;
+  const talk = attention.length + due.length + behind;
 
   if (live.length === 0 && data.measures.length === 0) return null;
 
@@ -416,8 +507,9 @@ function ThisWeek({ data }: { data: ExecutionData }) {
   for (const i of live) {
     lines.push(`${i.name} — ${RAG_LABEL[i.status]}${i.leader ? ` (${i.leader})` : ""}`);
     for (const s of data.steps.filter((s) => s.initiative_id === i.id && s.status !== "green")) {
+      const who = owner(s);
       lines.push(
-        `   • ${s.description}${s.accountable ? ` — ${s.accountable}` : ""}${
+        `   • ${s.description}${who ? ` — ${who}` : ""}${
           s.by_when ? ` — by ${isDateish(s.by_when) ? prettyDate(s.by_when) : s.by_when}` : ""
         }`
       );
@@ -425,7 +517,8 @@ function ThisWeek({ data }: { data: ExecutionData }) {
     lines.push("");
   }
   for (const m of data.measures) {
-    lines.push(`${m.label}: ${m.current ?? "—"}${m.unit ?? ""} of ${m.target ?? "—"}${m.unit ?? ""}`);
+    const now = effectiveCurrent(m, data.readings);
+    lines.push(`${m.label}: ${now ?? "—"}${m.unit ?? ""} of ${m.target ?? "—"}${m.unit ?? ""}`);
   }
   if (next) lines.push("", `Next review: ${prettyDate(next.on)} — ${next.length}, ${next.marker} in.`);
   const digest = lines.join("\n").trim();
@@ -439,9 +532,9 @@ function ThisWeek({ data }: { data: ExecutionData }) {
               This week
             </p>
             <h3 className="mt-1 font-display text-xl font-extrabold tracking-tight">
-              {attention.length === 0 && due.length === 0
+              {talk === 0
                 ? "Everything is on track"
-                : `${attention.length + due.length} thing${attention.length + due.length === 1 ? "" : "s"} to talk about`}
+                : `${talk} thing${talk === 1 ? "" : "s"} to talk about`}
             </h3>
           </div>
           <button
@@ -493,7 +586,7 @@ function ThisWeek({ data }: { data: ExecutionData }) {
                 <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-rose-400" />
                 <span>
                   {s.description}
-                  {s.accountable ? ` · ${s.accountable}` : ""} — due {prettyDate(s.by_when)}
+                  {owner(s) ? ` · ${owner(s)}` : ""} — due {prettyDate(s.by_when)}
                 </span>
               </li>
             ))}

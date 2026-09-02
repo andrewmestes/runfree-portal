@@ -208,7 +208,12 @@ export function buildCatalogue(
           key: `book:${f.id}`,
           source_kind: "book",
           source_id: f.id,
-          title: f.title,
+          // The parsed label, not the raw filename. `title` is what the Drive
+          // file is called ("Ch15_Measures"); `label`/`num` are what
+          // parseChapterNumLabel made of it, and what the books shelf shows.
+          // Caching the raw name here put "Ch15_Measures" on a church's
+          // dashboard.
+          title: f.num ? `Chapter ${f.num} — ${f.label}` : f.label || f.title,
           media_kind: "book",
           context: shelf.name,
           external_url: null,

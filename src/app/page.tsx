@@ -464,11 +464,17 @@ function PinButton({
   );
 }
 
+/**
+ * A div with a stretched link, not a link with a button inside it.
+ *
+ * Interactive content inside <a> is invalid HTML, and the pin's label was
+ * being read out as part of the link's name. The anchor's ::after covers the
+ * whole card so the face still opens the project; the pin sits above it.
+ */
 function ProjectCard({ project, onToggled }: { project: ProjectRow; onToggled: (id: string, pinned: boolean) => void }) {
   return (
-    <a
-      href={`/projects/${project.id}`}
-      className={`group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition duration-200 hover:-translate-y-1 hover:shadow-lg hover:ring-runfree-magenta/35 ${
+    <div
+      className={`group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition duration-200 focus-within:ring-2 focus-within:ring-runfree-magenta hover:-translate-y-1 hover:shadow-lg hover:ring-runfree-magenta/35 ${
         project.pinned_at ? "ring-runfree-magenta/40" : "ring-gray-200"
       }`}
     >
@@ -482,13 +488,20 @@ function ProjectCard({ project, onToggled }: { project: ProjectRow; onToggled: (
             </span>
           )}
           <h2 className="mt-0.5 font-display text-lg font-bold leading-snug text-runfree-ink">
-            {churchName(project)}
+            <a
+              href={`/projects/${project.id}`}
+              className="outline-none after:absolute after:inset-0 after:content-['']"
+            >
+              {churchName(project)}
+            </a>
           </h2>
           <ProjectMeta project={project} />
         </div>
-        <PinButton project={project} onToggled={onToggled} />
+        <span className="relative z-10">
+          <PinButton project={project} onToggled={onToggled} />
+        </span>
       </div>
-    </a>
+    </div>
   );
 }
 
@@ -502,15 +515,22 @@ function ProjectListRow({
   onToggled: (id: string, pinned: boolean) => void;
 }) {
   return (
-    <a
-      href={`/projects/${project.id}`}
-      className={`flex items-center gap-4 px-5 py-3.5 transition hover:bg-runfree-indigo/30 ${
+    // Same stretched-link shape as ProjectCard, for the same reason.
+    <div
+      className={`relative flex items-center gap-4 px-5 py-3.5 transition focus-within:bg-runfree-indigo/30 hover:bg-runfree-indigo/30 ${
         first ? "" : "border-t border-gray-100"
       }`}
     >
       <ProjectMark project={project} size={36} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-runfree-ink">{churchName(project)}</p>
+        <p className="truncate text-sm font-semibold text-runfree-ink">
+          <a
+            href={`/projects/${project.id}`}
+            className="outline-none after:absolute after:inset-0 after:content-['']"
+          >
+            {churchName(project)}
+          </a>
+        </p>
         <ProjectMeta project={project} />
       </div>
       {project.templates?.name && (
@@ -518,10 +538,12 @@ function ProjectListRow({
           {project.templates.name}
         </span>
       )}
-      <PinButton project={project} onToggled={onToggled} />
+      <span className="relative z-10">
+        <PinButton project={project} onToggled={onToggled} />
+      </span>
       <span aria-hidden className="shrink-0 text-gray-300">
         →
       </span>
-    </a>
+    </div>
   );
 }

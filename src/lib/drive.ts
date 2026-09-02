@@ -159,7 +159,14 @@ function leadingNumber(name: string): number {
 }
 
 function toTitle(filename: string): string {
-  return filename.replace(/\.[a-z0-9]{1,5}$/i, "").trim();
+  // The PortalFile type has promised for months that "- CERT" is removed
+  // here. It was not, and every certification handout listed as "Welcome -
+  // CERT". The marker is a Drive-side note that a file is the certification
+  // version; it means nothing to the person reading the list.
+  return filename
+    .replace(/\.[a-z0-9]{1,5}$/i, "")
+    .replace(/\s*[-–—]\s*CERT\s*$/i, "")
+    .trim();
 }
 
 /**

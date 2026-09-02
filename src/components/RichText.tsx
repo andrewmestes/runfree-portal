@@ -23,6 +23,9 @@ const BUTTONS: { cmd: string; arg?: string; label: string; title: string; classN
   { cmd: "underline", label: "U", title: "Underline", className: "underline" },
   { cmd: "formatBlock", arg: "h2", label: "Title", title: "Heading" },
   { cmd: "formatBlock", arg: "h3", label: "Subtitle", title: "Subheading" },
+  // formatBlock does not toggle and Clear only strips inline formatting, so
+  // without this a line made a Title stayed a Title forever.
+  { cmd: "formatBlock", arg: "p", label: "Text", title: "Plain text" },
   { cmd: "insertUnorderedList", label: "• List", title: "Bulleted list" },
   { cmd: "insertOrderedList", label: "1. List", title: "Numbered list" },
 ];

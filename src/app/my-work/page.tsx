@@ -89,6 +89,7 @@ export default function MyWorkPage() {
   const [profile, setProfile] = useState<Parameters<typeof PortalHeader>[0]["profile"] | null>(null);
   const [status, setStatus] = useState<"checking" | "denied" | "ready" | "error">("checking");
   const [busy, setBusy] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const router = useRouter();
 
   const load = useCallback(async () => {
@@ -146,9 +147,14 @@ export default function MyWorkPage() {
     const session = await getCurrentSession();
     if (!session) return;
     setBusy(task.id);
+    setActionError(null);
     try {
       await setTaskDone(session.access_token, task.id, true);
       setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    } catch (err) {
+      // set_task_done raises for a caller without the task grant; the tick
+      // used to do nothing at all.
+      setActionError(err instanceof Error ? err.message : "Could not mark that done.");
     } finally {
       setBusy(null);
     }
@@ -180,6 +186,14 @@ export default function MyWorkPage() {
       />
 
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+        {actionError && (
+          <p
+            role="alert"
+            className="mb-6 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-200"
+          >
+            {actionError}
+          </p>
+        )}
         {mySteps.length > 0 && (
           <section className="mb-8">
             <header className="mb-3 flex flex-wrap items-baseline gap-x-3">

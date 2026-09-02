@@ -116,8 +116,20 @@ export default function VisionStackExplorer({
    */
   const plates = useMemo(() => [...layers].reverse(), [layers]);
 
-  const [selected, setSelected] = useState(plates[0]?.slug ?? "");
+  /**
+   * Open on the highest layer with something finished in it, else the
+   * foundation. The top plate is Application Toolbox — the LAST step of the
+   * process — so a church early in the engagement was landing on "Nothing in
+   * this layer yet." while its own Paradigm Convictions sat two plates down.
+   */
+  const [selected, setSelected] = useState(() => {
+    const done = plates.find((p) =>
+      items.some((d) => d.stack_layer === p.slug && (d.file_path || d.image_path))
+    );
+    return done?.slug ?? plates[plates.length - 1]?.slug ?? "";
+  });
   const [hovered, setHovered] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [assembled, setAssembled] = useState(false);
   const reduced = useReducedMotion();
 
@@ -132,6 +144,19 @@ export default function VisionStackExplorer({
     const t = window.setTimeout(() => setAssembled(true), 80);
     return () => window.clearTimeout(t);
   }, [reduced]);
+
+  /**
+   * Select, and below `lg` bring the panel up. There the panel sits under
+   * the stack and the chips, so a tap on an upper plate otherwise changed
+   * nothing on screen except the plate's own lift.
+   */
+  const choose = (slug: string) => {
+    setSelected(slug);
+    if (window.matchMedia("(min-width: 1024px)").matches) return;
+    window.requestAnimationFrame(() =>
+      panelRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" })
+    );
+  };
 
   const activeIndex = plates.findIndex((p) => p.slug === selected);
   const active = plates[activeIndex];
@@ -162,7 +187,7 @@ export default function VisionStackExplorer({
                 key={p.slug}
                 type="button"
                 tabIndex={-1}
-                onClick={() => setSelected(p.slug)}
+                onClick={() => choose(p.slug)}
                 onMouseEnter={() => setHovered(p.slug)}
                 onMouseLeave={() => setHovered(null)}
                 className="pointer-events-auto absolute right-0 w-full -translate-y-1/2 cursor-pointer border-0 bg-transparent p-0 pr-3 text-right outline-none"
@@ -231,58 +256,65 @@ export default function VisionStackExplorer({
             const isActive = p.slug === selected;
             const isHover = hovered === p.slug && !isActive;
             return (
-              <button
+              /* Two elements per plate, and the split is the point.
+               *
+               * The BUTTON carries the clip-path, so what you can hover and
+               * what you can see are the same diamond — the fix for the
+               * hover chatter. It also carries the transform: `clip-path`
+               * resolves in the element's own coordinates and the transform
+               * maps both together, so scaling the clipped element scales
+               * the mask with it. (It used to sit on an inner span, and the
+               * selected plate grew past a mask that had not moved — Andrew:
+               * "the gear icon looks wonky when zoomed, some of the tile
+               * disappears.")
+               *
+               * The WRAPPER carries the drop-shadow. A filter on the clipped
+               * element is clipped with it — clip-path applies after filter —
+               * which is why the old per-plate shadow never painted at all.
+               * The wrapper is not clipped, so it draws the silhouette's
+               * shadow outside the diamond and follows the lift; with
+               * pointer-events off, hit-testing stays on the diamond alone. */
+              <div
                 key={p.slug}
-                type="button"
-                onClick={() => setSelected(p.slug)}
-                onMouseEnter={() => setHovered(p.slug)}
-                onMouseLeave={() => setHovered(null)}
-                onFocus={() => setHovered(p.slug)}
-                onBlur={() => setHovered(null)}
-                aria-pressed={isActive}
-                aria-label={p.name}
-                className="absolute left-0 w-full cursor-pointer border-0 bg-transparent p-0 outline-none"
+                className="pointer-events-none absolute left-0 w-full"
                 style={{
                   top: `${i * STEP}%`,
                   height: `${PLATE_H}%`,
                   zIndex: plates.length - i,
-                  // Hit-testing follows the clip. This is the fix for the
-                  // hover chatter, not a visual flourish.
-                  clipPath: DIAMOND,
-                  WebkitClipPath: DIAMOND,
-                  /* The transform lives HERE, on the clipped element.
-                   *
-                   * It used to sit on the inner span, so the selected plate
-                   * scaled up inside a clip that had not moved — the artwork
-                   * grew past its own mask and the corners vanished. Andrew:
-                   * "the gear icon looks wonky when zoomed, some of the tile
-                   * disappears." `clip-path` is applied in the element's local
-                   * coordinates and the transform maps both together, so
-                   * scaling the clipped element scales the mask with it. */
-                  transform: assembled
-                    ? `translateY(${isActive && !reduced ? -10 : 0}px) scale(${
-                        isActive ? 1.06 : isHover ? 1.02 : 1
-                      })`
-                    : "translateY(26px) scale(0.94)",
+                  filter: isActive
+                    ? "drop-shadow(0 18px 22px rgba(19,29,69,0.30))"
+                    : "drop-shadow(0 5px 8px rgba(19,29,69,0.14))",
                   // Kept nearly solid. At 0.62 the unselected plates washed
                   // out against a light page and the stack stopped reading as
-                  // one object — prominence comes from scale and a real
-                  // shadow, which is what separation actually looks like.
-                  opacity: assembled ? (isActive ? 1 : isHover ? 0.95 : 0.84) : 0,
-                  transformOrigin: "50% 44%",
+                  // one object — prominence comes from scale and the shadow.
+                  opacity: assembled ? (isActive ? 1 : isHover ? 0.97 : 0.86) : 0,
                   transition: reduced
                     ? "none"
-                    : "transform 620ms cubic-bezier(.22,1,.36,1), opacity 520ms cubic-bezier(.22,1,.36,1)",
+                    : "filter 520ms cubic-bezier(.22,1,.36,1), opacity 520ms cubic-bezier(.22,1,.36,1)",
                   transitionDelay: assembled && !reduced ? "0ms" : `${(plates.length - 1 - i) * 90}ms`,
                 }}
               >
-                <span
-                  className="block h-full w-full"
+                <button
+                  type="button"
+                  onClick={() => choose(p.slug)}
+                  onMouseEnter={() => setHovered(p.slug)}
+                  onMouseLeave={() => setHovered(null)}
+                  onFocus={() => setHovered(p.slug)}
+                  onBlur={() => setHovered(null)}
+                  aria-pressed={isActive}
+                  aria-label={p.name}
+                  className="pointer-events-auto block h-full w-full cursor-pointer border-0 bg-transparent p-0 outline-none"
                   style={{
-                    filter: isActive
-                      ? "drop-shadow(0 18px 26px rgba(19,29,69,0.28))"
-                      : "drop-shadow(0 6px 10px rgba(19,29,69,0.10))",
-                    transition: reduced ? "none" : "filter 480ms cubic-bezier(.22,1,.36,1)",
+                    clipPath: DIAMOND,
+                    WebkitClipPath: DIAMOND,
+                    transform: assembled
+                      ? `translateY(${isActive && !reduced ? -10 : 0}px) scale(${
+                          isActive ? 1.06 : isHover ? 1.03 : 1
+                        })`
+                      : "translateY(26px) scale(0.94)",
+                    transformOrigin: "50% 44%",
+                    transition: reduced ? "none" : "transform 620ms cubic-bezier(.22,1,.36,1)",
+                    transitionDelay: assembled && !reduced ? "0ms" : `${(plates.length - 1 - i) * 90}ms`,
                   }}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -292,8 +324,8 @@ export default function VisionStackExplorer({
                     draggable={false}
                     className="h-full w-full select-none object-contain"
                   />
-                </span>
-              </button>
+                </button>
+              </div>
             );
           })}
         </div>
@@ -313,7 +345,7 @@ export default function VisionStackExplorer({
             <button
               key={p.slug}
               type="button"
-              onClick={() => setSelected(p.slug)}
+              onClick={() => choose(p.slug)}
               aria-pressed={isActive}
               className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
                 isActive
@@ -329,7 +361,7 @@ export default function VisionStackExplorer({
       </div>
 
       {/* ──────────────────────────────────────────────── the panel ── */}
-      <div className="min-w-0">
+      <div ref={panelRef} className="min-w-0 scroll-mt-4">
         {active && (
           <LayerPanel
             key={active.slug}
@@ -391,8 +423,15 @@ function LayerPanel({
 }) {
   const [shown, setShown] = useState(reduced);
 
+  // `reduced` starts false and flips true after the first paint (it is read
+  // from matchMedia in an effect), so the first panel used to schedule its
+  // reveal, have that frame cancelled by the re-run, and sit at opacity 0
+  // until the next plate was clicked.
   useEffect(() => {
-    if (reduced) return;
+    if (reduced) {
+      setShown(true);
+      return;
+    }
     const r = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(r);
   }, [reduced]);
@@ -430,11 +469,14 @@ function LayerPanel({
 
       {!isFrame && (
         <p style={rise(3)} className="mt-5 text-xs font-semibold text-gray-400">
+          {/* No denominator. "3 of 8 finished" turns a deliberately partial
+              engagement into one that reads as mostly failed — the same rule
+              that keeps `total` off VisionStackCard. Count what is done. */}
           {items.length === 0
             ? "Nothing in this layer yet."
             : live === 0
-              ? `${items.length} ${items.length === 1 ? "piece" : "pieces"} to come`
-              : `${live} of ${items.length} finished`}
+              ? "Nothing finished here yet"
+              : `${live} finished`}
         </p>
       )}
 
@@ -459,7 +501,7 @@ function LayerPanel({
       )}
 
       {items.length > 0 && (
-        <ul className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-3 ${isFrame ? "mt-3" : "mt-6"}`}>
+        <ul className={`grid grid-cols-2 gap-3 xl:grid-cols-3 ${isFrame ? "mt-3" : "mt-6"}`}>
           {items.map((item, n) => (
             <li key={item.id} style={rise((isFrame ? 5 : 4) + n)}>
               <StackTile
@@ -505,6 +547,7 @@ function StackTile({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const hasFile = !!item.file_path;
   const openable = hasFile || !!imageUrl;
@@ -513,8 +556,13 @@ function StackTile({
   async function take(file: File | undefined) {
     if (!file || !onUpload) return;
     setBusy(true);
+    setError(null);
     try {
       await onUpload(item, file);
+    } catch (e) {
+      // "Uploading…" flipping straight back to "Add the finished piece" told
+      // nobody that the storage limit or RLS had refused the file.
+      setError(e instanceof Error ? e.message : "That upload did not go through.");
     } finally {
       setBusy(false);
     }
@@ -581,8 +629,13 @@ function StackTile({
             {title}
           </span>
           {!openable && (
-            <span className="mt-1 text-[11px] text-gray-400">
+            <span className="mt-1 text-[11px] text-gray-500">
               {canEdit ? "Add the finished piece" : "Not finished yet"}
+            </span>
+          )}
+          {error && (
+            <span role="alert" className="mt-1 text-[11px] font-semibold text-rose-600">
+              {error}
             </span>
           )}
         </span>

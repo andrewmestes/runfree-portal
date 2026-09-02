@@ -100,7 +100,6 @@ export default function VisionStackPage() {
         return;
       }
       setDetail(result);
-      setStatus("ready");
 
       const frame = await listVisionFrame(session.access_token, projectId);
       setFrameRows(frame);
@@ -111,6 +110,10 @@ export default function VisionStackPage() {
         ...frame.map((f) => f.image_path),
       ].filter((p): p is string => !!p);
       setImageUrls(await getSignedImageUrls(session.access_token, paths));
+      // Only now. Marking ready before the frame rows and signed URLs landed
+      // mounted the explorer on an empty frame and blank tiles for a beat,
+      // and the entrance animation played over the wrong picture.
+      setStatus("ready");
     } catch (err) {
       console.error("Vision Stack load failed:", err);
       setStatus("error");

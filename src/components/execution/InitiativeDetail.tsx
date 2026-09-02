@@ -191,7 +191,7 @@ export default function InitiativeDetail({
                       setDraft(body ?? "");
                       setEditingPlan(f.key);
                     }}
-                    className="mt-1.5 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+                    className="mt-1.5 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
                   >
                     {blank ? "Write it" : "Edit"}
                   </button>
@@ -277,7 +277,7 @@ export default function InitiativeDetail({
               await deleteInitiative(accessToken, i.id);
               await onChanged();
             }}
-            className="text-xs font-semibold text-gray-400 transition hover:text-rose-600"
+            className="text-xs font-semibold text-gray-500 transition hover:text-rose-600"
           >
             Delete
           </button>
@@ -339,9 +339,10 @@ function Scoreboard({
         value={
           <span className="flex items-center gap-2">
             {(["green", "amber", "red"] as const).map((s) => (
-              <span key={s} className="flex items-center gap-1">
+              <span key={s} className="flex items-center gap-1" title={RAG_LABEL[s]}>
                 <span className={`h-2.5 w-2.5 rounded-full ${RAG_DOT[s]}`} />
                 <span className="tabular-nums">{by(s)}</span>
+                <span className="sr-only">{RAG_LABEL[s].toLowerCase()}</span>
               </span>
             ))}
           </span>
@@ -440,6 +441,9 @@ function StepRow({
             value={s.description}
             onSave={(v) => v && void patch({ description: v })}
             disabled={!canManage}
+            required
+            wrap
+            ariaLabel="Action step"
             className="!px-0 font-medium !text-runfree-ink"
           />
           <div className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-4">
@@ -448,6 +452,7 @@ function StepRow({
                 value={s.by_when}
                 onSave={(v) => void patch({ by_when: v })}
                 disabled={!canManage}
+                ariaLabel="By when"
                 placeholder="Date or cadence"
                 className={`!text-xs ${overdue ? "!text-rose-600" : ""}`}
                 display={(v) => (isDateish(v) ? prettyDate(v) : v)}
@@ -458,6 +463,7 @@ function StepRow({
                 value={s.accountable}
                 onSave={(v) => void patch({ accountable: v })}
                 disabled={!canManage}
+                ariaLabel="Accountable"
                 placeholder="Who"
                 className="!text-xs"
               />
@@ -467,6 +473,7 @@ function StepRow({
                 value={s.cost}
                 onSave={(v) => void patch({ cost: v })}
                 disabled={!canManage}
+                ariaLabel="Cost"
                 placeholder="$"
                 className="!text-xs"
               />
@@ -498,10 +505,13 @@ function StepRow({
           {canManage && (
             <button
               onClick={async () => {
+                // The initiative's Delete and a measure's Remove both ask;
+                // this one, 6px under the traffic light, did not.
+                if (!confirm(`Remove “${s.description}”?`)) return;
                 await deleteStep(accessToken, s.id);
                 await onChanged();
               }}
-              className="text-[10px] font-semibold text-gray-300 transition hover:text-rose-600"
+              className="text-[10px] font-semibold text-gray-500 transition hover:text-rose-600"
             >
               Remove
             </button>

@@ -12,6 +12,8 @@ import {
   measureProgress,
   saveHorizonBox,
   updateMeasure,
+  effectiveCurrent,
+  latestReading,
   type ExecutionData,
   type MeasureReading,
   type MidgroundMeasure,
@@ -96,7 +98,7 @@ export default function MidgroundDetail({
           </div>
         ) : richTextIsEmpty(box?.body) ? (
           <p className="mt-1.5 text-sm italic text-gray-400">
-            {canEdit ? "Not written yet." : "Not written yet."}
+            Not written yet.
           </p>
         ) : (
           <div className="mt-1.5">
@@ -110,7 +112,7 @@ export default function MidgroundDetail({
                 setDraft(box?.body ?? "");
                 setEditing(true);
               }}
-              className="text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+              className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
             >
               {richTextIsEmpty(box?.body) ? "Write it" : "Edit"}
             </button>
@@ -118,7 +120,8 @@ export default function MidgroundDetail({
           {canEdit && (
             <button
               onClick={() => setShowTests((v) => !v)}
-              className="text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+              aria-expanded={showTests}
+              className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
             >
               {showTests ? "Hide" : "Is it a good one?"}
             </button>
@@ -227,7 +230,9 @@ function MeasureRow({
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState(false);
 
-  const pct = measureProgress(m, null);
+  // The latest reading wins over the stamped column — see effectiveCurrent.
+  const current = effectiveCurrent(m, readings);
+  const pct = measureProgress(m, current);
   const unit = m.unit ?? "";
   const num = (v: number | null | undefined) => (v == null ? "—" : `${v}${unit}`);
 
@@ -248,8 +253,8 @@ function MeasureRow({
           />
         </div>
         <p className="shrink-0 font-display text-lg font-extrabold tabular-nums text-runfree-ink">
-          {num(m.current)}
-          <span className="ml-1 text-xs font-semibold text-gray-400">
+          {num(current)}
+          <span className="ml-1 text-xs font-semibold text-gray-500">
             of {num(m.target)}
           </span>
         </p>
@@ -311,7 +316,7 @@ function MeasureRow({
         {canLog && !logging && (
           <button
             onClick={() => {
-              setValue(m.current != null ? String(m.current) : "");
+              setValue(current != null ? String(current) : "");
               setLogging(true);
             }}
             className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink"
@@ -322,7 +327,8 @@ function MeasureRow({
         {readings.length > 0 && (
           <button
             onClick={() => setHistory((v) => !v)}
-            className="text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+            aria-expanded={history}
+            className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
           >
             {history ? "Hide" : `${readings.length} reading${readings.length === 1 ? "" : "s"}`}
           </button>
@@ -334,7 +340,7 @@ function MeasureRow({
               await deleteMeasure(accessToken, m.id);
               await onChanged();
             }}
-            className="ml-auto text-[11px] font-semibold text-gray-300 transition hover:text-rose-600"
+            className="ml-auto text-[11px] font-semibold text-gray-500 transition hover:text-rose-600"
           >
             Remove
           </button>
@@ -345,6 +351,9 @@ function MeasureRow({
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            // Number("") is 0, and it passed isFinite — an empty form logged
+            // a reading of zero and stamped the headline to match.
+            if (value.trim() === "") return;
             const n = Number(value);
             if (!Number.isFinite(n)) return;
             setBusy(true);
@@ -382,7 +391,7 @@ function MeasureRow({
               className="mt-0.5 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm outline-none focus:border-runfree-magenta"
             />
           </label>
-          <label className="min-w-0 flex-1">
+          <label className="min-w-0 flex-1 basis-full sm:basis-auto">
             <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
               Note (optional)
             </span>
@@ -427,10 +436,18 @@ function MeasureRow({
                 {canLog && (
                   <button
                     onClick={async () => {
+                      if (!confirm(`Delete the ${prettyDate(r.on_date)} reading?`)) return;
                       await deleteReading(accessToken, r.id);
+                      // Best-effort, like logReading's stamp: the stored
+                      // headline follows the latest remaining reading rather
+                      // than keeping a number nothing supports.
+                      const latest = latestReading(readings.filter((x) => x.id !== r.id), m.id);
+                      await updateMeasure(accessToken, m.id, { current: latest?.value ?? null }).catch(
+                        () => {}
+                      );
                       await onChanged();
                     }}
-                    className="shrink-0 text-[10px] font-semibold text-gray-300 transition hover:text-rose-600"
+                    className="shrink-0 text-[10px] font-semibold text-gray-500 transition hover:text-rose-600"
                   >
                     Delete
                   </button>

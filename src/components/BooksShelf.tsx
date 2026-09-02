@@ -83,7 +83,9 @@ export default function BooksShelf({
           plus a centred refresh button filled an entire laptop screen, so a
           framer had to scroll before seeing a single chapter. It scrolls
           sideways on phones rather than wrapping to two ragged rows. */}
-      <div className="-mx-4 mb-6 flex items-start gap-5 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:justify-center sm:gap-8 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
+      {/* pt-3 on phones: overflow-x:auto forces overflow-y:auto, and the
+          selected cover's lift and shadow were being clipped at the top edge. */}
+      <div className="-mx-4 mb-6 flex items-start gap-5 overflow-x-auto px-4 pb-2 pt-3 [scrollbar-width:none] sm:mx-0 sm:justify-center sm:gap-8 sm:overflow-visible sm:px-0 sm:pt-0 [&::-webkit-scrollbar]:hidden">
         {/* Innovating Discipleship sits after Calling, where Andrew asked
             for it. It comes from library.standalone rather than
             library.books because it is one PDF rather than a folder of

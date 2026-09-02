@@ -41,6 +41,7 @@ export default function ResourcePicker({
   const [group, setGroup] = useState<CatalogueGroup | "all">("all");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef, onCancel);
 
@@ -73,8 +74,13 @@ export default function ResourcePicker({
 
   async function save() {
     setSaving(true);
+    setError(null);
     try {
       await onAdd(catalogue.filter((e) => picked.has(e.key)));
+    } catch (err) {
+      // 047 is the record of what a silent failure here costs: "every
+      // multi-select add failed silently, adding nothing".
+      setError(err instanceof Error ? err.message : "Could not add those.");
     } finally {
       setSaving(false);
     }
@@ -91,7 +97,7 @@ export default function ResourcePicker({
         aria-modal="true"
         aria-labelledby="picker-title"
         tabIndex={-1}
-        className="flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl outline-none sm:h-[80vh] sm:rounded-2xl"
+        className="flex h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl outline-none sm:h-[80dvh] sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="h-1.5 shrink-0 bg-runfree-grad" />
@@ -114,6 +120,7 @@ export default function ResourcePicker({
 
           <input
             autoFocus
+            data-autofocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search everything on this project…"
@@ -136,6 +143,7 @@ export default function ResourcePicker({
                 <button
                   key={g.key}
                   onClick={() => setGroup(g.key)}
+                  aria-pressed={on}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                     on
                       ? "bg-runfree-grad text-white shadow-sm"
@@ -173,6 +181,7 @@ export default function ResourcePicker({
                     <button
                       disabled={already}
                       onClick={() => toggle(e.key)}
+                      aria-pressed={on || already}
                       className={`flex w-full items-start gap-3 py-3 text-left transition ${
                         already ? "cursor-default opacity-45" : "hover:bg-runfree-indigo/20"
                       }`}
@@ -217,8 +226,11 @@ export default function ResourcePicker({
         </div>
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-100 px-4 py-3 sm:px-6">
-          <span className="text-xs font-medium text-gray-500 tabular-nums">
-            {picked.size} selected
+          <span
+            role={error ? "alert" : undefined}
+            className={`min-w-0 text-xs font-medium tabular-nums ${error ? "text-rose-600" : "text-gray-500"}`}
+          >
+            {error ?? `${picked.size} selected`}
           </span>
           <div className="flex items-center gap-2">
             <button

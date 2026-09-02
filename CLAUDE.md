@@ -849,6 +849,82 @@ desktop screenshot is the test environment, not a bug: `useCanvasPdf()`
 branches on the engine, so shooting with the iOS user agent takes the pdf.js
 canvas path and the document renders. Verify PDF previews on the mobile run.
 
+## The 1 September review round — what it left behind
+
+A full review pass (bugs, design, mobile, a11y) after the Vision Stack and
+Execution work. Most of it was ordinary fixes; these are the ones that change
+how the next person should work.
+
+- **Module cards are Live on creation** — `SessionCardForm.submit` sets
+  `published_at`. `read_deliverables` hides unpublished rows from viewers,
+  which is right for the Vision Stack's deliberate Draft/Live toggle, but the
+  cards under "From our sessions" have no toggle and are written FOR the
+  church, so every card a coach added was invisible to the people it was for.
+  **062** published the eleven with content already on Christ Chapel. If you
+  add another kind of deliverable without a toggle, publish it on create.
+- **061 and 062 are data migrations, not schema**: the placeholder
+  descriptions on the Key Dates groups, the Application Toolbox plate icon,
+  highlight chapter titles, and the publish above.
+- **Tap targets are widened in CSS, not per component.** `globals.css` has a
+  `@media (pointer: coarse)` rule that gives every 10/11px text button and
+  footer link a ~44px hit area through `::after`. A new small text control is
+  covered automatically; do not re-add per-button padding hacks.
+- **`Cell` has three more props** — `required` (blank snaps back instead of
+  sitting unsaved over a row that declined it), `wrap` (read-only text wraps;
+  a step description is a sentence), `ariaLabel` (for inputs whose caption is
+  not a `<label>`). Escape discards through a ref: `blur()` fires `onBlur`
+  synchronously with the pre-reset draft still in scope, so "reset, then
+  blur" committed exactly the edit Escape was meant to throw away.
+- **`RagPicker` is a real radio group** — one tab stop, arrows move — and its
+  value is `RagStatus | null`. No status is no status; never default it.
+- **The latest reading wins.** `effectiveCurrent(m, readings)` is what every
+  headline, gauge and digest line shows. `midground_measures.current` is a
+  best-effort stamp that RLS refuses for a task-grant viewer, and deleting a
+  reading re-stamps it from whatever reading remains. `measureProgress`
+  returns null without a baseline — substituting zero made a downward target
+  read as 100% done.
+- **"Measures behind" needs a clock.** It is judged against the year since
+  the earliest live initiative's `start_date`; with no anchor nothing can be
+  behind, only unstarted. The heading count includes it, so the tiles and the
+  headline agree.
+- **`focusInitiativeId`** on `ExecutionPanel` is how a step on the dashboard
+  opens its own initiative. The page clears it on any other panel change.
+- **`PrepCards`/`PrepCard` take `soloTitle`.** Key Dates is the only group on
+  its panel and printed its name twice; with no description or counter the
+  card header is skipped entirely, not rendered empty.
+- **A Vision Stack plate is two elements.** The BUTTON carries the clip-path
+  and the transform, so hit-testing and the mask move together. The WRAPPER
+  carries the drop-shadow, because a filter on the clipped element is clipped
+  with it — the old per-plate shadow never painted at all. The default layer
+  is the highest with something finished, else Layer 01; below `lg` choosing
+  a plate scrolls the panel into view.
+- **`useFocusTrap` reads `onClose` through a ref** and focuses
+  `[data-autofocus]` first. React never writes `autoFocus` to the DOM, so that
+  attribute cannot be queried — mark the field that should win.
+- **Signed URLs live twelve hours** (`SIGNED_URL_TTL`, storage.ts). Every page
+  mints once on load and holds them; at an hour, a meeting that ran long came
+  back to tiles that 400.
+- **`FilePreview` sniffs the blob.** Images render as `<img>` and download
+  with their real extension; Android joins iOS on the canvas path.
+- **The home page cards are divs with stretched links.** A `<button>` inside
+  an `<a>` is invalid and polluted the link's accessible name; the anchor's
+  `::after` covers the card and the pin sits above it.
+- **`PortalHeader` fetches the profile itself** when a page passes only a
+  `framer` row — a RunFree person with no certified_framers row rendered as
+  "?" with no My Tasks link on every certification page.
+- **`AssignedSteps` keeps a ticked step on screen with Undo** until the next
+  load. The list query excludes green rows, so the row used to vanish under
+  the thumb that moved it.
+- **Headshots are portal-admin only** (`canEditAvatars`). The one UPDATE
+  policy on `profiles` is `manage_profiles = am_admin()`, so a project admin
+  who is not a portal admin got a zero-row update, no error, and an orphaned
+  upload.
+
+Still open from that review, deliberately: the highlight picker cannot offer
+a module card's `deliverable_files` attachments (only its legacy `file_path`
+and `image_path`); the canvas PDF path has no text layer for a screen reader;
+the navigation drawer does not make the page behind it inert while open.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

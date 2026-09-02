@@ -37,18 +37,18 @@ export default function PortalFooter() {
         </div>
 
         <p className="mt-6 border-t border-gray-100 pt-6 text-xs text-gray-500">
-          <a href="/help" className="font-medium text-runfree-magentaDeep hover:underline">
+          <a href="/help" className="inline-block py-1.5 font-medium text-runfree-magentaDeep hover:underline">
             Help &amp; FAQ
           </a>
           {" · "}
           {/* Reachable without signing in — Google's OAuth reviewer checks
               these while logged out, and someone deciding whether to accept an
               invitation should be able to read them first. */}
-          <a href="/privacy" className="font-medium text-runfree-magentaDeep hover:underline">
+          <a href="/privacy" className="inline-block py-1.5 font-medium text-runfree-magentaDeep hover:underline">
             Privacy
           </a>
           {" · "}
-          <a href="/terms" className="font-medium text-runfree-magentaDeep hover:underline">
+          <a href="/terms" className="inline-block py-1.5 font-medium text-runfree-magentaDeep hover:underline">
             Terms
           </a>
           {" · "}

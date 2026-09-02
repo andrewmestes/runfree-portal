@@ -141,12 +141,20 @@ export default function ResourceCard({
   return (
     <li className="min-w-0">
       {onOpen ? (
-        <button onClick={onOpen} className="group block w-full text-left outline-none">
+        <button
+          onClick={onOpen}
+          className="group block w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-2"
+        >
           {media_}
           {label}
         </button>
       ) : href ? (
-        <a href={href} target="_blank" rel="noopener noreferrer" className="group block outline-none">
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-2"
+        >
           {media_}
           {label}
         </a>

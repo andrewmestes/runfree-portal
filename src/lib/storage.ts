@@ -195,10 +195,21 @@ export async function replaceDeliverableImage(
  * project members" policy). Short-lived on purpose; callers should request a
  * fresh one per page load rather than cache it.
  */
+/**
+ * Twelve hours, not one.
+ *
+ * Every page mints its URLs once on load and holds them. At an hour, a board
+ * meeting that ran long — or a tab left open over lunch — came back to tiles
+ * that 400 on re-mount and a preview that says "Couldn't load that file". The
+ * bucket is private and every URL is minted through the caller's own RLS, so
+ * a longer life changes who can open a link only by how long they have it.
+ */
+const SIGNED_URL_TTL = 12 * 60 * 60;
+
 export async function getSignedImageUrl(
   accessToken: string,
   path: string,
-  expiresInSeconds = 3600
+  expiresInSeconds = SIGNED_URL_TTL
 ): Promise<string | null> {
   const client = createUserClient(accessToken);
   const { data, error } = await client.storage
@@ -218,7 +229,7 @@ export async function getSignedImageUrl(
 export async function getSignedImageUrls(
   accessToken: string,
   paths: string[],
-  expiresInSeconds = 3600
+  expiresInSeconds = SIGNED_URL_TTL
 ): Promise<Record<string, string>> {
   if (paths.length === 0) return {};
 

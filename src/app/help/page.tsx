@@ -352,8 +352,8 @@ export default function HelpPage() {
           <Section title="Your certification resources">
             <Faq q="Where is the certification material?">
               <strong>Certification</strong> in the top bar opens the Certified Vision
-              Framer Hub. Five cards: Process Handouts, Training Videos, Will&rsquo;s
-              Books, the Digital Facilitator&rsquo;s Guide, and Keynotes (coming). Every
+              Framer Hub. Five cards: Process Handouts, Training Videos, Books,
+              the Digital Facilitator&rsquo;s Guide, and Keynote Presentations. Every
               page there carries the Pivvot mark, so you can always tell which part of
               the portal you are in.
             </Faq>
@@ -372,8 +372,8 @@ export default function HelpPage() {
             <Faq q="The material changed and I am seeing the old version">
               The handouts are read live from Google Drive, so an updated file appears
               for everyone as soon as it is replaced there. If something still looks
-              stale, <strong>Refresh from Drive</strong> on the Handouts page forces a
-              fresh read.
+              stale a little later, reload the page — and if it is still wrong, tell
+              Andrew, who can force a fresh read from Drive.
             </Faq>
             <Faq q="What is the difference between this and a church project?">
               The certification library is <em>your</em> material as a facilitator — how

@@ -146,8 +146,11 @@ export default function BooksPage() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await load(true);
-    setRefreshing(false);
+    try {
+      await load(true);
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   const fetchBlobUrl = useCallback(async (id: string): Promise<string | null> => {

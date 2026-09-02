@@ -25,8 +25,12 @@ function useCanvasPdf(): boolean {
       /iPad|iPhone|iPod/.test(ua) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
+    // Chrome for Android cannot render a PDF inline in an iframe either, and
+    // an Android tablet or landscape phone is wider than the phone breakpoint.
+    const android = /Android/.test(ua);
+
     const mq = window.matchMedia("(max-width: 767px)");
-    const decide = () => setCanvas(iOS || mq.matches);
+    const decide = () => setCanvas(iOS || android || mq.matches);
     decide();
     mq.addEventListener("change", decide);
     return () => mq.removeEventListener("change", decide);
@@ -68,6 +72,10 @@ export default function FilePreview({
    *  browser's own viewer rather than showing nothing. */
   const [canvasFailed, setCanvasFailed] = useState(false);
   const canvasPdf = wantsCanvas && !canvasFailed;
+  /** Sniffed from the fetched blob, so a signed URL with no extension still routes correctly. */
+  const [isImage, setIsImage] = useState(false);
+  /** Download extension, from the same sniff — a PNG saved as ".pdf" opens nowhere. */
+  const [ext, setExt] = useState("pdf");
 
   useEffect(() => {
     let url: string | null = null;
@@ -83,7 +91,28 @@ export default function FilePreview({
         return;
       }
       url = u;
-      setBlobUrl(u);
+      // Ask the blob what it is rather than trusting the id: the same viewer
+      // takes storage URLs, Drive ids and book ids, and only the bytes know.
+      fetch(u)
+        .then((r) => r.blob())
+        .then((b) => {
+          if (cancelled) return;
+          setIsImage(b.type.startsWith("image/"));
+          const known: Record<string, string> = {
+            "image/png": "png",
+            "image/jpeg": "jpg",
+            "image/webp": "webp",
+            "image/gif": "gif",
+            "application/pdf": "pdf",
+          };
+          setExt(known[b.type] ?? (b.type.startsWith("image/") ? b.type.slice(6) : "pdf"));
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setBlobUrl(u);
+        });
+    }).catch(() => {
+      if (!cancelled) setFailed(true);
     });
 
     return () => {
@@ -125,7 +154,7 @@ export default function FilePreview({
 
           <a
             href={blobUrl || undefined}
-            download={`${file.title}.pdf`}
+            download={`${file.title}.${ext}`}
             className={`shrink-0 rounded-lg bg-runfree-grad px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 sm:px-4 sm:text-sm ${
               blobUrl ? "" : "pointer-events-none opacity-40"
             }`}
@@ -148,6 +177,15 @@ export default function FilePreview({
               <p className="text-sm text-gray-600">
                 Couldn&rsquo;t load that file. Try closing and opening it again.
               </p>
+            </div>
+          ) : blobUrl && isImage ? (
+            /* A photographed flipchart or the Strategy sketch. Neither is a
+               PDF, and on a phone the pdf.js path was being asked to parse a
+               PNG — which failed, flipped to the iframe, and showed a broken
+               document icon. An image is simply shown. */
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <div className="flex h-full items-center justify-center overflow-auto bg-gray-50 p-3 sm:p-6">
+              <img src={blobUrl} alt={file.title} className="max-h-full max-w-full object-contain" />
             </div>
           ) : blobUrl ? (
             canvasPdf ? (

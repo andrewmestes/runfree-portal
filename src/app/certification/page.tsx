@@ -41,7 +41,7 @@ type Profile = {
 export default function CertificationHubPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [status, setStatus] = useState<"checking" | "ready" | "denied">("checking");
+  const [status, setStatus] = useState<"checking" | "ready" | "denied" | "error">("checking");
   /**
    * Whether to offer a way back to the projects list at all.
    *
@@ -76,7 +76,11 @@ export default function CertificationHubPage() {
       }
       // Same gate the certification pages themselves use.
       setStatus(current?.certification_access || current?.is_staff ? "ready" : "denied");
-    })();
+    })().catch(() => {
+      // A ProfileLookupError used to strand the hub on "Loading…" with no
+      // way forward.
+      setStatus("error");
+    });
   }, [router]);
 
   async function handleSignOut() {
@@ -88,6 +92,27 @@ export default function CertificationHubPage() {
     return (
       <div className="grid min-h-screen place-items-center bg-gray-50">
         <p className="text-sm text-gray-400">Loading…</p>
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <div className="grid min-h-screen place-items-center bg-gray-50 px-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-gray-200">
+          <h1 className="font-display text-xl font-bold text-runfree-ink">
+            Couldn&rsquo;t load your account
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Something went wrong reading your profile. It is usually momentary.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-5 rounded-lg bg-runfree-grad px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }

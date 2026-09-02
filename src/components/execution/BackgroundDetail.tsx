@@ -79,7 +79,7 @@ export default function BackgroundDetail({
           </div>
         ) : richTextIsEmpty(box?.body) ? (
           <p className="mt-1.5 text-sm italic text-gray-400">
-            {canEdit ? "Not written yet." : "—"}
+            Not written yet.
           </p>
         ) : (
           <div className="mt-1.5">
@@ -89,7 +89,7 @@ export default function BackgroundDetail({
         {canEdit && editing !== "body" && (
           <button
             onClick={() => open("body", box?.body)}
-            className="mt-1.5 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+            className="mt-1.5 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
           >
             {richTextIsEmpty(box?.body) ? "Write it" : "Edit"}
           </button>
@@ -129,7 +129,7 @@ export default function BackgroundDetail({
               {canEdit && !isEditing && (
                 <button
                   onClick={() => open(f.key, value)}
-                  className="mt-1.5 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+                  className="mt-1.5 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
                 >
                   {blank ? "Write it" : "Edit"}
                 </button>

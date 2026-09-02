@@ -168,3 +168,35 @@
   color: #6b7280;
   margin: 0 0 0.6rem;
 }
+
+/*
+ * Tap targets, on touch screens only.
+ *
+ * The portal's quiet text buttons — Edit, Write it, Remove, Open — are set at
+ * 10–11px with no padding, which is ~17px tall. On a pointer that is fine; on
+ * a thumb it is about a third of what lands reliably, and the mobile sweep
+ * counted up to twenty of them on one panel. Rather than restyle every site,
+ * grow the hit area with a pseudo-element on coarse pointers: the visual is
+ * untouched, the target becomes ~40px, and it costs nothing on desktop.
+ *
+ * `:not(.absolute)` because a handful of these are positioned (the Draft/Live
+ * pill) and `position: relative` would pull them out of place.
+ */
+@media (pointer: coarse) {
+  button.text-\[11px\]:not(.absolute),
+  button.text-\[10px\]:not(.absolute),
+  a.text-\[11px\]:not(.absolute),
+  footer a,
+  a[href^="mailto:"] {
+    position: relative;
+  }
+  button.text-\[11px\]:not(.absolute)::after,
+  button.text-\[10px\]:not(.absolute)::after,
+  a.text-\[11px\]:not(.absolute)::after,
+  footer a::after,
+  a[href^="mailto:"]::after {
+    content: "";
+    position: absolute;
+    inset: -12px -8px;
+  }
+}

@@ -107,7 +107,8 @@ export default function FileDrop({
               <button
                 type="button"
                 onClick={() => onRemove(i)}
-                className="shrink-0 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+                aria-label={`Remove ${s.file.name}`}
+                className="shrink-0 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
               >
                 Remove
               </button>

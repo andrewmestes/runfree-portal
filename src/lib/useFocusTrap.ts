@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 /**
  * Keyboard containment for a modal dialog.
@@ -19,12 +19,28 @@ import { useEffect, type RefObject } from "react";
  *
  * Pair with role="dialog", aria-modal="true", aria-labelledby, and tabIndex={-1}
  * on the same element the ref points at.
+ *
+ * Mark the field that should receive focus first with `data-autofocus`. React
+ * never writes `autoFocus` to the DOM (it calls .focus() during commit), so
+ * that attribute cannot be queried — and without a marker the trap picks the
+ * first focusable thing in the dialog, which in a picker is the Close button
+ * that precedes the search box.
+ *
+ * `onClose` is read through a ref. Callers pass inline arrows, and having it
+ * in the effect's dependencies re-ran the whole trap on every parent render:
+ * the cleanup handed focus back to the opener and the re-run took it again,
+ * yanking the caret out of the search field as the books list arrived.
  */
 export function useFocusTrap(
   ref: RefObject<HTMLElement | null>,
   onClose: () => void,
   active = true
 ) {
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!active) return;
 
@@ -40,11 +56,12 @@ export function useFocusTrap(
         // too even when visible, so they are kept explicitly.
       ).filter((el) => el.offsetParent !== null || el.tagName === "IFRAME");
 
-    (focusable()[0] ?? dialog)?.focus();
+    const preferred = dialog?.querySelector<HTMLElement>("[data-autofocus]") ?? null;
+    (preferred ?? focusable()[0] ?? dialog)?.focus();
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab") return;
@@ -78,5 +95,5 @@ export function useFocusTrap(
       document.body.style.overflow = previousOverflow;
       opener?.focus?.();
     };
-  }, [ref, onClose, active]);
+  }, [ref, active]);
 }

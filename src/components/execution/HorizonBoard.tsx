@@ -1,6 +1,6 @@
 "use client";
 
-import { RAG_DOT, type ExecutionData, type Initiative } from "@/lib/execution";
+import { RAG_DOT, RAG_LABEL, type ExecutionData, type Initiative } from "@/lib/execution";
 import { initiativeKind, templateByKey, templateIcon } from "@/lib/god-dreams";
 import { richTextIsEmpty } from "@/lib/rich-text";
 
@@ -39,9 +39,16 @@ export function sameSelection(a: Selection | null, b: Selection | null): boolean
 /** Strip tags for the one-line preview a box shows. */
 function plain(html: string | null | undefined): string {
   if (!html) return "";
+  // cleanRichText escapes quotes and angle brackets as entities; a preview
+  // that only knew &amp; and &nbsp; printed a church's "Three healthy
+  // congregations" with &quot; around it.
   return html
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
@@ -137,7 +144,7 @@ export default function HorizonBoard({
                     onClick={() => onSelect({ band: "background", position: n })}
                     text={plain(b?.body)}
                     empty={richTextIsEmpty(b?.body)}
-                    placeholder={canEdit ? `Priority ${n + 1}` : "—"}
+                    placeholder={canEdit ? `Priority ${n + 1}` : "Not written yet"}
                     footer={
                       notes > 0 ? (
                         <span className="mt-2 block text-[11px] font-semibold text-runfree-navy/60">
@@ -205,7 +212,10 @@ export default function HorizonBoard({
                   onClick={() => onSelect({ band: "foreground", id: i.id })}
                 />
               ))}
-              {Array.from({ length: Math.max(0, 4 - live.length) }, (_, k) => (
+              {/* Pad to a whole row at every column count. `4 - n` only
+                  worked up to four; five to seven initiatives exposed one to
+                  three bare grey cells — the artefact the padding is for. */}
+              {Array.from({ length: (4 - (Math.min(live.length, 8) % 4)) % 4 }, (_, k) => (
                 <span key={`pad-${k}`} aria-hidden className="bg-white px-4 py-3.5 sm:px-5" />
               ))}
             </Grid>
@@ -297,7 +307,11 @@ function InitiativeBox({
     >
       {selected && <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-runfree-grad" />}
       <span className="flex items-start gap-2">
-        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${RAG_DOT[i.status]}`} />
+        <span
+          title={RAG_LABEL[i.status]}
+          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${RAG_DOT[i.status]}`}
+        />
+        <span className="sr-only">{RAG_LABEL[i.status]}. </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold leading-snug text-runfree-ink">{i.name}</span>
           <span className="mt-0.5 block text-[11px] text-gray-500">{kind.label}</span>

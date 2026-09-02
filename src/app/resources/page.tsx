@@ -124,10 +124,23 @@ export default function ResourcesPage() {
     router.replace("/auth/login");
   }
 
+  /**
+   * Navigation is a side effect, so it lives here rather than in the render
+   * body — and it goes home, the way /books, /videos, /guide and /keynotes do.
+   * This page used to stop at a CVF-era "Access pending — Sign out" card, the
+   * one dead end in the certification half.
+   */
+  useEffect(() => {
+    if (status === "denied") router.replace("/");
+  }, [status, router]);
+
   async function handleRefresh() {
     setRefreshing(true);
-    await loadLibrary(true);
-    setRefreshing(false);
+    try {
+      await loadLibrary(true);
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   /** Authorised blob URL — same gated endpoint the download uses. */
@@ -430,7 +443,11 @@ export default function ResourcesPage() {
                           {prettySize(file.sizeBytes)}
                         </span>
 
-                        <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep opacity-0 ring-1 ring-runfree-magenta/30 transition group-hover:opacity-100">
+                        {/* Visible on touch, revealed on hover elsewhere. A
+                            chip that only appears under a pointer never
+                            appears on a phone, and the whole row looked
+                            inert. */}
+                        <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                           Preview
                         </span>
                       </button>

@@ -110,6 +110,7 @@ export default function HighlightShelf({
                   canManage ? (
                     <button
                       disabled={busy === h.id}
+                      aria-label={`Remove ${h.title}`}
                       onClick={async () => {
                         setBusy(h.id);
                         try {
@@ -118,7 +119,7 @@ export default function HighlightShelf({
                           setBusy(null);
                         }
                       }}
-                      className="text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep disabled:opacity-50"
+                      className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep disabled:opacity-50"
                     >
                       {busy === h.id ? "Removing…" : "Remove"}
                     </button>

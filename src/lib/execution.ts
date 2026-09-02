@@ -525,16 +525,32 @@ export function latestReading(
 }
 
 /**
+ * The number to show for a measure.
+ *
+ * `logReading` stamps `current` best-effort; for someone with the task grant
+ * but no editor role that second write is refused by RLS and the readings are
+ * the only record. So the latest reading wins whenever one exists — which
+ * also means a deleted reading stops counting the moment it is gone.
+ */
+export function effectiveCurrent(m: MidgroundMeasure, readings: MeasureReading[]): number | null {
+  return latestReading(readings, m.id)?.value ?? m.current;
+}
+
+/**
  * How far along a measure is, 0-1, or null when it cannot be computed.
  *
  * Uses baseline as the zero point rather than absolute zero: "from 12 percent
  * to 25 percent" is 0% done at 12, not 48% done. Handles a downward target
  * (fewer of something) by sign rather than by a separate direction column.
+ *
+ * No baseline, no answer. Substituting zero broke the downward case — a
+ * measure that needs to fall from an unrecorded start read as 100% done —
+ * and a gauge with an invented left edge is worse than a prompt to fill it in.
  */
 export function measureProgress(m: MidgroundMeasure, current: number | null): number | null {
   const now = current ?? m.current;
-  if (now == null || m.target == null) return null;
-  const from = m.baseline ?? 0;
+  if (now == null || m.target == null || m.baseline == null) return null;
+  const from = m.baseline;
   const span = m.target - from;
   if (span === 0) return now >= m.target ? 1 : 0;
   return Math.max(0, Math.min(1, (now - from) / span));

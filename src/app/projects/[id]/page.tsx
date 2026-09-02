@@ -3954,36 +3954,46 @@ function PrioritiesBanner({
               </div>
             )}
 
+            {/* One line, not the list. Andrew: "adding the 'before you begin'
+                to the 'what's important now' checklist on the dashboard is a
+                bit much … that's a bit much right out of the gate for a
+                client to see." The count and a way to Preparation, where the
+                list and the checklist PDF live. */}
             {openPrep.length > 0 && (
               <div className="mb-4">
+                <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">
+                  Before you begin
+                </p>
                 <button
                   onClick={() => onGoTo("prepare")}
-                  className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70 transition hover:text-white"
+                  className="group flex w-full items-center gap-3 rounded-xl bg-white/10 px-3 py-2.5 text-left outline-none transition hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/60"
                 >
-                  Before you begin
-                  <span aria-hidden>→</span>
+                  <span
+                    aria-hidden
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-white/85"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                      <path d="M9 5h6M9 12h6M9 19h6" />
+                      <path d="M4.5 5.5l1 1 2-2M4.5 12.5l1 1 2-2M4.5 19.5l1 1 2-2" />
+                    </svg>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-white">
+                      {openPrep.length === 1
+                        ? "One thing to do before we begin"
+                        : `${openPrep.length} things to do before we begin`}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-white/60">
+                      The list, and the checklist itself, are under Preparation.
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden
+                    className="shrink-0 text-white/60 transition-transform group-hover:translate-x-1"
+                  >
+                    →
+                  </span>
                 </button>
-                <ul className="space-y-1.5">
-                  {openPrep.map((i) => (
-                    <li
-                      key={i.id}
-                      className="flex items-start gap-3 rounded-xl bg-white/10 px-3 py-2.5"
-                    >
-                      <span
-                        aria-hidden
-                        className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-white/40"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium text-white">{i.title}</span>
-                        {i.due_on && (
-                          <span className="mt-0.5 block text-[11px] text-white/55">
-                            by {formatPrepDate(i.due_on)}
-                          </span>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
 

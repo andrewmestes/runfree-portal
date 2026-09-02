@@ -408,6 +408,10 @@ export type Database = {
           description: string | null;
           external_url: string | null;
           drive_file_id: string | null;
+          /** 063: a template-level file in Storage, under templates/{template_id}/. */
+          file_path: string | null;
+          file_name: string | null;
+          file_size: number | null;
           /** Marks the combined module handout, which renders large; the rest render small beneath it. */
           is_primary: boolean;
           position: number;
@@ -422,6 +426,9 @@ export type Database = {
           description?: string | null;
           external_url?: string | null;
           drive_file_id?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_size?: number | null;
           is_primary?: boolean;
           position?: number;
           created_at?: string;
@@ -433,6 +440,9 @@ export type Database = {
           description?: string | null;
           external_url?: string | null;
           drive_file_id?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_size?: number | null;
           is_primary?: boolean;
           position?: number;
         };

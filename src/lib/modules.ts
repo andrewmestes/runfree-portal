@@ -42,6 +42,10 @@ export function moduleOrder(section: string): number | null {
 
 /** "Mod #2 CROWD CLOUD" -> "Crowd Cloud" */
 export function moduleLabel(section: string): string {
+  // Younique's day sections come out of Asana as "Day 1 - Section #1"; the
+  // client reads "Day 1 · Section 1".
+  const day = /^\s*Day\s*(\d+)\s*[-–—]?\s*Section\s*#?\s*(\d+)\s*$/i.exec(section);
+  if (day) return `Day ${day[1]} · Section ${day[2]}`;
   const stripped = section.replace(/^\s*Mod\s*#\s*\d+\s*/i, "").trim();
   if (!stripped) return section;
   // Only re-case sections that are SHOUTED, which is how the Pivvot sections

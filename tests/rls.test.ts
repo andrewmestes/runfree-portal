@@ -554,6 +554,38 @@ async function main() {
         !adminPrivateErr,
         adminPrivateErr?.message
       );
+
+      // 16l-16o — template files (063). (16h-16k are the pinning checks below.) A worksheet under
+      // templates/{template_id}/ is readable by members of a project stamped
+      // from that template and by staff, and by nobody else. projectA sits on
+      // sharedTemplateId from section 8; projectB has no template.
+      if (sharedTemplateId) {
+        await supabaseAdmin.from("projects").update({ template_id: sharedTemplateId }).eq("id", projectA.id);
+        const templatePath = `templates/${sharedTemplateId}/rls-test-${RUN}.txt`;
+        const { error: tplUploadErr } = await supabaseAdmin.storage
+          .from(BUCKET)
+          .upload(templatePath, body, { upsert: true });
+        record("16l. the service role can place a template file", !tplUploadErr, tplUploadErr?.message);
+        if (!tplUploadErr) cleanupStoragePaths.push(templatePath);
+
+        const { error: memberTplErr } = await asViewer.storage.from(BUCKET).download(templatePath);
+        record(
+          "16m. a viewer on a project stamped from the template can read its files",
+          !memberTplErr,
+          memberTplErr?.message
+        );
+
+        const { error: otherTplErr } = await asOutsider.storage.from(BUCKET).download(templatePath);
+        record(
+          "16n. a member of a project on another template cannot",
+          !!otherTplErr,
+          otherTplErr ? "correctly rejected" : "template file was readable across templates"
+        );
+
+        const asStaff = createUserClient(staffOutsider.accessToken);
+        const { error: staffTplErr } = await asStaff.storage.from(BUCKET).download(templatePath);
+        record("16o. staff can read any template's files", !staffTplErr, staffTplErr?.message);
+      }
     }
 
     // -----------------------------------------------------------------

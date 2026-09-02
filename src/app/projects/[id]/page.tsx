@@ -9,6 +9,7 @@ import {
   createDeliverable,
   updateDeliverable,
   availableSections,
+  sectionOrderFromStructure,
   createContact,
   createPrepItem,
   createTask,
@@ -204,7 +205,35 @@ function signablePaths(detail: ProjectDetail): string[] {
     ...detail.deliverables.map((d) => d.file_path),
     ...detail.prepItems.map((p) => p.file_path),
     ...detail.prepItems.map((p) => p.thumb_path),
+    // Template worksheets (063) — Younique's LifePlan sheets and the like.
+    ...detail.resources.map((r) => r.file_path),
   ].filter((p): p is string => !!p);
+}
+
+/**
+ * The process sections of a template with no module track.
+ *
+ * Younique's three days and a coaching engagement's sections never rendered:
+ * the process panel was gated on "Mod #N" headings, so every Younique
+ * worksheet was invisible. This is the same "not a module, not prep, not the
+ * overview" test the orphan-section list applies, in the template's declared
+ * order, limited to sections that hold something.
+ */
+function nonModuleSections(detail: ProjectDetail): string[] {
+  const prep = new Set<string>([PREP_SECTION, ...detail.prepGroups.map((g) => g.section)]);
+  const inUse = new Set<string>(
+    [
+      ...detail.resources.filter((r) => r.kind !== "team_bio").map((r) => r.section),
+      ...detail.deliverables.filter((d) => d.kind === "session_image").map((d) => d.section),
+      ...detail.sessions.map((s) => s.section),
+    ].filter((x): x is string => !!x)
+  );
+  const declared = sectionOrderFromStructure(detail.template?.structure);
+  const ordered = [
+    ...declared.filter((x) => inUse.has(x)),
+    ...[...inUse].filter((x) => !declared.includes(x)),
+  ];
+  return ordered.filter((x) => moduleOrder(x) === null && !prep.has(x) && x !== OVERVIEW_SECTION);
 }
 
 /**
@@ -667,8 +696,15 @@ export default function ProjectDetailPage() {
   }, [detail]);
 
   useEffect(() => {
-    if (!activeModule && modules.length > 0) setActiveModule(modules[0].section);
-  }, [modules, activeModule]);
+    if (activeModule || !detail) return;
+    if (modules.length > 0) {
+      setActiveModule(modules[0].section);
+      return;
+    }
+    // No module track (Younique, Meta Performance): the first day section.
+    const first = nonModuleSections(detail)[0];
+    if (first) setActiveModule(first);
+  }, [modules, activeModule, detail]);
 
   async function handleSignOut() {
     await logout();
@@ -898,6 +934,10 @@ export default function ProjectDetailPage() {
    * rule between them and never names them — a heading per group would cost
    * more vertical space than the whole rail saves.
    */
+  // Younique's days, a coaching engagement's sections: the process of a
+  // template that has no six-tool arc.
+  const daySections = modules.length > 0 ? [] : nonModuleSections(detail);
+
   const panelItems = [
     // Always present, and always first: it is the landing panel, and unlike
     // every other entry it does not depend on the project having any
@@ -924,7 +964,9 @@ export default function ProjectDetailPage() {
     // left an in-person session, where there is audio and notes and no video,
     // looking like it did not belong in its own tab.
     { key: "sessions", label: "Sessions", group: 3 },
-    modules.length > 0 ? { key: "process", label: "The Process", group: 3 } : null,
+    modules.length > 0 || daySections.length > 0
+      ? { key: "process", label: "The Process", group: 3 }
+      : null,
     // Reading behind the process. Unconditional, and no longer "Will's Books"
     // — Andrew: "let's change the column from 'Will's Books' to just 'Books'."
     { key: "books", label: "Books", group: 3 },
@@ -1138,6 +1180,7 @@ export default function ProjectDetailPage() {
             {activePanel === "prepare" && (
               <PrepareSection
                 id="prepare"
+                isGroup={detail.template?.isGroup ?? true}
                 standalone
                 prep={prepResources}
                 overview={overviewResources}
@@ -1177,6 +1220,7 @@ export default function ProjectDetailPage() {
                   onChanged={refresh}
                   handouts={handouts}
                   onOpenHandout={openHandout}
+                  onOpenFile={openPrepFile}
                   thumbs={thumbs}
                 />
 
@@ -1196,12 +1240,46 @@ export default function ProjectDetailPage() {
                           onChanged={refresh}
                           handouts={handouts}
                           onOpenHandout={openHandout}
+                          onOpenFile={openPrepFile}
                           thumbs={thumbs}
                         />
                       ))}
                     </div>
                   </div>
                 )}
+              </section>
+            )}
+
+            {/* A template with no module track still has a process. Younique's
+                three days and a coaching engagement's sections come in the
+                template's declared order, and each renders the same panel a
+                Pivvot module does, minus the six icons that would mean nothing
+                here. Until now these sections rendered nowhere: a Younique
+                client opened a portal with every worksheet missing. */}
+            {activePanel === "process" && modules.length === 0 && daySections.length > 0 && (
+              <section id="process">
+                <SectionHeading eyebrow="Step by step" title="The Process" />
+                <div className="mt-8">
+                  <SectionNav
+                    sections={daySections}
+                    active={daySections.includes(activeModule) ? activeModule : daySections[0]}
+                    onSelect={setActiveModule}
+                  />
+                </div>
+                <ModulePanel
+                  key={daySections.includes(activeModule) ? activeModule : daySections[0]}
+                  section={daySections.includes(activeModule) ? activeModule : daySections[0]}
+                  detail={detail}
+                  imageUrls={imageUrls}
+                  cardFiles={cardFiles}
+                  canEdit={canEdit}
+                  accessToken={accessToken}
+                  onChanged={refresh}
+                  handouts={handouts}
+                  onOpenHandout={openHandout}
+                  onOpenFile={openPrepFile}
+                  thumbs={thumbs}
+                />
               </section>
             )}
 
@@ -4436,6 +4514,7 @@ function ModulePanel({
   onChanged,
   handouts,
   onOpenHandout,
+  onOpenFile,
   thumbs,
 }: {
   section: string;
@@ -4447,6 +4526,8 @@ function ModulePanel({
   onChanged: () => void;
   handouts: HandoutLibrary | null;
   onOpenHandout: (fileId: string, title: string) => void;
+  /** Opens a template worksheet (063) in the in-portal viewer. */
+  onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
   thumbs: Record<string, string>;
 }) {
   if (!section) return null;
@@ -4464,6 +4545,16 @@ function ModulePanel({
   const driveHandouts = moduleNo ? handouts?.byModule?.[String(moduleNo)] : undefined;
   const primaryHandout = driveHandouts?.combined ?? null;
   const otherHandouts = driveHandouts?.sheets ?? [];
+
+  // A section with no module number is a day (Younique) or a plain section
+  // (coaching): its rows ARE the agenda, in position order, and the ones with
+  // a file open the worksheet. Pivvot's exercise rows are labels for sheets
+  // that come from Drive, so they stay out of it there.
+  const walkthrough = moduleNo
+    ? []
+    : [...resources]
+        .filter((r) => r.kind !== "team_bio" && !(r.kind === "video" && r.external_url))
+        .sort((a, b) => a.position - b.position);
 
   // Every chart for this module, including the ones a coach uploaded while
   // logging a session.
@@ -4494,6 +4585,7 @@ function ModulePanel({
   // heading over an empty box.
   const hasAnything =
     !!primaryHandout ||
+    walkthrough.length > 0 ||
     videos.length > 0 ||
     (exercises.length > 0 && isGroupVertical) ||
     images.length > 0 ||
@@ -4511,6 +4603,66 @@ function ModulePanel({
             </h3>
             {meta && <p className="mt-1 text-sm text-gray-500">{meta.stage}</p>}
           </div>
+        )}
+
+        {walkthrough.length > 0 && (
+          <Block
+            title={
+              walkthrough.every((r) => r.kind === "handout")
+                ? `${walkthrough.length} document${walkthrough.length === 1 ? "" : "s"}`
+                : `${walkthrough.length} steps, in the order we work through them`
+            }
+          >
+            <ol className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
+              {walkthrough.map((r, i) => {
+                const url = r.file_path ? imageUrls[r.file_path] : undefined;
+                const href = r.external_url ? safeExternalUrl(r.external_url) : null;
+                const inner = (
+                  <>
+                    <span className="w-7 shrink-0 pt-0.5 text-right text-xs font-bold tabular-nums text-runfree-magenta/70">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-runfree-ink">{r.title}</span>
+                      {r.description && (
+                        <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">
+                          {r.description}
+                        </span>
+                      )}
+                    </span>
+                    {url ? (
+                      <span className="shrink-0 rounded-full bg-runfree-pink px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
+                        {r.kind === "handout" ? "PDF" : "Worksheet"}
+                      </span>
+                    ) : href ? (
+                      <span aria-hidden className="shrink-0 text-gray-400">
+                        ↗
+                      </span>
+                    ) : null}
+                  </>
+                );
+                const cls = `flex w-full items-start gap-3 px-4 py-3 text-left ${
+                  i > 0 ? "border-t border-gray-100" : ""
+                }`;
+                const live = "group outline-none transition hover:bg-runfree-indigo/40 focus-visible:bg-runfree-indigo/40";
+                return (
+                  <li key={r.id}>
+                    {url && onOpenFile ? (
+                      <button onClick={() => onOpenFile(url, r.title, r.file_size)} className={`${cls} ${live}`}>
+                        {inner}
+                      </button>
+                    ) : href ? (
+                      <a href={href} target="_blank" rel="noopener noreferrer" className={`${cls} ${live}`}>
+                        {inner}
+                      </a>
+                    ) : (
+                      <div className={cls}>{inner}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </Block>
         )}
 
         {(primaryHandout || otherHandouts.length > 0) && (
@@ -4893,6 +5045,45 @@ function ExtraHandouts({
   );
 }
 
+/**
+ * The sections of a template with no module track, as a row of chips —
+ * Younique's "Day 1 · Section 1" through "Day 3 · Section 1". Text rather
+ * than icons because there is no artwork for a day, and a numbered chip is
+ * enough to say where in the three days you are.
+ */
+function SectionNav({
+  sections,
+  active,
+  onSelect,
+}: {
+  sections: string[];
+  active: string;
+  onSelect: (section: string) => void;
+}) {
+  return (
+    <nav aria-label="Sections" className="flex flex-wrap gap-2">
+      {sections.map((s) => {
+        const on = s === active;
+        return (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onSelect(s)}
+            aria-pressed={on}
+            className={`rounded-full px-3.5 py-2 text-xs font-bold outline-none transition focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
+              on
+                ? "bg-runfree-grad text-white shadow-sm"
+                : "bg-white text-gray-600 ring-1 ring-gray-200 hover:ring-runfree-magenta/40 hover:text-runfree-ink"
+            }`}
+          >
+            {moduleLabel(s)}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
@@ -5037,7 +5228,7 @@ function SessionCards({
   if (items.length === 0 && !canEdit) {
     return (
       <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">
-        Nothing from this module yet.
+        Nothing here yet.
       </p>
     );
   }
@@ -6914,10 +7105,13 @@ function PrepareSection({
   handouts,
   onOpenHandout,
   onOpenFile,
+  isGroup = true,
   standalone = false,
 }: {
   id: string;
   /** True when this is a panel in its own right rather than a row. */
+  /** False for a 1:1 engagement, which has no team to prepare. */
+  isGroup?: boolean;
   standalone?: boolean;
   prep: ProjectDetail["resources"];
   overview: ProjectDetail["resources"];
@@ -7033,9 +7227,22 @@ function PrepareSection({
                 )}
               </>
             );
+            const fileUrl = r.file_path ? fileUrls[r.file_path] : undefined;
             return (
               <li key={r.id}>
-                {r.external_url ? (
+                {fileUrl && onOpenFile ? (
+                  /* A template worksheet (063) — the Life Discovery Grid, for
+                     Younique — opens in the portal's own viewer. */
+                  <button
+                    onClick={() => onOpenFile(fileUrl, r.title, r.file_size)}
+                    className="inline-flex items-center rounded-full border border-runfree-magenta/30 bg-runfree-pink/40 px-3.5 py-1.5 text-xs font-semibold text-runfree-magentaDeep transition hover:bg-runfree-pink"
+                  >
+                    {r.title}
+                    <span aria-hidden className="ml-1.5 text-runfree-magentaDeep/60">
+                      ↗
+                    </span>
+                  </button>
+                ) : r.external_url ? (
                   <a
                     href={safeExternalUrl(r.external_url)!}
                     target="_blank"
@@ -7068,7 +7275,10 @@ function PrepareSection({
   if (standalone) {
     return (
       <section id={id} className="scroll-mt-8">
-        <SectionHeading eyebrow="Before you begin" title="Prepare Your Team" />
+        {/* "Your Team" is Pivvot's vocabulary. A Younique client is one
+            person, and being told to prepare a team they do not have reads
+            as the wrong portal. */}
+        <SectionHeading eyebrow="Before you begin" title={isGroup ? "Prepare Your Team" : "Your Preparation"} />
         <div className="mt-8">{body}</div>
       </section>
     );

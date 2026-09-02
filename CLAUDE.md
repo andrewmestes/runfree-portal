@@ -26,6 +26,12 @@ repo prints `sh: next: command not found`, does nothing, and **exits 0**;
 typecheck passed when nothing ran at all. That has already happened once.
 Always call the binary directly and read the actual output.
 
+**The in-app preview runner cannot start this dev server either.** Its
+sandbox reports `EPERM` opening `node_modules/next/dist/bin/next` — the same
+colon in the path, one layer down. `.claude/launch.json` is there and correct;
+start the server from Bash (`./node_modules/.bin/next dev -p 3001`) and point
+the browser at it.
+
 ## Which Supabase project — the names read backwards
 
 There were three Supabase projects in the org. The one **named**
@@ -924,6 +930,82 @@ Still open from that review, deliberately: the highlight picker cannot offer
 a module card's `deliverable_files` attachments (only its legacy `file_path`
 and `image_path`); the canvas PDF path has no text layer for a screen reader;
 the navigation drawer does not make the page behind it inert while open.
+
+## Templates carry files now, and a template without modules still has a process
+
+Andrew, 1 Sept 2026: "I also need to start thinking of a coaching template and
+a younique 1-on-1 coaching template to bring in. consider Joe McGinn's
+Younique project in asana as a general structure."
+
+009 had built the Younique template from that project's task TITLES and
+nothing else, and the day sections it seeded never rendered: the process
+panel was gated on "Mod #N" headings, so a Younique client would have opened
+a portal with every worksheet missing. Three things changed.
+
+**`template_resources` can carry a file** (**063**): `file_path`,
+`file_name`, `file_size`, stored in the private bucket under
+`templates/{template_id}/{slug}.{ext}`. Pivvot's sheets still come from
+Drive; this exists because Younique's fifteen LifePlan worksheets, the
+Life-Making Cycle set and the retreat guides live nowhere but as attachments
+on the Asana project. Readers are the template's audience — owner, staff, and
+members of any project stamped from it — mirroring `read_template_resources`.
+Writes are script-only:
+
+```bash
+./node_modules/.bin/tsx --env-file=.env.local scripts/import-template-files.ts manifest.json --go
+```
+
+The manifest pairs Asana attachment download URLs with (section, title).
+Those URLs expire in about an hour; list them again right before a `--go`.
+
+Two storage-policy traps, both hit on the night this landed:
+
+- **`alter policy` replaces the whole using-clause.** 063 rewrote the read
+  policy from 007's text and silently dropped 036's private-prep rule;
+  `tests/rls.test.ts` 16f caught it and **065** restored it. Start from the
+  migration that last touched a policy, not the one that created it.
+- **Write `objects.name`, not `name`, inside a subquery on storage.objects.**
+  063's subquery joined `projects`, which has a `name` column, so
+  `foldername(name)` resolved to the church's name and no member ever
+  matched — staff saw worksheet pills, a viewer saw none. **066** fixed it;
+  16m is the check. 036 had written `objects.name` for the same reason.
+
+007's project-id cast is now guarded by `try_uuid()`: a `templates/…` path
+in the first folder used to be a runtime error inside the OR of policies, not
+a false.
+
+**A template with no module track renders its sections as The Process.**
+`nonModuleSections(detail)` — declared order from `templates.structure`,
+minus prep sections and the overview, limited to sections holding something —
+feeds `SectionNav` (text chips, "Day 1 · Section 1") and the same
+`ModulePanel` a Pivvot module uses. In that panel a section without a module
+number renders its rows as a numbered walkthrough: a row with a file opens the
+worksheet in the in-portal viewer, a row with a URL links out, a row with
+neither is a step in the day. Pivvot sections keep their Drive handouts and
+never show the walkthrough — there the exercise rows are labels for sheets
+that live in Drive. `moduleLabel()` prettifies "Day 1 - Section #1".
+
+**Younique 1-1 Life Plan** (**064**) is a real curriculum now: four prework
+rows (the LDG worksheet and its three Loom videos), ten steps on Day 1
+Section 1 down to three on Day 3, and seven Life-Making Cycle documents, with
+21 files attached. Section names were normalised ("Day 2 Section #1" and
+"Day 3 - Section #3" were Asana copy-paste artefacts). Nothing of Joe's own
+content came across — only blank worksheets and the pre-work list from the
+template task's note. The two 90-Day Launch attachments were byte-identical
+(24 MB each); one is kept. The Younique book itself is already on the Books
+shelf from Drive, so it is not duplicated here.
+
+**Meta Performance Coaching** (also 064) has an outline — COACHING
+PREPARATION, Coaching Sessions, Coaching Resources, TEAM — and three prework
+items as a starting point for Andrew to edit, not a curriculum. Working Genius
+is there because it is Andrew's own instrument; he has not confirmed it.
+
+`scripts/scratch-project.ts <slug> "<name>"` stamps a throwaway project
+through `createProject()` with a throwaway staff account, and `--delete
+<id>` removes both. Delete it. A forgotten one is a fake church in the picker.
+
+`PrepareSection` takes `isGroup`; a 1:1 client reads "Your Preparation", not
+"Prepare Your Team".
 
 ## Checking it on a phone
 

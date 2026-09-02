@@ -1897,7 +1897,10 @@ function ChurchHero({
   return (
     <div className="border-b border-gray-200 bg-white">
       <div className="px-4 py-5 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+        {/* A row at every width. Stacked on a phone, the 96px mark plus the
+            name plus the meta line cost ~400px at the top of EVERY panel; a
+            56px mark beside the name gives most of that back. */}
+        <div className="flex items-center gap-4 sm:gap-5">
           {/* Works for any engagement: a church's logo, or the person's
               photo on a Younique or coaching project. */}
           <div
@@ -1918,7 +1921,7 @@ function ChurchHero({
               uploadLogo(e.dataTransfer.files?.[0]);
             }}
             title={canManage ? "Upload a logo or photo" : undefined}
-            className={`group relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-200 outline-none ${
+            className={`group relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-50 ring-1 ring-gray-200 outline-none sm:h-24 sm:w-24 sm:rounded-2xl ${
               canManage
                 ? "cursor-pointer hover:ring-runfree-magenta/40 focus-visible:ring-2 focus-visible:ring-runfree-magenta"
                 : ""
@@ -1928,7 +1931,7 @@ function ChurchHero({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoUrl} alt={org} className="h-full w-full object-contain p-2" />
             ) : (
-              <span className="font-display text-2xl font-extrabold tracking-tight text-runfree-navy/40">
+              <span className="font-display text-lg font-extrabold tracking-tight text-runfree-navy/40 sm:text-2xl">
                 {initials}
               </span>
             )}
@@ -1963,7 +1966,7 @@ function ChurchHero({
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
               Welcome
             </p>
-            <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight text-runfree-ink sm:text-4xl lg:text-[2.75rem]">
+            <h1 className="mt-0.5 font-display text-2xl font-extrabold leading-tight tracking-tight text-runfree-ink sm:mt-1 sm:text-4xl lg:text-[2.75rem]">
               {org}
             </h1>
             {/* One line: what this is and where, then the controls hard

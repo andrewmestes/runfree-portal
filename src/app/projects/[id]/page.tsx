@@ -4152,35 +4152,34 @@ function VisionStackCard({
             the Vision Stack page, still, with the layer names on a rail to the
             left the way the printed sheet has them; the card is one link, so
             the whole thing is the button. */}
-        <div className="relative mx-auto shrink-0 sm:mx-0" style={{ width: 132 + 176 }}>
-          <div className="relative ml-[132px]" style={{ width: 176, aspectRatio: "503 / 900" }}>
-            {[...layers].reverse().map((layer, i) => (
-              <div
-                key={layer.slug}
-                className="absolute left-0 w-full transition-transform duration-500 ease-out group-hover:-translate-y-1.5"
-                style={{
-                  top: `${i * 20.11}%`,
-                  height: "39.67%",
-                  zIndex: layers.length - i,
-                  filter: "drop-shadow(0 10px 14px rgba(0,0,0,0.35))",
-                  transitionDelay: `${(layers.length - 1 - i) * 45}ms`,
-                }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`/brand/vision-stack/${layer.slug}.png`}
-                  alt=""
-                  className="h-full w-full object-contain"
-                />
-                <span
-                  className="absolute w-[118px] -translate-y-1/2 text-right text-[12px] font-bold leading-[1.15] text-white/85"
-                  style={{ right: "calc(100% + 10px)", top: `${39.67 * 0.44}%` }}
-                >
-                  {layer.name}
-                </span>
-              </div>
-            ))}
-          </div>
+        {/* The art alone. Andrew: "remove the vision stack titles. just use the
+            image there. make it slightly bigger, and feel free to let it
+            bleed on the bottom a little." The card clips it, so the negative
+            margin is the bleed. */}
+        <div
+          className="relative mx-auto -mb-16 shrink-0 sm:mx-0 lg:-mb-24 lg:-mt-2 lg:self-end"
+          style={{ width: 250, aspectRatio: "503 / 900" }}
+        >
+          {[...layers].reverse().map((layer, i) => (
+            <div
+              key={layer.slug}
+              className="absolute left-0 w-full transition-transform duration-500 ease-out group-hover:-translate-y-1.5"
+              style={{
+                top: `${i * 20.11}%`,
+                height: "39.67%",
+                zIndex: layers.length - i,
+                filter: "drop-shadow(0 12px 16px rgba(0,0,0,0.38))",
+                transitionDelay: `${(layers.length - 1 - i) * 45}ms`,
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/brand/vision-stack/${layer.slug}.png`}
+                alt=""
+                className="h-full w-full object-contain"
+              />
+            </div>
+          ))}
         </div>
       </div>
     </a>
@@ -5083,7 +5082,9 @@ function SheetWalkthrough({
   return (
     <div className="mt-4">
       <p className="mb-2 text-xs text-gray-500">
-        {sheets.length} sheets, in the order we work through them.
+        {sheets.length === 1
+          ? "One sheet. Open it to read or download."
+          : `${sheets.length} sheets, in the order we work through them.`}
       </p>
       <ol className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
         {sheets.map((h, i) => (
@@ -7737,6 +7738,12 @@ function PrepareSection({
   onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
 }) {
   const extras = handouts?.extras ?? [];
+  // The template's prep resources — orientation videos, reading chips — no
+  // longer render here. Andrew: "if the dashboard holds all the orientation
+  // material along with the assigned reading when it's starting up, the
+  // preparation tab can be solely focused on the content from the checklist
+  // we prepared." They still exist for the highlight picker.
+  void prep;
   void overview;
   /**
    * Open when it IS the panel, closed when it is a row inside another one.
@@ -7746,8 +7753,21 @@ function PrepareSection({
    */
   const [open, setOpen] = useState(standalone);
 
-  if (prep.length === 0 && overview.length === 0 && prepGroups.length === 0 && extras.length === 0)
-    return null;
+  // By file title as well as group name: the checklist PDF sits inside
+  // "Additional Handouts" in Drive, and a group-name match never saw it.
+  const checklistHandouts = extras
+    .map((g) => ({
+      ...g,
+      name: PREP_HANDOUT.test(g.name) ? g.name : "The Preparation Checklist, as a PDF",
+      files: g.files.filter((f) => PREP_HANDOUT.test(g.name) || PREP_HANDOUT.test(f.title)),
+    }))
+    .filter((g) => g.files.length > 0);
+
+  // A church meets the reading through the dashboard's highlights; the shelf
+  // stays here for the people who curate it.
+  const shownGroups = canEdit ? prepGroups : prepGroups.filter((g) => g.kind !== "reading");
+
+  if (shownGroups.length === 0 && checklistHandouts.length === 0) return null;
 
   // Only the preparation resources. `overview` is the PROCESS OVERVIEW
   // section, and merging it in here is why "Process Overview Teaching" and
@@ -7758,22 +7778,8 @@ function PrepareSection({
   // The one thing worth keeping from that block, the 7 Laws overview, is now
   // a reading item with its own link, so it arrives through the shelf rather
   // than by dragging a whole unrelated section along with it.
-  const videos = prep.filter((r) => r.kind === "video" && r.external_url);
-  const reading = prep.filter((r) => r.kind !== "video");
-  // By file title as well as group name: the two checklist PDFs sit inside
-  // "Additional Handouts" in Drive, and a group-name match never saw them.
-  const checklistHandouts = extras
-    .map((g) => ({
-      ...g,
-      name: PREP_HANDOUT.test(g.name) ? g.name : "The Preparation Checklist, as a PDF",
-      files: g.files.filter((f) => PREP_HANDOUT.test(g.name) || PREP_HANDOUT.test(f.title)),
-    }))
-    .filter((g) => g.files.length > 0);
 
-  const itemCount =
-    prepItems.filter((i) => prepGroups.some((g) => g.id === i.group_id)).length +
-    videos.length +
-    reading.length;
+  const itemCount = prepItems.filter((i) => shownGroups.some((g) => g.id === i.group_id)).length;
 
   /**
    * One line, closed by default, sitting between the tabs and the module
@@ -7798,9 +7804,9 @@ function PrepareSection({
         <ExtraHandouts extras={checklistHandouts} onOpen={onOpenHandout} />
       )}
 
-      {prepGroups.length > 0 && (
+      {shownGroups.length > 0 && (
         <PrepCards
-          groups={prepGroups}
+          groups={shownGroups}
           items={prepItems}
           projectId={projectId}
           canEdit={canEdit}
@@ -7813,71 +7819,6 @@ function PrepareSection({
         />
       )}
 
-      {videos.length > 0 && (
-        <div>
-          <h4 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-            Orientation Videos
-          </h4>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {videos.map((v) => (
-              <VideoCard
-                key={v.id}
-                title={v.title}
-                url={v.external_url!}
-                thumbnail={thumbs[v.external_url!]}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {reading.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
-          {reading.map((r) => {
-            const inner = (
-              <>
-                {r.title}
-                {r.external_url && (
-                  <span aria-hidden className="ml-1.5 text-gray-400">
-                    →
-                  </span>
-                )}
-              </>
-            );
-            const fileUrl = r.file_path ? fileUrls[r.file_path] : undefined;
-            return (
-              <li key={r.id}>
-                {fileUrl && onOpenFile ? (
-                  /* A template worksheet (063) — the Life Discovery Grid, for
-                     Younique — opens in the portal's own viewer. */
-                  <button
-                    onClick={() => onOpenFile(fileUrl, r.title, r.file_size)}
-                    className="inline-flex items-center rounded-full border border-runfree-magenta/30 bg-runfree-pink/40 px-3.5 py-1.5 text-xs font-semibold text-runfree-magentaDeep transition hover:bg-runfree-pink"
-                  >
-                    {r.title}
-                    <span aria-hidden className="ml-1.5 text-runfree-magentaDeep/60">
-                      ↗
-                    </span>
-                  </button>
-                ) : r.external_url ? (
-                  <a
-                    href={safeExternalUrl(r.external_url)!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-runfree-magenta/40 hover:text-runfree-ink"
-                  >
-                    {inner}
-                  </a>
-                ) : (
-                  <span className="inline-flex items-center rounded-full bg-gray-50 px-3.5 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
-                    {inner}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
     </div>
   );
 

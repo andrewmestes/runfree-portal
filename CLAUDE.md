@@ -1107,6 +1107,50 @@ Andrew's notes from walking Athena Christian Church, and what each became.
   fits the art in flight. Reduced motion skips it. The hero is three lights on
   navy with the frame mark drawn large and faint.
 
+## The 2 September evening notes — the stack opens, one checklist, a focused Preparation tab
+
+Andrew's second look at the walkthrough changes, and what each one turned into:
+
+**The Vision Stack intro opens in place instead of arriving in a row.** The
+first idea (four small plates in a row, sliding into the stack on the first
+scroll) "didn't look as cool as I thought it would. i couldn't even see it
+when it first loaded": the row was small, sat below the fold, and had already
+moved by the time he reached it. Now every plate starts on the foundation's
+spot as one closed block, and when the stack box is 45% in view
+(`IntersectionObserver` on `stackRef` in `VisionStackExplorer`) the upper
+three rise to their places bottom first, labels following once they land. It
+plays when the stack is actually looked at, not on a timer racing the reader;
+a 6s fallback and any click open it regardless; reduced motion starts open.
+The hero he liked ("the header looks great w the vision frame icon") is
+untouched.
+
+**One checklist PDF.** "Launch Preparation Checklist" and "Preparation
+Checklist" in Drive's Additional Handouts are the same document twice.
+`listTemplateHandouts` now keeps the most recently modified of any files
+matching `/prep(aration)?\s*checklist/i` within a group (12 June's
+"Preparation Checklist" over 2 June's "Launch …" as of this writing) — so the
+Preparation card, the Process handout pills and the highlight picker all see
+one. Athena also carried a byte-identical upload of the older copy on a
+"Review the Preparation Checklist" prep item; that row and its storage object
+were removed, since the Drive copy reaches the panel on its own. Do not add
+the checklist back as a prep-item file.
+
+**Preparation is the checklist content, nothing else.** "If the dashboard
+holds all the orientation material along with the assigned reading when it's
+starting up, the preparation tab can be solely focused on the content from
+the checklist we prepared." `PrepareSection` no longer renders the template's
+prep resources (the orientation videos and reading chips — they still exist
+for the highlight picker), and the Reading & Pre-Work group is shown to
+editors only, since a church meets the reading through the dashboard's
+highlights. A viewer sees: the checklist PDF card, Previous Vision Equity,
+Before the First Visit, Room and Environment Setup. The single-file handout
+card says "One sheet", not "1 sheets".
+
+**The Deliverables card shows the art alone.** No layer titles; the four
+plates at 250px wide, pinned to the card's bottom edge with a negative margin
+so the foundation bleeds off it (the card is `overflow-hidden`, which is what
+makes the bleed a crop rather than an overflow).
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

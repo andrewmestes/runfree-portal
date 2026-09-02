@@ -466,9 +466,24 @@ export async function listTemplateHandouts(rootId: string): Promise<TemplateHand
   // preview could not render.
   const openable = (f: DriveListedFile) => /pdf$|^image\//i.test(f.mimeType);
   for (const m of Object.values(byModule)) m.sheets = m.sheets.filter(openable);
+  // "Launch Preparation Checklist" and "Preparation Checklist" are the same
+  // document twice in Additional Handouts. Andrew: "make sure that file isn't
+  // duplicated." The most recently modified copy survives (on 2 Sept 2026
+  // that was "Preparation Checklist", 12 June, over "Launch …", 2 June) and
+  // the other never reaches a church.
+  const checklist = /prep(aration)?\s*checklist/i;
+  const dedupeChecklist = (files: DriveListedFile[]) => {
+    const dupes = files.filter((f) => checklist.test(f.title));
+    if (dupes.length < 2) return files;
+    const keep = [...dupes].sort(
+      (a, b) =>
+        (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? "") || a.title.length - b.title.length
+    )[0];
+    return files.filter((f) => !checklist.test(f.title) || f.id === keep.id);
+  };
   const extras = groups
     .filter((g) => (g.order < 1 || g.order > 6) && !/combined handouts/i.test(g.name))
-    .map((g) => ({ ...g, files: g.files.filter(openable) }))
+    .map((g) => ({ ...g, files: dedupeChecklist(g.files.filter(openable)) }))
     .filter((g) => g.files.length > 0);
 
   return { byModule, extras, notebooks };

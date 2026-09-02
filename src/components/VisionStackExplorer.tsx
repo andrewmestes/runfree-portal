@@ -134,37 +134,54 @@ export default function VisionStackExplorer({
   const reduced = useReducedMotion();
 
   /**
-   * The intro: four plates in a row, then the stack.
+   * The intro: the stack arrives closed and opens.
    *
-   * Andrew: "maybe the tiles are horizontal, and then as soon as I start to
-   * scroll, they shift over into a stack … some kind of engaging, creative
-   * visual that makes this page feel a little bit more epic." So the plates
-   * arrive side by side, small, and glide into the stack on the first scroll
-   * — or the first click, or after a moment for someone who does neither.
-   * Reduced motion skips straight to the stack. The row boxes keep the
-   * plate's own aspect (see the wrapper style) so the diamond clip still
-   * fits the art while they travel.
+   * All four plates sit on the foundation as one closed block, and when the
+   * stack comes into view the upper three rise to their places, bottom
+   * first, the labels following once they land. Andrew's first idea — the
+   * plates lying in a row that shifts into a stack — "didn't look as cool as
+   * I thought it would. i couldn't even see it when it first loaded": the
+   * row was small and sat below the fold, and the move had happened before
+   * he reached it. Opening in place is visible wherever the stack is, and it
+   * plays when it is actually looked at (IntersectionObserver), not on a
+   * timer racing the reader. Reduced motion skips straight to open.
    */
-  const [stage, setStage] = useState<"row" | "stack">("row");
+  const stackRef = useRef<HTMLDivElement>(null);
+  const [stage, setStage] = useState<"closed" | "open">("closed");
   useEffect(() => {
     if (reduced) {
-      setStage("stack");
+      setStage("open");
       return;
     }
-    if (stage === "stack") return;
-    const go = () => setStage("stack");
-    window.addEventListener("scroll", go, { once: true, passive: true });
-    window.addEventListener("wheel", go, { once: true, passive: true });
-    window.addEventListener("touchmove", go, { once: true, passive: true });
-    const t = window.setTimeout(go, 2800);
+    if (stage === "open") return;
+    const el = stackRef.current;
+    let t: number | undefined;
+    const open = () => {
+      t = window.setTimeout(() => setStage("open"), 350);
+    };
+    const io =
+      typeof IntersectionObserver !== "undefined" && el
+        ? new IntersectionObserver(
+            (entries) => {
+              if (entries.some((e) => e.isIntersecting)) {
+                open();
+                io?.disconnect();
+              }
+            },
+            { threshold: 0.45 }
+          )
+        : null;
+    if (io && el) io.observe(el);
+    else open();
+    // Nobody should wait forever on a stack that never scrolls into view.
+    const fallback = window.setTimeout(() => setStage("open"), 6000);
     return () => {
-      window.removeEventListener("scroll", go);
-      window.removeEventListener("wheel", go);
-      window.removeEventListener("touchmove", go);
-      window.clearTimeout(t);
+      io?.disconnect();
+      if (t) window.clearTimeout(t);
+      window.clearTimeout(fallback);
     };
   }, [reduced, stage]);
-  const stacked = stage === "stack";
+  const stacked = stage === "open";
 
   // Assemble once on arrival. Held a frame so the transition has a "from"
   // state — setting the final transform in the same paint lands it there with
@@ -185,7 +202,7 @@ export default function VisionStackExplorer({
    */
   const choose = (slug: string) => {
     setSelected(slug);
-    setStage("stack");
+    setStage("open");
     if (window.matchMedia("(min-width: 1024px)").matches) return;
     window.requestAnimationFrame(() =>
       panelRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" })
@@ -271,7 +288,7 @@ export default function VisionStackExplorer({
           )}
         </div>
 
-        <div className="relative w-full" style={{ aspectRatio: STACK_ASPECT }}>
+        <div ref={stackRef} className="relative w-full" style={{ aspectRatio: STACK_ASPECT }}>
           {/* Ground. Andrew: "I think a bit of shadow underneath would be
               helpful." A soft ellipse under the base plate — four floating
               diamonds with no contact shadow read as clip-art, and the
@@ -316,13 +333,12 @@ export default function VisionStackExplorer({
                 key={p.slug}
                 className="pointer-events-none absolute left-0 w-full"
                 style={{
-                  // Row: 26% wide, at the plate's own aspect (26% of 503 wide
-                  // by 10.3% of 900 tall is 800x567), lined up mid-box.
-                  // Stack: the geometry from the artwork.
-                  top: stacked ? `${i * STEP}%` : "44%",
-                  left: stacked ? "0%" : `${2 + i * 24}%`,
-                  width: stacked ? "100%" : "26%",
-                  height: stacked ? `${PLATE_H}%` : "10.3%",
+                  // Closed: every plate on the foundation's spot, one block.
+                  // Open: the geometry from the artwork.
+                  top: stacked ? `${i * STEP}%` : `${(plates.length - 1) * STEP}%`,
+                  left: 0,
+                  width: "100%",
+                  height: `${PLATE_H}%`,
                   zIndex: plates.length - i,
                   filter: isActive && stacked
                     ? "drop-shadow(0 18px 22px rgba(19,29,69,0.30))"
@@ -333,11 +349,13 @@ export default function VisionStackExplorer({
                   opacity: assembled ? (!stacked ? 1 : isActive ? 1 : isHover ? 0.97 : 0.86) : 0,
                   transition: reduced
                     ? "none"
-                    : "top 900ms cubic-bezier(.22,1,.36,1), left 900ms cubic-bezier(.22,1,.36,1), width 900ms cubic-bezier(.22,1,.36,1), height 900ms cubic-bezier(.22,1,.36,1), filter 520ms cubic-bezier(.22,1,.36,1), opacity 520ms cubic-bezier(.22,1,.36,1)",
+                    : "top 1100ms cubic-bezier(.22,1,.36,1), filter 520ms cubic-bezier(.22,1,.36,1), opacity 520ms cubic-bezier(.22,1,.36,1)",
+                  // Bottom first: the Vision Frame lifts, then the Storyline,
+                  // then the Toolbox — the stack opening upward.
                   transitionDelay:
                     assembled && !reduced
                       ? stacked
-                        ? `${(plates.length - 1 - i) * 70}ms`
+                        ? `${(plates.length - 1 - i) * 110}ms`
                         : "0ms"
                       : `${(plates.length - 1 - i) * 90}ms`,
                 }}
@@ -358,7 +376,7 @@ export default function VisionStackExplorer({
                     transform: !assembled
                       ? "translateY(26px) scale(0.94)"
                       : !stacked
-                        ? "none"
+                        ? "scale(0.97)"
                         : `translateY(${isActive && !reduced ? -10 : 0}px) scale(${
                             isActive ? 1.06 : isHover ? 1.03 : 1
                           })`,

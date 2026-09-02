@@ -65,6 +65,8 @@ import FilePreview, { type PreviewFile } from "@/components/FilePreview";
 import ResourceCard from "@/components/ResourceCard";
 import VisionFramePanel from "@/components/VisionFramePanel";
 import {
+  frameElementForSection,
+  framePrompt,
   listVisionFrame,
   saveVisionFrameElement,
   type VisionFrameElement,
@@ -219,7 +221,7 @@ function signablePaths(detail: ProjectDetail): string[] {
  * overview" test the orphan-section list applies, in the template's declared
  * order, limited to sections that hold something.
  */
-function nonModuleSections(detail: ProjectDetail): string[] {
+function nonModuleSections(detail: ProjectDetail, includeEmptyDeclared = false): string[] {
   const prep = new Set<string>([PREP_SECTION, ...detail.prepGroups.map((g) => g.section)]);
   const inUse = new Set<string>(
     [
@@ -229,8 +231,12 @@ function nonModuleSections(detail: ProjectDetail): string[] {
     ].filter((x): x is string => !!x)
   );
   const declared = sectionOrderFromStructure(detail.template?.structure);
+  // A frame template's sections ARE the process — Mission, Values, Strategy,
+  // Measures, Vision — and every one of them belongs on the rail from day
+  // one, filed under or not. Younique's declared "Overview" and "Session
+  // Recordings" hold nothing and should stay off it.
   const ordered = [
-    ...declared.filter((x) => inUse.has(x)),
+    ...(includeEmptyDeclared ? declared : declared.filter((x) => inUse.has(x))),
     ...[...inUse].filter((x) => !declared.includes(x)),
   ];
   return ordered.filter((x) => moduleOrder(x) === null && !prep.has(x) && x !== OVERVIEW_SECTION);
@@ -701,8 +707,9 @@ export default function ProjectDetailPage() {
       setActiveModule(modules[0].section);
       return;
     }
-    // No module track (Younique, Meta Performance): the first day section.
-    const first = nonModuleSections(detail)[0];
+    // No module track (Younique, Meta Performance, the nonprofit frame): the
+    // first section.
+    const first = nonModuleSections(detail, detail.template?.processKind === "frame")[0];
     if (first) setActiveModule(first);
   }, [modules, activeModule, detail]);
 
@@ -934,9 +941,10 @@ export default function ProjectDetailPage() {
    * rule between them and never names them — a heading per group would cost
    * more vertical space than the whole rail saves.
    */
-  // Younique's days, a coaching engagement's sections: the process of a
-  // template that has no six-tool arc.
-  const daySections = modules.length > 0 ? [] : nonModuleSections(detail);
+  // Younique's days, a coaching engagement's sections, a nonprofit's frame:
+  // the process of a template that has no six-tool arc.
+  const processKind = detail.template?.processKind ?? (modules.length > 0 ? "modules" : "sections");
+  const daySections = modules.length > 0 ? [] : nonModuleSections(detail, processKind === "frame");
 
   const panelItems = [
     // Always present, and always first: it is the landing panel, and unlike
@@ -1221,6 +1229,7 @@ export default function ProjectDetailPage() {
                   handouts={handouts}
                   onOpenHandout={openHandout}
                   onOpenFile={openPrepFile}
+                  onGoTo={goPanel}
                   thumbs={thumbs}
                 />
 
@@ -1241,6 +1250,7 @@ export default function ProjectDetailPage() {
                           handouts={handouts}
                           onOpenHandout={openHandout}
                           onOpenFile={openPrepFile}
+                          onGoTo={goPanel}
                           thumbs={thumbs}
                         />
                       ))}
@@ -1258,12 +1268,30 @@ export default function ProjectDetailPage() {
                 client opened a portal with every worksheet missing. */}
             {activePanel === "process" && modules.length === 0 && daySections.length > 0 && (
               <section id="process">
-                <SectionHeading eyebrow="Step by step" title="The Process" />
+                <SectionHeading
+                  eyebrow={processKind === "frame" ? "The Vision Frame" : "Step by step"}
+                  title="The Process"
+                />
                 <div className="mt-8">
-                  <SectionNav
-                    sections={daySections}
-                    active={daySections.includes(activeModule) ? activeModule : daySections[0]}
-                    onSelect={setActiveModule}
+                  {processKind === "frame" ? (
+                    <FrameNav
+                      sections={daySections}
+                      active={daySections.includes(activeModule) ? activeModule : daySections[0]}
+                      onSelect={setActiveModule}
+                    />
+                  ) : (
+                    <SectionNav
+                      sections={daySections}
+                      active={daySections.includes(activeModule) ? activeModule : daySections[0]}
+                      onSelect={setActiveModule}
+                    />
+                  )}
+                  {/* The template's Drive folder, as pills under the rail — the
+                      nonprofit folder is examples and overviews rather than
+                      numbered modules, so it all arrives as "extras". */}
+                  <HandoutPills
+                    extras={(handouts?.extras ?? []).filter((g) => !PREP_HANDOUT.test(g.name))}
+                    onOpen={openHandout}
                   />
                 </div>
                 <ModulePanel
@@ -1278,6 +1306,7 @@ export default function ProjectDetailPage() {
                   handouts={handouts}
                   onOpenHandout={openHandout}
                   onOpenFile={openPrepFile}
+                  onGoTo={goPanel}
                   thumbs={thumbs}
                 />
               </section>
@@ -1314,6 +1343,8 @@ export default function ProjectDetailPage() {
                     searchable at some level." */}
                 <VisionFramePanel
                   rows={visionFrame}
+                  elements={detail.template?.frameElements}
+                  voice={detail.template?.voice}
                   canEdit={canEdit}
                   onSave={async (element, body) => {
                     if (!accessToken) return;
@@ -1435,6 +1466,7 @@ export default function ProjectDetailPage() {
  * which is the only path that creates an account.
  */
 function ChurchTeamInfo({
+  voice = "church",
   id,
   contacts,
   projectId,
@@ -1442,6 +1474,8 @@ function ChurchTeamInfo({
   accessToken,
   onChanged,
 }: {
+  /** A nonprofit has a team, not a church team (067). */
+  voice?: "church" | "organization";
   id: string;
   contacts: ChurchContact[];
   projectId: string;
@@ -1514,10 +1548,10 @@ function ChurchTeamInfo({
 
           <span className="min-w-0 flex-1">
             <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
-              From your church
+              {voice === "organization" ? "From your organization" : "From your church"}
             </span>
             <span className="block font-display text-xl font-extrabold tracking-tight text-runfree-ink">
-              Church Team
+              {voice === "organization" ? "Your Team" : "Church Team"}
             </span>
           </span>
 
@@ -4518,6 +4552,7 @@ function ModulePanel({
   handouts,
   onOpenHandout,
   onOpenFile,
+  onGoTo,
   thumbs,
 }: {
   section: string;
@@ -4531,6 +4566,8 @@ function ModulePanel({
   onOpenHandout: (fileId: string, title: string) => void;
   /** Opens a template worksheet (063) in the in-portal viewer. */
   onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
+  /** Jump to another panel — the Sessions list, from a section's sessions. */
+  onGoTo?: (panel: string) => void;
   thumbs: Record<string, string>;
 }) {
   if (!section) return null;
@@ -4581,6 +4618,15 @@ function ModulePanel({
   const order = moduleOrder(section);
   const meta = order ? MODULE_META[order] : null;
   const isGroupVertical = detail.template?.isGroup ?? true;
+  // On a frame template the section IS a side of the frame; say which
+  // question it answers, in the template's voice.
+  const frameEl = order ? null : frameElementForSection(section);
+  const voice = detail.template?.voice ?? "church";
+  // Every session filed under this section, with what it left behind —
+  // Andrew, for the nonprofit template: "session recordings, transcripts,
+  // notes, next steps … all of that stuff is still relevant." They live on
+  // Sessions; this is the way there from the section they belong to.
+  const sectionSessions = detail.sessions.filter((x) => x.section === section);
 
   // A section whose only rows are handouts and videos with no destination
   // yet has nothing to show. An editor still gets the panel, because the
@@ -4589,11 +4635,16 @@ function ModulePanel({
   const hasAnything =
     !!primaryHandout ||
     walkthrough.length > 0 ||
+    sectionSessions.length > 0 ||
     videos.length > 0 ||
     (exercises.length > 0 && isGroupVertical) ||
     images.length > 0 ||
     moduleDeliverables.length > 0;
-  if (!hasAnything && !canEdit) return null;
+  // On a frame template the section is a side of the frame, and a client
+  // clicking "Mission" on day one should meet the question it answers — not
+  // a rail of icons with nothing under them.
+  const alwaysShow = !order && detail.template?.processKind === "frame";
+  if (!hasAnything && !canEdit && !alwaysShow) return null;
 
   return (
     <div className="animate-fade mt-2 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
@@ -4605,6 +4656,16 @@ function ModulePanel({
               {moduleLabel(section)}
             </h3>
             {meta && <p className="mt-1 text-sm text-gray-500">{meta.stage}</p>}
+            {frameEl && (
+              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                {frameEl.question && (
+                  <span className="font-bold uppercase tracking-wide text-runfree-navy">
+                    {frameEl.question} —{" "}
+                  </span>
+                )}
+                {framePrompt(frameEl.key, voice)}
+              </p>
+            )}
           </div>
         )}
 
@@ -4732,6 +4793,52 @@ function ModulePanel({
             onChanged={onChanged}
           />
         </Block>
+
+        {sectionSessions.length > 0 && (
+          <Block title="Sessions on this">
+            <ul className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
+              {sectionSessions.map((x, i) => {
+                const openSteps = detail.tasks.filter((t) => t.session_id === x.id && !t.is_done).length;
+                return (
+                  <li
+                    key={x.id}
+                    className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-white px-4 py-3 ${
+                      i > 0 ? "border-t border-gray-100" : ""
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-runfree-ink">{x.title}</span>
+                      <span className="block text-xs text-gray-500">{formatSessionDate(x.held_on)}</span>
+                    </span>
+                    {x.recording_url && (
+                      <span className="rounded-full bg-runfree-pink px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
+                        Recording
+                      </span>
+                    )}
+                    {x.transcript && (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-600">
+                        Transcript
+                      </span>
+                    )}
+                    {openSteps > 0 && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                        {openSteps} next step{openSteps === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    {onGoTo && (
+                      <button
+                        onClick={() => onGoTo("sessions")}
+                        className="text-xs font-semibold text-runfree-magentaDeep hover:underline"
+                      >
+                        Open →
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </Block>
+        )}
 
         {videos.length > 0 && (
           <Block title={`${moduleLabel(section)} training videos`}>
@@ -5083,6 +5190,139 @@ function SectionNav({
           </button>
         );
       })}
+    </nav>
+  );
+}
+
+/**
+ * The Vision Frame as the process rail (067, process_kind = 'frame').
+ *
+ * Andrew: "a process overview that is essentially just the vision frame
+ * icons." The same bones as ModuleNav — a track behind a row of icons, the
+ * chosen one lifted — with the RunFree-drawn frame marks in place of the six
+ * Pivvot tools. Discovery has no side of the frame, so it gets a search mark.
+ */
+function FrameNav({
+  sections,
+  active,
+  onSelect,
+}: {
+  sections: string[];
+  active: string;
+  onSelect: (section: string) => void;
+}) {
+  const activeIndex = sections.indexOf(active);
+  const activeEl = active ? frameElementForSection(active) : null;
+  const fill =
+    activeIndex < 0 || sections.length < 2 ? 0 : (activeIndex / (sections.length - 1)) * 100;
+  const pad = `${50 / Math.max(sections.length, 1)}%`;
+
+  return (
+    <nav aria-label="Vision Frame">
+      <div className="mb-7 flex min-h-[68px] items-center justify-center px-4">
+        {/* The question is the headline and the element is the eyebrow — the
+            other way round printed "Discovery" here and again as the panel's
+            own heading directly beneath. */}
+        {active && (
+          <div key={active} className="animate-rise text-center">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
+              {activeEl?.label ?? moduleLabel(active)}
+            </p>
+            <p className="mt-1 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
+              {activeEl?.question ?? "Before the frame"}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="relative">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute top-10 hidden h-[3px] sm:block"
+          style={{ left: pad, right: pad }}
+        >
+          <div className="h-full w-full rounded-full bg-gray-200" />
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-runfree-grad transition-all duration-500 ease-out"
+            style={{ width: `${fill}%` }}
+          />
+        </div>
+
+        <ul className="relative flex flex-wrap items-start justify-center gap-x-1 gap-y-8 sm:flex-nowrap sm:gap-x-2">
+          {sections.map((s) => {
+            const el = frameElementForSection(s);
+            const isActive = s === active;
+            return (
+              <li key={s} className="flex-1">
+                <button
+                  onClick={() => onSelect(s)}
+                  aria-pressed={isActive}
+                  className="group flex w-full min-w-[104px] flex-col items-center rounded-xl outline-none ring-runfree-magenta/60 focus-visible:ring-2 focus-visible:ring-offset-2"
+                >
+                  <span
+                    className={`relative flex h-20 w-20 items-center justify-center rounded-full transition-transform duration-300 ease-out will-change-transform ${
+                      isActive
+                        ? "-translate-y-1 scale-110"
+                        : "group-hover:-translate-y-1 group-hover:scale-110 group-focus-visible:-translate-y-1"
+                    }`}
+                  >
+                    <span aria-hidden className="absolute inset-1 rounded-full bg-gray-50" />
+                    <span
+                      aria-hidden
+                      className={`absolute inset-0 rounded-full bg-runfree-magenta/25 blur-xl transition-opacity duration-300 ${
+                        isActive ? "opacity-100" : "opacity-0 group-hover:opacity-70"
+                      }`}
+                    />
+                    {el ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={el.icon}
+                        alt=""
+                        className={`relative h-16 w-16 object-contain transition duration-300 ${
+                          isActive
+                            ? ""
+                            : "opacity-70 saturate-50 group-hover:opacity-100 group-hover:saturate-100"
+                        }`}
+                      />
+                    ) : (
+                      <span
+                        className={`relative grid h-16 w-16 place-items-center rounded-full transition duration-300 ${
+                          isActive
+                            ? "bg-runfree-grad text-white"
+                            : "bg-white text-runfree-navy/60 ring-1 ring-gray-200 group-hover:text-runfree-magentaDeep group-hover:ring-runfree-magenta/40"
+                        }`}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-7 w-7"
+                          aria-hidden="true"
+                        >
+                          <circle cx="11" cy="11" r="6" />
+                          <path d="M20 20l-4.5-4.5" />
+                        </svg>
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className={`mt-3 flex min-h-10 flex-col items-center text-center text-[15px] font-semibold leading-[1.15] transition-colors ${
+                      isActive ? "text-runfree-ink" : "text-gray-500 group-hover:text-runfree-ink"
+                    }`}
+                  >
+                    {(el?.label ?? moduleLabel(s)).split(/\s+/).map((w, i) => (
+                      <span key={i}>{w}</span>
+                    ))}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </nav>
   );
 }
@@ -7420,6 +7660,7 @@ function SessionsSection({
             moduleOptions={moduleOptions}
             canEdit={canEdit}
             canAssignTasks={canAssignTasks}
+            voice={detail.template?.voice ?? "church"}
             thumb={s.recording_url ? thumbs[s.recording_url] : undefined}
             tasks={detail.tasks.filter((t) => t.session_id === s.id)}
             accessToken={accessToken}
@@ -7511,6 +7752,7 @@ function SessionRow({
   moduleOptions,
   canEdit,
   canAssignTasks,
+  voice = "church",
   thumb,
   tasks,
   accessToken,
@@ -7525,6 +7767,8 @@ function SessionRow({
   canEdit: boolean;
   /** Task create/edit/complete — admins plus anyone granted it (053). */
   canAssignTasks: boolean;
+  /** 067: "church team" or "client team" on the publish checkbox. */
+  voice?: "church" | "organization";
   /** Loom still for the collapsed row. */
   thumb?: string;
   /** Homework this session produced. */
@@ -7784,7 +8028,7 @@ function SessionRow({
                   checked={form.published}
                   onChange={(e) => setForm((f) => ({ ...f, published: e.target.checked }))}
                 />
-                Visible to the church team
+                {voice === "organization" ? "Visible to the client team" : "Visible to the church team"}
               </label>
               <div className="flex items-center justify-between gap-3 pt-1">
                 <button
@@ -8120,6 +8364,7 @@ function TeamSection({
           visible". */}
       {isGroup && (
         <ChurchTeamInfo
+          voice={detail.template?.voice ?? "church"}
           id="church-team"
           contacts={detail.contacts}
           projectId={projectId}

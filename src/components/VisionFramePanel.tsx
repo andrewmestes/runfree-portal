@@ -5,6 +5,8 @@ import RichText, { RichTextView } from "./RichText";
 import { richTextIsEmpty } from "@/lib/rich-text";
 import {
   VISION_FRAME,
+  framePrompt,
+  type FrameVoice,
   type VisionFrameElement,
   type VisionFrameRow,
 } from "@/lib/vision-frame";
@@ -26,17 +28,25 @@ export default function VisionFramePanel({
   rows,
   canEdit,
   onSave,
+  elements,
+  voice = "church",
 }: {
   rows: VisionFrameRow[];
   canEdit: boolean;
   onSave: (element: VisionFrameElement, body: string | null) => Promise<void>;
+  /** Which rows this template's sheet carries (067). Omitted: all seven. */
+  elements?: string[] | null;
+  voice?: FrameVoice;
 }) {
   const [editing, setEditing] = useState<VisionFrameElement | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // A nonprofit's frame has no Kingdom Concept: the template says which rows
+  // belong on its sheet, in the sheet's own order.
+  const frame = elements ? VISION_FRAME.filter((e) => elements.includes(e.key)) : VISION_FRAME;
   const byKey = new Map(rows.map((r) => [r.element, r]));
-  const filled = VISION_FRAME.filter((e) => !richTextIsEmpty(byKey.get(e.key)?.body)).length;
+  const filled = frame.filter((e) => !richTextIsEmpty(byKey.get(e.key)?.body)).length;
 
   // Nothing written and nobody who could write it: a church with no frame yet
   // sees the empty sheet, which is informative, but only once there is a
@@ -53,14 +63,14 @@ export default function VisionFramePanel({
           Vision Frame Progress
         </h3>
         <p className="mt-1 text-sm text-gray-500">
-          {filled === VISION_FRAME.length
-            ? "All seven are written."
-            : `${filled} of ${VISION_FRAME.length} written so far.`}
+          {filled === frame.length
+            ? `All ${frame.length} are written.`
+            : `${filled} of ${frame.length} written so far.`}
         </p>
       </header>
 
       <div className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
-        {VISION_FRAME.map((el, i) => {
+        {frame.map((el, i) => {
           const row = byKey.get(el.key);
           const empty = richTextIsEmpty(row?.body);
           const isEditing = editing === el.key;
@@ -98,7 +108,7 @@ export default function VisionFramePanel({
                       {el.question} —{" "}
                     </span>
                   )}
-                  {el.prompt}
+                  {framePrompt(el.key, voice)}
                 </p>
 
                 <div className="mt-2">
@@ -108,7 +118,7 @@ export default function VisionFramePanel({
                         value={draft}
                         onChange={setDraft}
                         minHeight="7rem"
-                        placeholder={`${el.label} — in the church's own words.`}
+                        placeholder={`${el.label} — in ${voice === "church" ? "the church's" : "your"} own words.`}
                       />
                       <div className="flex items-center gap-2">
                         <button

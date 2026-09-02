@@ -121,6 +121,12 @@ export type Database = {
           has_vision_stack: boolean;
           /** False for 1:1 engagements, which have no client "team" — see 020. */
           is_group: boolean;
+          /** How The Process is navigated — see 067. */
+          process_kind: "modules" | "sections" | "frame";
+          /** Which Vision Frame rows the Deliverables sheet shows; null is all seven. */
+          frame_elements: string[] | null;
+          /** Prompts and roster labels: a church, or any other organization. */
+          voice: "church" | "organization";
           created_at: string;
         };
         Insert: {
@@ -130,6 +136,9 @@ export type Database = {
           description?: string | null;
           structure?: unknown;
           is_active?: boolean;
+          process_kind?: "modules" | "sections" | "frame";
+          frame_elements?: string[] | null;
+          voice?: "church" | "organization";
           created_at?: string;
         };
         Update: {

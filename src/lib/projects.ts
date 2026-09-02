@@ -132,6 +132,12 @@ export type ProjectDetail = {
     structure: unknown;
     hasVisionStack: boolean;
     isGroup: boolean;
+    /** 067: how The Process is navigated. */
+    processKind: "modules" | "sections" | "frame";
+    /** 067: which Vision Frame rows the Deliverables sheet shows; null is all. */
+    frameElements: string[] | null;
+    /** 067: prompts and roster labels. */
+    voice: "church" | "organization";
   } | null;
   /** Per-module notes, keyed by section. */
   sectionNotes: Record<string, string>;
@@ -177,7 +183,7 @@ export async function getProjectDetail(
 
   const { data: project, error: projectErr } = await client
     .from("projects")
-    .select("*, templates(id, name, slug, structure, has_vision_stack, is_group)")
+    .select("*, templates(id, name, slug, structure, has_vision_stack, is_group, process_kind, frame_elements, voice)")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -284,6 +290,9 @@ export async function getProjectDetail(
         structure: unknown;
         has_vision_stack: boolean;
         is_group: boolean;
+        process_kind?: "modules" | "sections" | "frame" | null;
+        frame_elements?: string[] | null;
+        voice?: "church" | "organization" | null;
       }
     | null;
   const template = t
@@ -294,6 +303,9 @@ export async function getProjectDetail(
         structure: t.structure,
         hasVisionStack: t.has_vision_stack,
         isGroup: t.is_group,
+        processKind: t.process_kind ?? "sections",
+        frameElements: t.frame_elements ?? null,
+        voice: t.voice ?? "church",
       }
     : null;
 

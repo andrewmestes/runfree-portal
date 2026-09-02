@@ -112,6 +112,43 @@ export const VISION_FRAME: {
   },
 ];
 
+/**
+ * The same seven questions, asked of an organization that is not a church.
+ *
+ * The sheet's wording is church wording — "the life of a believer", "God's
+ * better future" — and a nonprofit's board reads that as the wrong document.
+ * Only the lines that name a church are rewritten; the WHAT / WHY / HOW / WHEN /
+ * WHERE framing is the method and stays.
+ */
+const ORGANIZATION_PROMPTS: Partial<Record<VisionFrameElement, string>> = {
+  problem_statement: "To fulfill our mission, we need… more of, and less of.",
+  kingdom_concept: "We exist to… the people we serve, the place, the passion, and the One Word.",
+  measures: "The attributes in the life of a person we serve that reflect the accomplishment of the mission.",
+  vision_proper: "Living language that illustrates and anticipates the better future we are building toward.",
+};
+
+export type FrameVoice = "church" | "organization";
+
+export function framePrompt(element: VisionFrameElement, voice: FrameVoice = "church"): string {
+  const base = VISION_FRAME.find((e) => e.key === element)?.prompt ?? "";
+  return voice === "organization" ? (ORGANIZATION_PROMPTS[element] ?? base) : base;
+}
+
+/**
+ * The frame element a process section stands for, when a template's process
+ * IS the frame (067's process_kind = 'frame'): "Mission" → mission, "Vision"
+ * → vision_proper. Null for anything else — "Discovery" has no icon.
+ */
+export function frameElementForSection(section: string) {
+  const s = section.trim().toLowerCase();
+  if (!s) return null;
+  return (
+    VISION_FRAME.find((e) => e.label.toLowerCase() === s) ??
+    VISION_FRAME.find((e) => e.label.toLowerCase().startsWith(s) || s.startsWith(e.label.toLowerCase())) ??
+    null
+  );
+}
+
 export async function listVisionFrame(
   accessToken: string,
   projectId: string

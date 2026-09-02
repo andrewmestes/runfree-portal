@@ -1007,6 +1007,56 @@ through `createProject()` with a throwaway staff account, and `--delete
 `PrepareSection` takes `isGroup`; a 1:1 client reads "Your Preparation", not
 "Prepare Your Team".
 
+## The nonprofit template: a template says how its process is navigated
+
+Andrew, 2 Sept 2026: "Another template we'll need is for a nonprofit. we do
+very similar vision frame training, it just doesn't follow the 'pivvot
+process.' … It would be nice to have a process overview that is essentially
+just the vision frame icons … the final deliverables would essentially be
+just the vision frame with a space to add some custom handouts."
+
+**067** gave `templates` three facts the page had been inferring:
+
+- **`process_kind`** — `modules` (Pivvot's six "Mod #N" tools, `ModuleNav`),
+  `sections` (Younique's days and coaching's sections, `SectionNav` chips),
+  `frame` (the Vision Frame elements as icons, `FrameNav`). For `frame`,
+  every declared section is on the rail from day one, empty or not — the
+  frame IS the process. For `sections`, a declared section still has to
+  hold something (Younique declares "Overview" and "Session Recordings",
+  which hold nothing).
+- **`frame_elements`** — which `vision_frame` rows the Deliverables sheet
+  shows. A nonprofit has no Kingdom Concept; null means all seven.
+- **`voice`** — `church` or `organization`. `framePrompt()` rewrites only
+  the prompts that name a church; the roster card and the session publish
+  checkbox say "Your Team" / "client team" instead of "Church Team".
+
+`frameElementForSection()` maps a section name to its element ("Vision" →
+vision_proper); "Discovery" maps to nothing and gets a search mark.
+
+**The nonprofit template** (`nonprofit-vision-frame`): sections Discovery,
+Mission, Values, Strategy, Measures, Vision; prep groups Key Dates, Discovery
+Work (three placeholder items), Team Profiles, and a DELIVERABLES group
+"Custom Handouts" (kind `files`) — which is the "space to add some custom
+handouts": editors upload PDFs, viewers open them. `has_vision_stack` is
+false, so Deliverables is the frame sheet plus that group.
+
+**Handouts come from Drive** through `handouts_folder_id`, pointed at
+"RunFree Team > Non Church Org (for profit)" (`1-ZWrZ0vecjza7HD3wKuoe-dm5WCMe7bP`).
+That folder is examples and overviews, not numbered modules, so it all
+arrives as `extras` and renders as `HandoutPills` under the rail. Two changes
+to `listTemplateHandouts` for it: a file two levels down now belongs to the
+top-level folder above it (the PDFs live in "Handouts/PDF"), and only PDFs and
+images are listed (the `.pages` originals sit beside their exports). **The
+folder has to be shared with `portal@runfree-portal.iam.gserviceaccount.com`
+before any of it lists** — as of 2 Sept it was not, and an unshared folder
+lists as empty, not as an error.
+
+**Every ModulePanel now ends with "Sessions on this"** — the sessions filed
+under that section, with Recording / Transcript / N next steps marks and a
+jump to the Sessions panel. Pointers, not copies: recordings, transcripts,
+notes and next steps still live on Sessions (040/041), this is the way there
+from the section they belong to.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

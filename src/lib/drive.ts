@@ -300,9 +300,31 @@ export async function listDriveFolder(rootId: string): Promise<DriveFolderGroup[
       .map((f) => toTitle(f.name).toLowerCase())
   );
 
+  // A file two levels down belongs to the top-level folder above it. The
+  // nonprofit handouts folder keeps its PDFs in "Handouts/PDF"; grouping on
+  // the direct parent alone silently dropped every one of them.
+  const parentOf = new Map<string, string>();
+  for (const f of folders) {
+    const parent = (f.parents || [])[0];
+    if (parent) parentOf.set(f.id, parent);
+  }
+  const topOf = (id: string): string => {
+    let cur = id;
+    for (let i = 0; i < MAX_DEPTH + 1; i++) {
+      const parent = parentOf.get(cur);
+      if (!parent || parent === rootId) return cur;
+      cur = parent;
+    }
+    return cur;
+  };
+
   const childrenOf = (folderId: string) =>
     files
-      .filter((f) => (f.parents || []).includes(folderId))
+      .filter((f) =>
+        folderId === rootId
+          ? (f.parents || []).includes(rootId)
+          : (f.parents || []).some((pid) => topOf(pid) === folderId)
+      )
       .filter(
         (f) =>
           !isTimestampedExport(f.name) ||
@@ -439,9 +461,15 @@ export async function listTemplateHandouts(rootId: string): Promise<TemplateHand
   // only, and anything client-specific belongs on that client's project.
   const notebooks: DriveListedFile[] = [];
 
-  const extras = groups.filter(
-    (g) => (g.order < 1 || g.order > 6) && !/combined handouts/i.test(g.name)
-  );
+  // Only what the viewer can open. The nonprofit folder carries the .pages
+  // originals beside their PDF exports; listing both offered a file the
+  // preview could not render.
+  const openable = (f: DriveListedFile) => /pdf$|^image\//i.test(f.mimeType);
+  for (const m of Object.values(byModule)) m.sheets = m.sheets.filter(openable);
+  const extras = groups
+    .filter((g) => (g.order < 1 || g.order > 6) && !/combined handouts/i.test(g.name))
+    .map((g) => ({ ...g, files: g.files.filter(openable) }))
+    .filter((g) => g.files.length > 0);
 
   return { byModule, extras, notebooks };
 }

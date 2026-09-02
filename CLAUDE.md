@@ -1057,6 +1057,56 @@ jump to the Sessions panel. Pointers, not copies: recordings, transcripts,
 notes and next steps still live on Sessions (040/041), this is the way there
 from the section they belong to.
 
+## The 2 September walkthrough — Preparation, Team, the module tiles, the one-page PDF
+
+Andrew's notes from walking Athena Christian Church, and what each became.
+
+- **A `files` group is a drop zone, not a form.** Andrew: "All that I really
+  need in this section is to be able to add files … drag and drop any file
+  that a client gives to me … also add any text notes to this area as a kind
+  of separate card." `FileDump` takes any number of files by drop or click,
+  each becoming a row named after the file, and a note (title + text). The
+  full `PrepItemForm` with dates and links is still what Edit opens on a row;
+  it is no longer the door. Previous Vision Equity, Team Building Profiles,
+  Final Documents, Custom Handouts and the profile uploads are all `files`.
+- **The Preparation Checklist is the PDF's own steps** (**068**). "Launch
+  Preparation Checklist" has two lists, so the group became two — "Before the
+  First Visit" (the five things to send) and "Room and Environment Setup"
+  (the nine things to have ready, with the two order links) — stamped into
+  the template and into both live Pivvot projects. The PDF itself reaches the
+  panel through `checklistHandouts`, which now matches file titles as well as
+  group names; the two checklist PDFs live inside "Additional Handouts" in
+  Drive and a group-name match never found them.
+- **Project settings live under Edit details**, not at the foot of Team.
+  Andrew: "a really strange place to have that functionality." `ProjectSettings`
+  takes a `className` so it can sit inside the hero's editing box.
+- **"What this module produces" is tiles**, the Vision Stack's own `StackTile`
+  (now exported), wired to the same open/upload/publish handlers as the stack
+  page, so a file dropped on Funnel Fusion's "Church Problem Statement" is the
+  file on the Paradigm Convictions plate. Assimilation Funnel left Module 1
+  (068) but stays on the stack.
+- **Reading & Pre-Work is two shelves**: books and PDFs on 150px tracks,
+  videos on their own row on 220px tracks. A 2:3 jacket and a 16:9 still
+  never sat well in one grid.
+- **The Vision Stack card draws the plates** — the real artwork, the stack
+  geometry, the layer names on a rail to the left — instead of a list.
+- **The Vision Frame sheet has a Kingdom Concept mark** (cropped from the
+  Venn diagram in Andrew's Downloads) **and opens as a one-page PDF.**
+  `/api/projects/[id]/vision-frame` draws it with pdf-lib from whatever is
+  written — only written sides, body size stepping down until one page holds
+  it — in Montserrat and Poppins from `src/lib/pdf/fonts/`. Those fonts and
+  the wordmark are listed in `next.config.ts`'s `outputFileTracingIncludes`;
+  `readFile(path.join(process.cwd(), …))` is invisible to Vercel's tracer and
+  the function would ship without them. The button fetches with the bearer
+  token and opens the blob in `FilePreview`, where Download already lives.
+- **The Vision Stack page opens with the plates in a row**, small, and they
+  glide into the stack on the first scroll, wheel, touch or click — or after
+  2.8s. Andrew: "the tiles are horizontal, and then as soon as I start to
+  scroll, they shift over into a stack." The row boxes keep the plate's own
+  aspect (26% wide by 10.3% tall of a 503x900 box) so the diamond clip still
+  fits the art in flight. Reduced motion skips it. The hero is three lights on
+  navy with the frame mark drawn large and faint.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

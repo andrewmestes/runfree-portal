@@ -20,6 +20,7 @@ import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
 import VisionStackExplorer, { type StackEntry } from "@/components/VisionStackExplorer";
+import { VisionFrameMark } from "@/components/execution/HorizonBoard";
 import FilePreview, { type PreviewFile } from "@/components/FilePreview";
 import AccessError from "@/components/AccessError";
 
@@ -191,15 +192,23 @@ export default function VisionStackPage() {
           effects behind white type muddied the middle of the field and read
           as decoration rather than as a ground. What carries this now is the
           scale of the type and the space around it. */}
+      {/* Andrew: "it's very dark blue for almost all of it and then kind of
+          goes towards the light blue at the very top left … enhance the
+          visual experience." Three lights on a navy field — indigo at the top
+          left where the type sits, the brand magenta and orange low on the
+          right — and the frame mark drawn large and faint, so the band says
+          what the page is about before the headline does. */}
       <div className="relative overflow-hidden bg-runfree-navyDeep">
         <div
           aria-hidden
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(120% 90% at 12% 0%, #24397F 0%, #16224F 45%, #131D45 100%)",
+              "radial-gradient(70% 90% at 10% 0%, rgba(58,80,170,0.78) 0%, rgba(58,80,170,0) 60%), radial-gradient(48% 70% at 92% 112%, rgba(228,61,150,0.5) 0%, rgba(228,61,150,0) 62%), radial-gradient(36% 56% at 76% 6%, rgba(241,90,37,0.3) 0%, rgba(241,90,37,0) 60%), linear-gradient(180deg, #18265C 0%, #131D45 100%)",
           }}
         />
+        <VisionFrameMark className="pointer-events-none absolute -right-8 top-1/2 hidden h-[440px] w-[440px] -translate-y-1/2 text-white/[0.06] lg:block" />
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-runfree-grad opacity-80" />
         <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-28">
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-runfree-pink">
             {church}

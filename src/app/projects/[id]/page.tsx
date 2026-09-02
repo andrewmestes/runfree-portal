@@ -53,12 +53,14 @@ import {
   getSignedImageUrls,
   uploadDeliverableImage,
   uploadDeliverableFile,
+  replaceDeliverableImage,
   uploadPrepFile,
   setPrepFilePrivacy,
   uploadProjectLogo,
 } from "@/lib/storage";
 import { extractLoomId } from "@/lib/loom";
 import { useFocusTrap } from "@/lib/useFocusTrap";
+import { StackTile, type StackEntry } from "@/components/VisionStackExplorer";
 import { MODULE_META, moduleLabel, moduleOrder } from "@/lib/modules";
 import ModuleNav, { type NavModule } from "@/components/ModuleNav";
 import FilePreview, { type PreviewFile } from "@/components/FilePreview";
@@ -572,6 +574,97 @@ export default function ProjectDetailPage() {
     },
     []
   );
+
+  /**
+   * A module's deliverables as tiles (Andrew: "make that a container with a
+   * pre-populated title"). The same StackTile the Vision Stack page draws,
+   * with the same three handlers, so a file dropped on Funnel Fusion's
+   * "Church Problem Statement" is the file on the Paradigm Convictions plate.
+   */
+  const openDeliverable = useCallback(
+    (item: StackEntry) => {
+      const p = item.file_path ?? item.image_path;
+      const url = p ? imageUrls[p] : undefined;
+      if (!url) return;
+      setPreview({
+        id: url,
+        title: item.title ?? "Deliverable",
+        num: null,
+        label: item.title ?? "Deliverable",
+        sizeBytes: item.file_size,
+        source: "storage",
+      });
+    },
+    [imageUrls]
+  );
+  const uploadDeliverable = useCallback(
+    async (item: StackEntry, file: File) => {
+      if (!accessToken) return;
+      if (file.type.startsWith("image/")) {
+        const { path } = await replaceDeliverableImage(accessToken, item.image_path, projectId, file);
+        await updateDeliverable(accessToken, item.id, {
+          image_path: path,
+          published_at: item.published_at ?? new Date().toISOString(),
+        });
+      } else {
+        const doc = await uploadDeliverableFile(accessToken, projectId, file);
+        await updateDeliverable(accessToken, item.id, {
+          file_path: doc.path,
+          file_name: doc.name,
+          file_mime: doc.mime,
+          file_size: doc.size,
+          published_at: item.published_at ?? new Date().toISOString(),
+        });
+      }
+      await refresh();
+    },
+    // refresh is declared below in this component and is stable enough for this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [accessToken, projectId]
+  );
+  const toggleDeliverable = useCallback(
+    async (item: StackEntry) => {
+      if (!accessToken) return;
+      await updateDeliverable(accessToken, item.id, {
+        published_at: item.published_at ? null : new Date().toISOString(),
+      });
+      await refresh();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [accessToken]
+  );
+
+  /**
+   * The Vision Frame as a one-page PDF, drawn on the server from whatever is
+   * written and opened in the same viewer as every other document, which is
+   * where the Download button lives.
+   */
+  const [exportingFrame, setExportingFrame] = useState(false);
+  const exportVisionFrame = useCallback(async () => {
+    if (!accessToken || !detail) return;
+    setExportingFrame(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/vision-frame`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error(`The PDF could not be built (${res.status}).`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const church = detail.name.replace(/\s*-\s*.*$/, "");
+      setPreview({
+        id: url,
+        title: `${church} — Vision Frame`,
+        num: null,
+        label: `${church} — Vision Frame`,
+        sizeBytes: blob.size,
+        source: "storage",
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "The PDF could not be built.");
+    } finally {
+      setExportingFrame(false);
+    }
+  }, [accessToken, detail, projectId]);
 
   /**
    * Will's books, for the church. Andrew: "we need to add Will's Books to all
@@ -1230,6 +1323,9 @@ export default function ProjectDetailPage() {
                   onOpenHandout={openHandout}
                   onOpenFile={openPrepFile}
                   onGoTo={goPanel}
+                  onOpenDeliverable={openDeliverable}
+                  onUploadDeliverable={uploadDeliverable}
+                  onToggleDeliverable={toggleDeliverable}
                   thumbs={thumbs}
                 />
 
@@ -1251,6 +1347,9 @@ export default function ProjectDetailPage() {
                           onOpenHandout={openHandout}
                           onOpenFile={openPrepFile}
                           onGoTo={goPanel}
+                          onOpenDeliverable={openDeliverable}
+                          onUploadDeliverable={uploadDeliverable}
+                          onToggleDeliverable={toggleDeliverable}
                           thumbs={thumbs}
                         />
                       ))}
@@ -1307,6 +1406,9 @@ export default function ProjectDetailPage() {
                   onOpenHandout={openHandout}
                   onOpenFile={openPrepFile}
                   onGoTo={goPanel}
+                  onOpenDeliverable={openDeliverable}
+                  onUploadDeliverable={uploadDeliverable}
+                  onToggleDeliverable={toggleDeliverable}
                   thumbs={thumbs}
                 />
               </section>
@@ -1345,6 +1447,8 @@ export default function ProjectDetailPage() {
                   rows={visionFrame}
                   elements={detail.template?.frameElements}
                   voice={detail.template?.voice}
+                  onExport={exportVisionFrame}
+                  exporting={exportingFrame}
                   canEdit={canEdit}
                   onSave={async (element, body) => {
                     if (!accessToken) return;
@@ -1387,19 +1491,6 @@ export default function ProjectDetailPage() {
                 focusInitiativeId={executionFocus}
               />
             )}
-
-            {/* Archive and delete follow the roster rather than getting a
-                tab of their own: they are the rarest thing an admin does,
-                and Team is where the project's people already live. Access
-                itself moved to the dialog in the header. */}
-            {activePanel === "team" && canManage && (
-              <ProjectSettings
-                detail={detail}
-                projectId={projectId}
-                accessToken={accessToken}
-                onChanged={refresh}
-              />
-          )}
         </div>
         </div>
 
@@ -1750,11 +1841,13 @@ function ProjectSettings({
   projectId,
   accessToken,
   onChanged,
+  className = "first:mt-0 mt-20",
 }: {
   detail: ProjectDetail;
   projectId: string;
   accessToken: string | null;
   onChanged: () => void;
+  className?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -1787,7 +1880,7 @@ function ProjectSettings({
   }
 
   return (
-    <section className="first:mt-0 mt-20">
+    <section className={className}>
       <div className="rounded-2xl border border-dashed border-gray-300 p-5">
         <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
           Project settings
@@ -2170,6 +2263,17 @@ function ChurchHero({
                     Cancel
                   </button>
                 </div>
+                {/* Archive and delete used to sit at the foot of Team. Andrew:
+                    "this seems like a really strange place to have that
+                    functionality." They are properties of the project, so
+                    they live with the project's details. */}
+                <ProjectSettings
+                  className="mt-2"
+                  detail={detail}
+                  projectId={detail.id}
+                  accessToken={accessToken}
+                  onChanged={onChanged}
+                />
               </div>
             )}
           </div>
@@ -4032,40 +4136,42 @@ function VisionStackCard({
           </span>
         </div>
 
-        {/* The four layers, echoing the printed stack graphic: exploded plates,
-            foundation at the bottom, toolbox on top. */}
-        {/* Equal width and right-aligned: the staggered indent made four
-            different-length labels look like four different-size boxes. The
-            stack now steps cleanly, which is what the printed graphic does. */}
-        {/* Each layer wears the icon of the process tool that produces it
-            (migration 021), so the stack reads in the same visual language as
-            the module track rather than as four unlabelled boxes. The
-            Application Toolbox has no icon of its own yet and falls back to
-            its layer number. */}
-        <ul className="flex w-full shrink-0 flex-col-reverse gap-1.5 sm:w-72">
-          {layers.map((layer, i) => (
-            <li
-              key={layer.slug}
-              className="flex items-center gap-3 rounded-lg bg-white/10 px-3 py-2.5 text-left text-xs font-semibold text-white/80 ring-1 ring-white/10 transition duration-300 group-hover:bg-white/15"
-              style={{ transitionDelay: `${i * 40}ms` }}
-            >
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-white/10">
-                {layer.icon_path ? (
-                  <Image
-                    src={layer.icon_path}
-                    alt=""
-                    width={28}
-                    height={28}
-                    className="h-7 w-7 object-contain"
-                  />
-                ) : (
-                  <span className="text-[11px] font-bold tabular-nums text-white/70">{i + 1}</span>
-                )}
-              </span>
-              <span className="min-w-0 flex-1">{layer.name}</span>
-            </li>
-          ))}
-        </ul>
+        {/* The stack itself. Andrew: "can we actually make that the stack
+            tiles image with the titles … I want to see the stack tiles in a
+            creative way right there." The same plate artwork and geometry as
+            the Vision Stack page, still, with the layer names on a rail to the
+            left the way the printed sheet has them; the card is one link, so
+            the whole thing is the button. */}
+        <div className="relative mx-auto shrink-0 sm:mx-0" style={{ width: 132 + 176 }}>
+          <div className="relative ml-[132px]" style={{ width: 176, aspectRatio: "503 / 900" }}>
+            {[...layers].reverse().map((layer, i) => (
+              <div
+                key={layer.slug}
+                className="absolute left-0 w-full transition-transform duration-500 ease-out group-hover:-translate-y-1.5"
+                style={{
+                  top: `${i * 20.11}%`,
+                  height: "39.67%",
+                  zIndex: layers.length - i,
+                  filter: "drop-shadow(0 10px 14px rgba(0,0,0,0.35))",
+                  transitionDelay: `${(layers.length - 1 - i) * 45}ms`,
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/brand/vision-stack/${layer.slug}.png`}
+                  alt=""
+                  className="h-full w-full object-contain"
+                />
+                <span
+                  className="absolute w-[118px] -translate-y-1/2 text-right text-[12px] font-bold leading-[1.15] text-white/85"
+                  style={{ right: "calc(100% + 10px)", top: `${39.67 * 0.44}%` }}
+                >
+                  {layer.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </a>
   );
@@ -4553,6 +4659,9 @@ function ModulePanel({
   onOpenHandout,
   onOpenFile,
   onGoTo,
+  onOpenDeliverable,
+  onUploadDeliverable,
+  onToggleDeliverable,
   thumbs,
 }: {
   section: string;
@@ -4568,6 +4677,10 @@ function ModulePanel({
   onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
   /** Jump to another panel — the Sessions list, from a section's sessions. */
   onGoTo?: (panel: string) => void;
+  /** The module's deliverables, as tiles — open, upload, publish. */
+  onOpenDeliverable?: (item: StackEntry) => void;
+  onUploadDeliverable?: (item: StackEntry, file: File) => Promise<void>;
+  onToggleDeliverable?: (item: StackEntry) => Promise<void>;
   thumbs: Record<string, string>;
 }) {
   if (!section) return null;
@@ -4870,28 +4983,25 @@ function ModulePanel({
             of the Expectations Exercise) was converted to a card by migration
             043 rather than left to rot behind a removed component. */}
 
+        {/* Pills said only that a deliverable existed. Andrew: "make that a
+            container with a pre-populated title." These are the Vision Stack's
+            own tiles — the same rows, so uploading here fills the plate. */}
         {moduleDeliverables.length > 0 && (
           <Block title="What this module produces">
-            <div className="flex flex-wrap gap-2">
+            <ul className="grid grid-cols-2 gap-3 xl:grid-cols-3">
               {moduleDeliverables.map((d) => (
-                <span
-                  key={d.id}
-                  className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium ring-1 ${
-                    d.published_at
-                      ? "bg-runfree-pink text-runfree-magentaDeep ring-runfree-magenta/30"
-                      : "bg-white text-gray-500 ring-gray-200"
-                  }`}
-                >
-                  <span
-                    aria-hidden
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      d.published_at ? "bg-runfree-magenta" : "bg-gray-300"
-                    }`}
+                <li key={d.id}>
+                  <StackTile
+                    item={d as StackEntry}
+                    imageUrl={d.image_path ? imageUrls[d.image_path] : undefined}
+                    onOpen={(item) => onOpenDeliverable?.(item)}
+                    onUpload={canEdit ? onUploadDeliverable : undefined}
+                    onTogglePublished={canEdit ? onToggleDeliverable : undefined}
+                    canEdit={canEdit}
                   />
-                  {d.title}
-                </span>
+                </li>
               ))}
-            </div>
+            </ul>
           </Block>
         )}
       </div>
@@ -6546,7 +6656,15 @@ function PrepCard({
               </ul>
             )}
 
-            {canEdit &&
+            {canEdit && group.kind === "files" ? (
+              <FileDump
+                group={group}
+                projectId={projectId}
+                siblings={items}
+                accessToken={accessToken}
+                onChanged={onChanged}
+              />
+            ) : canEdit &&
               (adding ? (
                 <div className="mt-3">
                   <PrepItemForm
@@ -6666,7 +6784,15 @@ function PrepCard({
 
       {canEdit && (
         <div className="mt-4">
-          {adding ? (
+          {group.kind === "files" ? (
+            <FileDump
+              group={group}
+              projectId={projectId}
+              siblings={items}
+              accessToken={accessToken}
+              onChanged={onChanged}
+            />
+          ) : adding ? (
             <PrepItemForm
               group={group}
               projectId={projectId}
@@ -6694,6 +6820,197 @@ function PrepCard({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * A place to drop what a client hands you.
+ *
+ * Andrew, on Previous Vision Equity and Team Building Profiles: "it's asking
+ * me for due dates, end dates, link options … All that I really need in this
+ * section is to be able to add files … drag and drop any file that a client
+ * gives to me … also add any text notes to this area as a kind of separate
+ * card. This should just be a place where I can dump any documents."
+ *
+ * So a `files` group takes files by drop or click — any number, each becoming
+ * a row named after the file — and a note, which is a row with a title and
+ * text. The full form with dates and links is still reachable by editing a
+ * row; it is just not the door.
+ */
+function FileDump({
+  group,
+  projectId,
+  siblings,
+  accessToken,
+  onChanged,
+}: {
+  group: PrepGroup;
+  projectId: string;
+  siblings: PrepItem[];
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [over, setOver] = useState(false);
+  const [noting, setNoting] = useState(false);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteBody, setNoteBody] = useState("");
+
+  async function take(files: File[]) {
+    if (!accessToken || files.length === 0) return;
+    setError(null);
+    let n = 0;
+    try {
+      for (const file of files) {
+        n++;
+        setBusy(files.length > 1 ? `Uploading ${n} of ${files.length}…` : "Uploading…");
+        if (file.size > MAX_IMAGE_BYTES) {
+          throw new Error(`"${file.name}" is over ${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)}MB.`);
+        }
+        const uploaded = await uploadPrepFile(accessToken, projectId, file, false);
+        await createPrepItem(
+          accessToken,
+          projectId,
+          group.id,
+          {
+            title: file.name.replace(/\.[a-z0-9]{1,5}$/i, ""),
+            file_path: uploaded.path,
+            file_name: uploaded.name,
+            file_mime: uploaded.mime,
+            file_size: uploaded.size,
+          },
+          siblings
+        );
+      }
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That upload did not go through.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveNote(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken) return;
+    const body = noteBody.trim();
+    const title = noteTitle.trim() || body.split("\n")[0].slice(0, 80);
+    if (!title) return;
+    setBusy("Saving…");
+    setError(null);
+    try {
+      await createPrepItem(accessToken, projectId, group.id, { title, notes: body || null }, siblings);
+      setNoting(false);
+      setNoteTitle("");
+      setNoteBody("");
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save that.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const field =
+    "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta";
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label="Add files"
+        onClick={() => input.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            input.current?.click();
+          }
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          void take(Array.from(e.dataTransfer.files ?? []));
+        }}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-6 text-center outline-none transition focus-visible:ring-2 focus-visible:ring-runfree-magenta ${
+          over
+            ? "border-runfree-magenta bg-runfree-pink/40"
+            : "border-gray-300 hover:border-runfree-magenta/50 hover:bg-runfree-pink/20"
+        }`}
+      >
+        <span className="text-sm font-semibold text-runfree-ink">
+          {busy ?? "Drop files here, or click to choose"}
+        </span>
+        <span className="text-xs text-gray-500">
+          PDFs, photos, documents — anything the client hands you. Several at once is fine.
+        </span>
+        <input
+          ref={input}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            void take(Array.from(e.target.files ?? []));
+            e.target.value = "";
+          }}
+        />
+      </div>
+
+      {error && (
+        <p role="alert" className="text-xs font-semibold text-rose-600">
+          {error}
+        </p>
+      )}
+
+      {noting ? (
+        <form onSubmit={saveNote} className="space-y-2 rounded-xl bg-gray-50/80 p-3">
+          <input
+            value={noteTitle}
+            onChange={(e) => setNoteTitle(e.target.value)}
+            placeholder="Title (optional)"
+            className={field}
+          />
+          <textarea
+            autoFocus
+            rows={4}
+            value={noteBody}
+            onChange={(e) => setNoteBody(e.target.value)}
+            placeholder="The note"
+            className={field}
+          />
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={!!busy}
+              className="rounded-lg bg-runfree-grad px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? "Saving…" : "Save note"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setNoting(false)}
+              className="px-2 py-2 text-xs text-gray-500 transition hover:text-runfree-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button
+          onClick={() => setNoting(true)}
+          className="text-xs font-semibold text-runfree-magentaDeep hover:underline"
+        >
+          + Add a note
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -6756,62 +7073,101 @@ function ReadingShelf({
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
-    /* auto-fill rather than a fixed column count. With `sm:grid-cols-3` the
-       cards grew with the container — on a wide screen three of them filled
-       1100px and a book jacket rendered nearly 400px tall, which Andrew called
-       "a little obnoxious", correctly. Sized tracks keep a card a thumbnail at
-       every width: two across on a phone, as many as fit on a desktop. */
-    <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] items-start gap-x-4 gap-y-6">
-      {items.map((item) =>
-        editingId === item.id ? (
-          <li key={item.id} className="col-span-full">
-            <PrepItemForm
-              group={group}
-              projectId={projectId}
-              existing={item}
-              accessToken={accessToken}
-              onDone={() => {
-                setEditingId(null);
-                onChanged();
-              }}
-              onCancel={() => setEditingId(null)}
-            />
-          </li>
-        ) : (
-          (() => {
-            const href = safeExternalUrl(item.external_url);
-            const isVideo = !!href && /loom\.com|vimeo\.com|youtube\.com|youtu\.be/i.test(href);
-            const cover = item.thumb_path ? fileUrls[item.thumb_path] : undefined;
-            const fileUrl = item.file_path ? fileUrls[item.file_path] : undefined;
-            return (
-              <ResourceCard
-                key={item.id}
-                title={item.title}
-                note={item.notes}
-                media={isVideo ? "video" : item.file_path ? "pdf" : href ? "link" : "pdf"}
-                art={cover ?? (isVideo && item.external_url ? thumbs?.[item.external_url] : undefined)}
-                href={href}
-                onOpen={
-                  fileUrl && onOpenFile
-                    ? () => onOpenFile(fileUrl, item.title, item.file_size)
-                    : undefined
-                }
-                actions={
-                  canEdit ? (
-                    <button
-                      onClick={() => setEditingId(item.id)}
-                      className="text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
-                    >
-                      Edit
-                    </button>
-                  ) : undefined
-                }
+    /* Two shelves, not one grid. Andrew: "the format of the image for future
+       church, or like a book or a PDF, looks quite a bit different when you
+       put a thumbnail of a video in there … might be better in a different
+       container." A 2:3 jacket and a 16:9 still never sat well side by side,
+       so the videos get their own row, on wider tracks, under the reading.
+
+       auto-fill rather than a fixed column count: sized tracks keep a card a
+       thumbnail at every width — two across on a phone, as many as fit on a
+       desktop. */
+    <div className="space-y-6">
+      {(() => {
+        const isVideoItem = (item: PrepItem) => {
+          const href = safeExternalUrl(item.external_url);
+          return !!href && /loom\.com|vimeo\.com|youtube\.com|youtu\.be/i.test(href);
+        };
+        const reads = items.filter((i) => !isVideoItem(i));
+        const videos = items.filter(isVideoItem);
+        const card = (item: PrepItem) =>
+          editingId === item.id ? (
+            <li key={item.id} className="col-span-full">
+              <PrepItemForm
+                group={group}
+                projectId={projectId}
+                existing={item}
+                accessToken={accessToken}
+                onDone={() => {
+                  setEditingId(null);
+                  onChanged();
+                }}
+                onCancel={() => setEditingId(null)}
               />
-            );
-          })()
-        )
-      )}
-    </ul>
+            </li>
+          ) : (
+            (() => {
+              const href = safeExternalUrl(item.external_url);
+              const isVideo = isVideoItem(item);
+              const cover = item.thumb_path ? fileUrls[item.thumb_path] : undefined;
+              const fileUrl = item.file_path ? fileUrls[item.file_path] : undefined;
+              return (
+                <ResourceCard
+                  key={item.id}
+                  title={item.title}
+                  note={item.notes}
+                  media={isVideo ? "video" : item.file_path ? "pdf" : href ? "link" : "pdf"}
+                  art={cover ?? (isVideo && item.external_url ? thumbs?.[item.external_url] : undefined)}
+                  href={href}
+                  onOpen={
+                    fileUrl && onOpenFile
+                      ? () => onOpenFile(fileUrl, item.title, item.file_size)
+                      : undefined
+                  }
+                  actions={
+                    canEdit ? (
+                      <button
+                        onClick={() => setEditingId(item.id)}
+                        className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
+                      >
+                        Edit
+                      </button>
+                    ) : undefined
+                  }
+                />
+              );
+            })()
+          );
+        return (
+          <>
+            {reads.length > 0 && (
+              <div>
+                {videos.length > 0 && (
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                    Read
+                  </p>
+                )}
+                <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] items-start gap-x-4 gap-y-6">
+                  {reads.map(card)}
+                </ul>
+              </div>
+            )}
+            {videos.length > 0 && (
+              <div>
+                {reads.length > 0 && (
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                    Watch
+                  </p>
+                )}
+                <ul className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] items-start gap-x-4 gap-y-6">
+                  {videos.map(card)}
+                </ul>
+              </div>
+            )}
+          </>
+        );
+      })()}
+    </div>
   );
 }
 
@@ -7394,7 +7750,15 @@ function PrepareSection({
   // than by dragging a whole unrelated section along with it.
   const videos = prep.filter((r) => r.kind === "video" && r.external_url);
   const reading = prep.filter((r) => r.kind !== "video");
-  const checklistHandouts = extras.filter((g) => PREP_HANDOUT.test(g.name));
+  // By file title as well as group name: the two checklist PDFs sit inside
+  // "Additional Handouts" in Drive, and a group-name match never saw them.
+  const checklistHandouts = extras
+    .map((g) => ({
+      ...g,
+      name: PREP_HANDOUT.test(g.name) ? g.name : "The Preparation Checklist, as a PDF",
+      files: g.files.filter((f) => PREP_HANDOUT.test(g.name) || PREP_HANDOUT.test(f.title)),
+    }))
+    .filter((g) => g.files.length > 0);
 
   const itemCount =
     prepItems.filter((i) => prepGroups.some((g) => g.id === i.group_id)).length +

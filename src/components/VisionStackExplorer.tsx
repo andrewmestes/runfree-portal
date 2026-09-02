@@ -133,6 +133,39 @@ export default function VisionStackExplorer({
   const [assembled, setAssembled] = useState(false);
   const reduced = useReducedMotion();
 
+  /**
+   * The intro: four plates in a row, then the stack.
+   *
+   * Andrew: "maybe the tiles are horizontal, and then as soon as I start to
+   * scroll, they shift over into a stack … some kind of engaging, creative
+   * visual that makes this page feel a little bit more epic." So the plates
+   * arrive side by side, small, and glide into the stack on the first scroll
+   * — or the first click, or after a moment for someone who does neither.
+   * Reduced motion skips straight to the stack. The row boxes keep the
+   * plate's own aspect (see the wrapper style) so the diamond clip still
+   * fits the art while they travel.
+   */
+  const [stage, setStage] = useState<"row" | "stack">("row");
+  useEffect(() => {
+    if (reduced) {
+      setStage("stack");
+      return;
+    }
+    if (stage === "stack") return;
+    const go = () => setStage("stack");
+    window.addEventListener("scroll", go, { once: true, passive: true });
+    window.addEventListener("wheel", go, { once: true, passive: true });
+    window.addEventListener("touchmove", go, { once: true, passive: true });
+    const t = window.setTimeout(go, 2800);
+    return () => {
+      window.removeEventListener("scroll", go);
+      window.removeEventListener("wheel", go);
+      window.removeEventListener("touchmove", go);
+      window.clearTimeout(t);
+    };
+  }, [reduced, stage]);
+  const stacked = stage === "stack";
+
   // Assemble once on arrival. Held a frame so the transition has a "from"
   // state — setting the final transform in the same paint lands it there with
   // no motion at all.
@@ -152,6 +185,7 @@ export default function VisionStackExplorer({
    */
   const choose = (slug: string) => {
     setSelected(slug);
+    setStage("stack");
     if (window.matchMedia("(min-width: 1024px)").matches) return;
     window.requestAnimationFrame(() =>
       panelRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" })
@@ -179,7 +213,11 @@ export default function VisionStackExplorer({
          *
          * Desktop only. Below `lg` the same names render as chips under the
          * stack, where there is width for them. */}
-        <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 hidden w-[112px] lg:block">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 hidden w-[112px] lg:block"
+          style={{ opacity: stacked ? 1 : 0, transition: reduced ? "none" : "opacity 500ms ease 650ms" }}
+        >
           {plates.map((p, i) => {
             const isActive = p.slug === selected;
             return (
@@ -217,7 +255,7 @@ export default function VisionStackExplorer({
               relative to this element, so anywhere else it drifts. Desktop
               only; on a phone the panel sits underneath and there is nothing
               to lead across to. */}
-          {active && (
+          {active && stacked && (
             <span
               aria-hidden
               className="pointer-events-none absolute hidden lg:block"
@@ -248,7 +286,7 @@ export default function VisionStackExplorer({
               height: "7%",
               background: "radial-gradient(ellipse at center, rgba(19,29,69,0.22) 0%, rgba(19,29,69,0.10) 45%, rgba(19,29,69,0) 72%)",
               filter: "blur(6px)",
-              opacity: assembled ? 1 : 0,
+              opacity: assembled && stacked ? 1 : 0,
               transition: reduced ? "none" : "opacity 700ms ease-out 300ms",
             }}
           />
@@ -278,20 +316,30 @@ export default function VisionStackExplorer({
                 key={p.slug}
                 className="pointer-events-none absolute left-0 w-full"
                 style={{
-                  top: `${i * STEP}%`,
-                  height: `${PLATE_H}%`,
+                  // Row: 26% wide, at the plate's own aspect (26% of 503 wide
+                  // by 10.3% of 900 tall is 800x567), lined up mid-box.
+                  // Stack: the geometry from the artwork.
+                  top: stacked ? `${i * STEP}%` : "44%",
+                  left: stacked ? "0%" : `${2 + i * 24}%`,
+                  width: stacked ? "100%" : "26%",
+                  height: stacked ? `${PLATE_H}%` : "10.3%",
                   zIndex: plates.length - i,
-                  filter: isActive
+                  filter: isActive && stacked
                     ? "drop-shadow(0 18px 22px rgba(19,29,69,0.30))"
                     : "drop-shadow(0 5px 8px rgba(19,29,69,0.14))",
                   // Kept nearly solid. At 0.62 the unselected plates washed
                   // out against a light page and the stack stopped reading as
                   // one object — prominence comes from scale and the shadow.
-                  opacity: assembled ? (isActive ? 1 : isHover ? 0.97 : 0.86) : 0,
+                  opacity: assembled ? (!stacked ? 1 : isActive ? 1 : isHover ? 0.97 : 0.86) : 0,
                   transition: reduced
                     ? "none"
-                    : "filter 520ms cubic-bezier(.22,1,.36,1), opacity 520ms cubic-bezier(.22,1,.36,1)",
-                  transitionDelay: assembled && !reduced ? "0ms" : `${(plates.length - 1 - i) * 90}ms`,
+                    : "top 900ms cubic-bezier(.22,1,.36,1), left 900ms cubic-bezier(.22,1,.36,1), width 900ms cubic-bezier(.22,1,.36,1), height 900ms cubic-bezier(.22,1,.36,1), filter 520ms cubic-bezier(.22,1,.36,1), opacity 520ms cubic-bezier(.22,1,.36,1)",
+                  transitionDelay:
+                    assembled && !reduced
+                      ? stacked
+                        ? `${(plates.length - 1 - i) * 70}ms`
+                        : "0ms"
+                      : `${(plates.length - 1 - i) * 90}ms`,
                 }}
               >
                 <button
@@ -307,11 +355,13 @@ export default function VisionStackExplorer({
                   style={{
                     clipPath: DIAMOND,
                     WebkitClipPath: DIAMOND,
-                    transform: assembled
-                      ? `translateY(${isActive && !reduced ? -10 : 0}px) scale(${
-                          isActive ? 1.06 : isHover ? 1.03 : 1
-                        })`
-                      : "translateY(26px) scale(0.94)",
+                    transform: !assembled
+                      ? "translateY(26px) scale(0.94)"
+                      : !stacked
+                        ? "none"
+                        : `translateY(${isActive && !reduced ? -10 : 0}px) scale(${
+                            isActive ? 1.06 : isHover ? 1.03 : 1
+                          })`,
                     transformOrigin: "50% 44%",
                     transition: reduced ? "none" : "transform 620ms cubic-bezier(.22,1,.36,1)",
                     transitionDelay: assembled && !reduced ? "0ms" : `${(plates.length - 1 - i) * 90}ms`,
@@ -530,7 +580,7 @@ function LayerPanel({
  * see what is coming. Andrew's own instruction on ratios applies here —
  * nothing counts what is missing.
  */
-function StackTile({
+export function StackTile({
   item,
   imageUrl,
   onOpen,

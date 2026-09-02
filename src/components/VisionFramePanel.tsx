@@ -30,6 +30,8 @@ export default function VisionFramePanel({
   onSave,
   elements,
   voice = "church",
+  onExport,
+  exporting = false,
 }: {
   rows: VisionFrameRow[];
   canEdit: boolean;
@@ -37,6 +39,9 @@ export default function VisionFramePanel({
   /** Which rows this template's sheet carries (067). Omitted: all seven. */
   elements?: string[] | null;
   voice?: FrameVoice;
+  /** Opens the frame as a one-page PDF. Andrew: "click to download, and anything that's currently there would come out in a one-page PDF." */
+  onExport?: () => void;
+  exporting?: boolean;
 }) {
   const [editing, setEditing] = useState<VisionFrameElement | null>(null);
   const [draft, setDraft] = useState("");
@@ -67,6 +72,19 @@ export default function VisionFramePanel({
             ? `All ${frame.length} are written.`
             : `${filled} of ${frame.length} written so far.`}
         </p>
+        {onExport && filled > 0 && (
+          <button
+            onClick={onExport}
+            disabled={exporting}
+            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink disabled:opacity-50"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+              <path d="M14 3v5h5" />
+              <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
+            </svg>
+            {exporting ? "Building the page…" : "Open as a one-page PDF"}
+          </button>
+        )}
       </header>
 
       <div className="overflow-hidden rounded-2xl ring-1 ring-gray-200">

@@ -1151,6 +1151,64 @@ plates at 250px wide, pinned to the card's bottom edge with a negative margin
 so the foundation bleeds off it (the card is `overflow-hidden`, which is what
 makes the bleed a crop rather than an overflow).
 
+## Executive Coaching: a template built from a live Asana project, without the client in it
+
+Andrew, 2 Sept 2026, on a teammate's "Amy Davis Executive Coaching" project in
+Asana: "scrape everything you can from that project that can be standardized
+on coaching. pay attention to the column names as inspiration and guidelines.
+pull every pdf and video link to bring into the template … don't bring over
+any sensitive material about her. for instance, if a task says vision — just
+note that we need a vision task with the ability to edit text."
+
+So 069 turns the placeholder "Meta Performance Coaching" (an outline, three
+guessed prework items, no projects) into **Executive Coaching** (slug
+`executive-coaching`, same template id). Meta Performance is the school behind
+this coaching, not a second offering — Jaggard's "Beyond High Performance" is
+its first-month read. Nothing of the client's came across: the session notes
+and whiteboard photos were never read, the intake form's answers were dropped
+and only its sixteen questions kept, and every "Vision point #1" is an empty
+field. The coach's own Zoom and scheduling links became two placeholder rows
+("Your coach adds their scheduling link here").
+
+**How the Asana columns landed.** Onboarding → Preparation (Key Dates, the
+seven Coaching Commitments as a checklist, Getting to Know You as sixteen
+editable notes, Forms and Scheduling). Sessions → Sessions. Whiteboarding →
+the photo on the session it came from. Additional Resources and Healthy
+Practices and Optional Life Planning and Younique Book by Chapter → declared
+process sections, chips on The Process. Deliverables → thirteen `notes`
+groups under `DELIVERABLES`, one per tool, every field an item the client
+types into, with the five one-page worksheets as `DELIVERABLES` resources.
+The 35 files (PDFs, and the eight Performance Practices cards as PNGs) sit in
+template storage; `scripts/import-template-files.ts` now takes a local
+`path` as well as a `url`, because Asana download links expire in an hour and
+the files were pulled first.
+
+**Three things the page learned for it.**
+
+1. A prep group whose `section` is a section the template DECLARES in
+   `structure.sections` renders inside that section's panel (ModulePanel's
+   "Fill this in" block) and stays off Preparation; `nonModuleSections` no
+   longer treats such a section as prep. Undeclared sections
+   (`PREPARATION`, `CHURCH PREPARATION`, `TEAM`, `DELIVERABLES`) route as
+   before. Dates groups go to Key Dates wherever they sit. Side effect,
+   intended: Younique's "Recommended Prework" is now a chip on The Process
+   holding its LDG worksheet, the three videos and its groups — those four
+   resources had lost their home when Preparation stopped rendering template
+   prep resources.
+2. A stored image resource is a card, not a document row: ModulePanel splits
+   the walkthrough into `cards` (a gallery, `IMAGE_FILE`) and `walkthrough`.
+   That is the Healthy Practices section.
+3. `DELIVERABLES` resources with files list on the Deliverables panel as
+   Worksheets (`SheetList`), above the groups. And an EMPTY `frame_elements`
+   now means "no Vision Frame sheet" (070) — null still means all seven — so
+   the church frame does not sit above a coaching client's thrill lists.
+
+**Team or one person is the project's call now.** `projects.is_group` (069,
+null = the template's default) feeds `detail.isGroup`, which replaced every
+`detail.template?.isGroup ?? true`; the New Project page asks "Who is this
+for?" with the template's default pre-selected. Executive Coaching defaults
+to one person; the same template serves a team by flipping that.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

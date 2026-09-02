@@ -7,7 +7,7 @@
  * The manifest:
  *   { "template": "younique-lifeplan",
  *     "files": [ { "section": "Day 1 - Section #1", "title": "Life Drifts Grid",
- *                  "url": "https://asanausercontent.com/…", "name": "03_lifedriftsgrid.pdf",
+ *                  "url": "https://asanausercontent.com/…" | "path": "/local/file.pdf", "name": "03_lifedriftsgrid.pdf",
  *                  "kind"?: "exercise" | "handout", "position"?: 9, "description"?: "…" } ] }
  *
  * Files land in the private bucket under templates/{template_id}/{slug}.{ext}
@@ -26,7 +26,9 @@ import { createClient } from "@supabase/supabase-js";
 type Entry = {
   section: string;
   title: string;
-  url: string;
+  /** One of the two: a download URL, or a file already on disk. */
+  url?: string;
+  path?: string;
   name: string;
   kind?: "handout" | "exercise" | "link" | "video";
   position?: number;
@@ -93,10 +95,20 @@ async function main() {
     console.log(`${row ? "attach       " : "insert+attach"}  ${f.section} › ${f.title}  ←  ${f.name}`);
     if (!GO) continue;
 
-    const res = await fetch(f.url);
-    if (!res.ok) throw new Error(`${f.name}: HTTP ${res.status} — expired URL? list the attachments again`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    const type = res.headers.get("content-type");
+    let buf: Buffer;
+    let type: string | null;
+    if (f.path) {
+      // Already on disk — downloaded earlier, while the Asana URLs were live.
+      buf = readFileSync(f.path);
+      type = null;
+    } else if (f.url) {
+      const res = await fetch(f.url);
+      if (!res.ok) throw new Error(`${f.name}: HTTP ${res.status} — expired URL? list the attachments again`);
+      buf = Buffer.from(await res.arrayBuffer());
+      type = res.headers.get("content-type");
+    } else {
+      throw new Error(`${f.name}: needs a url or a path`);
+    }
     const e = ext(f.name, type);
     if (e === "pdf" && buf.subarray(0, 4).toString() !== "%PDF") {
       throw new Error(`${f.name}: not a PDF (${type}) — expired URL served a page instead`);

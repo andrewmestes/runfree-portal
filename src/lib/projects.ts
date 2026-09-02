@@ -125,6 +125,12 @@ export type ProjectDetail = {
   about: string | null;
   priorities: string | null;
   prioritiesUpdatedAt: string | null;
+  /**
+   * A team engagement or one person. The project's own setting wins; the
+   * template's is the default. Executive Coaching serves both — Andrew: "for
+   * both teams and individuals" — so it is chosen per project.
+   */
+  isGroup: boolean;
   template: {
     id: string;
     name: string;
@@ -321,6 +327,7 @@ export async function getProjectDetail(
     about: project.about,
     priorities: project.priorities,
     prioritiesUpdatedAt: project.priorities_updated_at,
+    isGroup: project.is_group ?? t?.is_group ?? true,
     template,
     sectionNotes: Object.fromEntries(
       (notesRes.data ?? []).map((n) => [n.section, n.body ?? ""])
@@ -486,18 +493,30 @@ export function sectionOrderFromStructure(structure: unknown): string[] {
   return [];
 }
 
-export type TemplateSummary = { id: string; name: string; slug: string; description: string | null };
+export type TemplateSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  isGroup: boolean;
+};
 
 /** Staff-only per read_templates — used to populate the "start from a template" picker. */
 export async function listTemplates(accessToken: string): Promise<TemplateSummary[]> {
   const client = createUserClient(accessToken);
   const { data, error } = await client
     .from("templates")
-    .select("id, name, slug, description")
+    .select("id, name, slug, description, is_group")
     .eq("is_active", true)
     .order("name", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    slug: t.slug,
+    description: t.description,
+    isGroup: t.is_group,
+  }));
 }
 
 /**
@@ -512,7 +531,13 @@ export async function listTemplates(accessToken: string): Promise<TemplateSummar
 export async function createProject(
   accessToken: string,
   creatorId: string,
-  input: { name: string; visibility: "private" | "team"; templateId: string | null }
+  input: {
+    name: string;
+    visibility: "private" | "team";
+    templateId: string | null;
+    /** Team or one person; null leaves it to the template. */
+    isGroup?: boolean | null;
+  }
 ): Promise<{ id: string }> {
   const client = createUserClient(accessToken);
 
@@ -523,6 +548,7 @@ export async function createProject(
       visibility: input.visibility,
       template_id: input.templateId,
       created_by: creatorId,
+      is_group: input.isGroup ?? null,
     })
     .select("id")
     .single();

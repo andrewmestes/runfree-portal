@@ -121,6 +121,72 @@ type Profile = {
  * and has appeared as both "Preparation Checklist" and "Prep Checklist".
  */
 const PREP_HANDOUT = /prep(aration)?\s*checklist/i;
+/** Stored images render as cards; everything else opens as a document. */
+const IMAGE_FILE = /\.(png|jpe?g|webp|gif)$/i;
+
+/**
+ * A numbered list of stored sheets that open in the in-portal viewer — the
+ * Deliverables panel's worksheets. Same shape as a section's walkthrough,
+ * without the exercise pills.
+ */
+function SheetList({
+  title,
+  subtitle,
+  sheets,
+  fileUrls,
+  onOpenFile,
+}: {
+  title: string;
+  subtitle?: string;
+  sheets: ProjectDetail["resources"][number][];
+  fileUrls: Record<string, string>;
+  onOpenFile: (signedUrl: string, title: string, sizeBytes: number | null) => void;
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-5 ring-1 ring-gray-200 sm:p-6">
+      <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">{title}</h4>
+      {subtitle && <p className="mt-1 text-xs text-gray-500">{subtitle}</p>}
+      <ol className="mt-3 overflow-hidden rounded-2xl ring-1 ring-gray-200">
+        {sheets.map((r, i) => {
+          const url = r.file_path ? fileUrls[r.file_path] : undefined;
+          const inner = (
+            <>
+              <span className="w-7 shrink-0 pt-0.5 text-right text-xs font-bold tabular-nums text-runfree-magenta/70">
+                {i + 1}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-runfree-ink">{r.title}</span>
+                {r.description && (
+                  <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{r.description}</span>
+                )}
+              </span>
+              {url && (
+                <span className="shrink-0 rounded-full bg-runfree-pink px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep">
+                  PDF
+                </span>
+              )}
+            </>
+          );
+          const cls = `flex w-full items-start gap-3 px-4 py-3 text-left ${i > 0 ? "border-t border-gray-100" : ""}`;
+          return (
+            <li key={r.id}>
+              {url ? (
+                <button
+                  onClick={() => onOpenFile(url, r.title, r.file_size)}
+                  className={`${cls} group outline-none transition hover:bg-runfree-indigo/40 focus-visible:bg-runfree-indigo/40`}
+                >
+                  {inner}
+                </button>
+              ) : (
+                <div className={cls}>{inner}</div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
 
 const PREP_SECTION = "CHURCH PREPARATION";
 const OVERVIEW_SECTION = "PROCESS OVERVIEW";
@@ -224,7 +290,18 @@ function signablePaths(detail: ProjectDetail): string[] {
  * order, limited to sections that hold something.
  */
 function nonModuleSections(detail: ProjectDetail, includeEmptyDeclared = false): string[] {
-  const prep = new Set<string>([PREP_SECTION, ...detail.prepGroups.map((g) => g.section)]);
+  const declared = sectionOrderFromStructure(detail.template?.structure);
+  // A group's section is a prepare/team/deliverables pseudo-section unless
+  // the template declares it as a real section of the process — then the
+  // group renders inside that section's panel (see ModulePanel), and the
+  // section stays on the rail. Executive Coaching's "Optional Life Planning"
+  // is chapters and videos AND the fill-in tools that go with them.
+  const prep = new Set<string>([
+    PREP_SECTION,
+    "TEAM",
+    "DELIVERABLES",
+    ...detail.prepGroups.map((g) => g.section).filter((x) => !declared.includes(x)),
+  ]);
   const inUse = new Set<string>(
     [
       ...detail.resources.filter((r) => r.kind !== "team_bio").map((r) => r.section),
@@ -232,7 +309,6 @@ function nonModuleSections(detail: ProjectDetail, includeEmptyDeclared = false):
       ...detail.sessions.map((s) => s.section),
     ].filter((x): x is string => !!x)
   );
-  const declared = sectionOrderFromStructure(detail.template?.structure);
   // A frame template's sections ARE the process — Mission, Values, Strategy,
   // Measures, Vision — and every one of them belongs on the rail from day
   // one, filed under or not. Younique's declared "Overview" and "Session
@@ -925,9 +1001,14 @@ export default function ProjectDetailPage() {
   // a third template names its own prepare section and lands in the right
   // place without another branch here.
   const moduleSections = new Set(modules.map((m) => m.section));
+  // Declared process sections keep their own groups (ModulePanel renders
+  // them); see nonModuleSections.
+  const declaredSections = new Set(sectionOrderFromStructure(detail.template?.structure));
   const prepSections = new Set<string>([
     PREP_SECTION,
-    ...detail.prepGroups.map((g) => g.section).filter((s) => !moduleSections.has(s)),
+    ...detail.prepGroups
+      .map((g) => g.section)
+      .filter((s) => !moduleSections.has(s) && !declaredSections.has(s)),
   ]);
 
   const prepResources = detail.resources.filter(
@@ -945,7 +1026,7 @@ export default function ProjectDetailPage() {
   // Perspective(1), Preparation Checklist(2) — which reads as a shuffled
   // deck rather than one list with an appendix.
   const allNonModuleGroups = detail.prepGroups
-    .filter((g) => !moduleSections.has(g.section))
+    .filter((g) => !moduleSections.has(g.section) && !declaredSections.has(g.section))
     .sort(
       (a, b) =>
         Number(a.section === OVERVIEW_SECTION) - Number(b.section === OVERVIEW_SECTION) ||
@@ -956,8 +1037,18 @@ export default function ProjectDetailPage() {
   // Andrew's IA: key dates, preparation, deliverables and team-coaching work
   // are four different things that were all sharing one "prepare" block.
   // A group's `section` now says which of them it belongs to.
-  const dateGroups = allNonModuleGroups.filter((g) => g.kind === "dates");
+  // Dates are dates whichever section their group sits in — Younique files
+  // its Key Dates under the declared "Recommended Prework", and they still
+  // belong on the Key Dates panel, not inside that section.
+  const dateGroups = detail.prepGroups.filter(
+    (g) => g.kind === "dates" && !moduleSections.has(g.section)
+  );
   const deliverableGroups = allNonModuleGroups.filter((g) => g.section === "DELIVERABLES");
+  // Worksheets filed under DELIVERABLES — the one-page sheets a coaching
+  // deliverable is filled in from — open from the Deliverables panel.
+  const deliverableSheets = detail.resources
+    .filter((r) => r.section === "DELIVERABLES" && r.file_path)
+    .sort((a, b) => a.position - b.position);
   const teamGroups = allNonModuleGroups.filter((g) => g.section === "TEAM");
   const prepareGroups = allNonModuleGroups.filter(
     (g) =>
@@ -1007,7 +1098,12 @@ export default function ProjectDetailPage() {
    * same objection that keeps a ratio off Deliverables applies to all of
    * them: a coach running part of the process should not see a tally.
    */
-  const hasDeliverables = (detail.template?.hasVisionStack ?? false) || deliverableGroups.length > 0;
+  const hasDeliverables =
+    (detail.template?.hasVisionStack ?? false) || deliverableGroups.length > 0 || deliverableSheets.length > 0;
+  // An empty frame_elements list means "no Vision Frame here" — Executive
+  // Coaching's deliverables are its own tools, not a church's frame. Null
+  // still means all seven.
+  const showFrame = (detail.template?.frameElements?.length ?? 1) > 0;
   // Title Case throughout — "The process" next to "Key dates" read as an
   // unfinished sentence rather than a set of labels.
   //
@@ -1281,7 +1377,7 @@ export default function ProjectDetailPage() {
             {activePanel === "prepare" && (
               <PrepareSection
                 id="prepare"
-                isGroup={detail.template?.isGroup ?? true}
+                isGroup={detail.isGroup}
                 standalone
                 prep={prepResources}
                 overview={overviewResources}
@@ -1443,19 +1539,32 @@ export default function ProjectDetailPage() {
                 {/* The church's own words, under the stack of what they
                     built. Andrew: "I like the ability to input text so it's
                     searchable at some level." */}
-                <VisionFramePanel
-                  rows={visionFrame}
-                  elements={detail.template?.frameElements}
-                  voice={detail.template?.voice}
-                  onExport={exportVisionFrame}
-                  exporting={exportingFrame}
-                  canEdit={canEdit}
-                  onSave={async (element, body) => {
-                    if (!accessToken) return;
-                    await saveVisionFrameElement(accessToken, projectId, element, body);
-                    setVisionFrame(await listVisionFrame(accessToken, projectId));
-                  }}
-                />
+                {showFrame && (
+                  <VisionFramePanel
+                    rows={visionFrame}
+                    elements={detail.template?.frameElements}
+                    voice={detail.template?.voice}
+                    onExport={exportVisionFrame}
+                    exporting={exportingFrame}
+                    canEdit={canEdit}
+                    onSave={async (element, body) => {
+                      if (!accessToken) return;
+                      await saveVisionFrameElement(accessToken, projectId, element, body);
+                      setVisionFrame(await listVisionFrame(accessToken, projectId));
+                    }}
+                  />
+                )}
+                {deliverableSheets.length > 0 && (
+                  <div className="mt-6">
+                    <SheetList
+                      title="Worksheets"
+                      subtitle="The one-page sheets the deliverables below are filled in from."
+                      sheets={deliverableSheets}
+                      fileUrls={imageUrls}
+                      onOpenFile={openPrepFile}
+                    />
+                  </div>
+                )}
                 {deliverableGroups.length > 0 && (
                   <div className="mt-6">
                     <PrepCards
@@ -3860,6 +3969,8 @@ function PrioritiesBanner({
   const openPrep = detail.prepItems.filter(
     (i) => checklistGroups.has(i.group_id) && !i.is_done
   );
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const processStarted = detail.sessions.some((x) => x.held_on !== null && x.held_on <= todayIso);
 
   if (!hasPriorities(detail, canEdit) && mySteps.length === 0 && openPrep.length === 0) return null;
 
@@ -3958,8 +4069,13 @@ function PrioritiesBanner({
                 to the 'what's important now' checklist on the dashboard is a
                 bit much … that's a bit much right out of the gate for a
                 client to see." The count and a way to Preparation, where the
-                list and the checklist PDF live. */}
-            {openPrep.length > 0 && (
+                list and the checklist PDF live.
+
+                And only before the process starts. Andrew: "I need the '12
+                things' part of this to go away after a process starts." The
+                first session held is the start; from that day the row is
+                gone, whatever is still unticked under Preparation. */}
+            {openPrep.length > 0 && !processStarted && (
               <div className="mb-4">
                 <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">
                   Before you begin
@@ -4697,7 +4813,7 @@ function ModulePanel({
   const resources = detail.resources.filter((r) => r.section === section);
   const videos = resources.filter((r) => r.kind === "video" && r.external_url);
   const exercises = resources.filter((r) => r.kind === "exercise" || r.kind === "link");
-  const sectionGroups = detail.prepGroups.filter((g) => g.section === section);
+  const sectionGroups = detail.prepGroups.filter((g) => g.section === section && g.kind !== "dates");
 
   // Handouts come from Drive, keyed by module number — not from
   // template_resources, whose handout rows are just titles with nowhere to
@@ -4712,11 +4828,16 @@ function ModulePanel({
   // (coaching): its rows ARE the agenda, in position order, and the ones with
   // a file open the worksheet. Pivvot's exercise rows are labels for sheets
   // that come from Drive, so they stay out of it there.
-  const walkthrough = moduleNo
+  const walkthroughAll = moduleNo
     ? []
     : [...resources]
         .filter((r) => r.kind !== "team_bio" && !(r.kind === "video" && r.external_url))
         .sort((a, b) => a.position - b.position);
+  // An image handout IS its content — the Performance Practices cards are
+  // eight coloured index cards, not eight documents — so those show as a
+  // gallery rather than a numbered list of titles.
+  const cards = walkthroughAll.filter((r) => !!r.file_path && IMAGE_FILE.test(r.file_path));
+  const walkthrough = walkthroughAll.filter((r) => !cards.includes(r));
 
   // Every chart for this module, including the ones a coach uploaded while
   // logging a session.
@@ -4739,7 +4860,7 @@ function ModulePanel({
 
   const order = moduleOrder(section);
   const meta = order ? MODULE_META[order] : null;
-  const isGroupVertical = detail.template?.isGroup ?? true;
+  const isGroupVertical = detail.isGroup;
   // On a frame template the section IS a side of the frame; say which
   // question it answers, in the template's voice.
   const frameEl = order ? null : frameElementForSection(section);
@@ -4757,6 +4878,8 @@ function ModulePanel({
   const hasAnything =
     !!primaryHandout ||
     walkthrough.length > 0 ||
+    cards.length > 0 ||
+    sectionGroups.length > 0 ||
     sectionSessions.length > 0 ||
     videos.length > 0 ||
     (exercises.length > 0 && isGroupVertical) ||
@@ -4789,6 +4912,44 @@ function ModulePanel({
               </p>
             )}
           </div>
+        )}
+
+        {cards.length > 0 && (
+          <Block title={`${cards.length} card${cards.length === 1 ? "" : "s"}`}>
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {cards.map((r) => {
+                const url = r.file_path ? imageUrls[r.file_path] : undefined;
+                const body = (
+                  <>
+                    <span className="block aspect-[1/1] overflow-hidden rounded-xl bg-runfree-indigo/40 ring-1 ring-gray-200">
+                      {url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={url} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.03]" />
+                      ) : null}
+                    </span>
+                    <span className="mt-2 block text-sm font-medium leading-snug text-runfree-ink">{r.title}</span>
+                    {r.description && (
+                      <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{r.description}</span>
+                    )}
+                  </>
+                );
+                return (
+                  <li key={r.id}>
+                    {url && onOpenFile ? (
+                      <button
+                        onClick={() => onOpenFile(url, r.title, r.file_size)}
+                        className="group block w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+                      >
+                        {body}
+                      </button>
+                    ) : (
+                      <div>{body}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </Block>
         )}
 
         {walkthrough.length > 0 && (
@@ -4848,6 +5009,23 @@ function ModulePanel({
                 );
               })}
             </ol>
+          </Block>
+        )}
+
+        {sectionGroups.length > 0 && (
+          <Block title={sectionGroups.length === 1 ? "Fill this in" : "Fill these in"}>
+            <PrepCards
+              groups={sectionGroups}
+              items={detail.prepItems}
+              projectId={detail.id}
+              canEdit={canEdit}
+              accessToken={accessToken}
+              fileUrls={imageUrls}
+              thumbs={thumbs}
+              onOpenFile={onOpenFile}
+              onChanged={onChanged}
+              stacked
+            />
           </Block>
         )}
 
@@ -8582,7 +8760,7 @@ function TeamSection({
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
     });
   // Templates default to group; only an explicitly 1:1 vertical opts out.
-  const isGroup = detail.template?.isGroup ?? true;
+  const isGroup = detail.isGroup;
 
   return (
     <section id={id} className="first:mt-0 mt-20 scroll-mt-20">

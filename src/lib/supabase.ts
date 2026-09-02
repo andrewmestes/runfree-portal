@@ -165,6 +165,7 @@ export type Database = {
           /** "What your team is doing right now" — see migration 018. */
           priorities: string | null;
           priorities_updated_at: string | null;
+          is_group: boolean | null;
           created_by: string;
           archived_at: string | null;
           created_at: string;
@@ -181,6 +182,7 @@ export type Database = {
           about?: string | null;
           priorities?: string | null;
           priorities_updated_at?: string | null;
+          is_group?: boolean | null;
           created_by: string;
           archived_at?: string | null;
           created_at?: string;
@@ -196,6 +198,7 @@ export type Database = {
           about?: string | null;
           priorities?: string | null;
           priorities_updated_at?: string | null;
+          is_group?: boolean | null;
           archived_at?: string | null;
         };
         Relationships: [

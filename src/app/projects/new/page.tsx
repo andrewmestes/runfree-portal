@@ -32,6 +32,8 @@ export default function NewProjectPage() {
   // private and access is a deliberate act on the project itself.
   const visibility = "private" as const;
   const [templateId, setTemplateId] = useState<string | "">("");
+  // Team or one person. The template's default until someone says otherwise.
+  const [isGroup, setIsGroup] = useState<boolean | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +82,7 @@ export default function NewProjectPage() {
         name: name.trim(),
         visibility,
         templateId: templateId || null,
+        isGroup,
       });
       router.push(`/projects/${id}`);
     } catch (err) {
@@ -180,6 +183,40 @@ export default function NewProjectPage() {
               )}
             </div>
           </div>
+
+          {(() => {
+            const chosen = templates.find((t) => t.id === templateId);
+            const fallback = chosen?.isGroup ?? true;
+            const value = isGroup ?? fallback;
+            return (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-runfree-ink">Who is this for?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { v: true, label: "A team", hint: "A church or organization's team, with a client roster." },
+                    { v: false, label: "One person", hint: "One-on-one work — no team roster." },
+                  ].map((o) => (
+                    <label
+                      key={String(o.v)}
+                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 has-[:checked]:border-runfree-magenta has-[:checked]:bg-runfree-pink/40"
+                    >
+                      <input
+                        type="radio"
+                        name="is_group"
+                        checked={value === o.v}
+                        onChange={() => setIsGroup(o.v)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-runfree-ink">{o.label}</span>
+                        <span className="block text-xs text-gray-500">{o.hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

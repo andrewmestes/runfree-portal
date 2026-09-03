@@ -340,6 +340,72 @@ export async function updateHighlight(
   if (error) throw error;
 }
 
+/** Persist a shelf order: ids first to last become positions 0..n. */
+export async function reorderHighlights(accessToken: string, ids: string[]): Promise<void> {
+  const client = createUserClient(accessToken);
+  const results = await Promise.all(
+    ids.map((id, index) => client.from("project_highlights").update({ position: index }).eq("id", id))
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
+}
+
+/**
+ * Highlight a template's defaults on a brand-new project (075). Titles from
+ * `templates.ui.default_highlights` are matched, case-insensitively, against
+ * the Drive handout library the project just inherited — "Preparation
+ * Checklist" on a Pivvot engagement. Best effort: a Drive hiccup at creation
+ * costs the default, not the project.
+ */
+export async function seedDefaultHighlights(
+  accessToken: string,
+  projectId: string,
+  titles: string[]
+): Promise<number> {
+  if (titles.length === 0) return 0;
+  const res = await fetch(`/api/projects/${projectId}/handouts`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return 0;
+  const lib = (await res.json()) as {
+    byModule?: Record<string, { combined: HandoutRef | null; sheets: HandoutRef[] }>;
+    extras?: { name: string; files: HandoutRef[] }[];
+    notebooks?: HandoutRef[];
+  };
+  const files: HandoutRef[] = [
+    ...Object.values(lib.byModule ?? {}).flatMap((m) => [...(m.combined ? [m.combined] : []), ...m.sheets]),
+    ...(lib.extras ?? []).flatMap((g) => g.files),
+    ...(lib.notebooks ?? []),
+  ];
+  const entries: CatalogueEntry[] = [];
+  for (const wanted of titles) {
+    const needle = wanted.toLowerCase();
+    // The shortest matching title is the plainest one — "Preparation
+    // Checklist" over "Launch Preparation Checklist".
+    const hit = files
+      .filter((f) => f.title.toLowerCase().includes(needle))
+      .sort((a, b) => a.title.length - b.title.length)[0];
+    if (!hit || entries.some((e) => e.source_id === hit.id)) continue;
+    entries.push({
+      key: `handout:${hit.id}`,
+      source_kind: "handout",
+      source_id: hit.id,
+      title: hit.title,
+      media_kind: "pdf",
+      context: null,
+      external_url: null,
+      file_path: null,
+      file_name: hit.title,
+      file_mime: "application/pdf",
+      file_size: hit.sizeBytes,
+      thumb_path: null,
+      thumb_url: null,
+    });
+  }
+  await addHighlights(accessToken, projectId, entries, 0);
+  return entries.length;
+}
+
 export async function deleteHighlight(accessToken: string, id: string): Promise<void> {
   const { error } = await createUserClient(accessToken)
     .from("project_highlights")

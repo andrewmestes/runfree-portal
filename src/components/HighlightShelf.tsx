@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ResourceCard from "./ResourceCard";
+import PdfThumbnail from "./PdfThumbnail";
 import type { Highlight } from "@/lib/highlights";
 
 /**
@@ -30,6 +31,8 @@ export default function HighlightShelf({
   onOpen,
   onAdd,
   onRemove,
+  onReorder,
+  fetchPdfBytes,
 }: {
   highlights: Highlight[];
   /**
@@ -49,8 +52,40 @@ export default function HighlightShelf({
   onOpen: (h: Highlight) => void;
   onAdd: () => void;
   onRemove: (h: Highlight) => void;
+  /** Persist a new order (ids, first to last). Drag, or the arrows. */
+  onReorder?: (ids: string[]) => Promise<void>;
+  /**
+   * Authorised bytes for a PDF highlight, so its first page can be drawn as
+   * the card's art when nothing else is. A Drive handout comes through
+   * /handouts/file; a stored file through its signed URL.
+   */
+  fetchPdfBytes?: (h: Highlight) => Promise<ArrayBuffer | null>;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
+
+  // Local order so a drag lands instantly; the server's order wins whenever
+  // the list itself changes (an add, a remove, a reload).
+  const [order, setOrder] = useState<Highlight[]>(highlights);
+  const ids = highlights.map((h) => h.id).join("|");
+  useEffect(() => {
+    setOrder(highlights);
+  }, [ids, highlights]);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragTo, setDragTo] = useState<number | null>(null);
+  const canSort = canManage && !!onReorder && order.length > 1;
+
+  async function move(from: number, to: number) {
+    if (from === to || to < 0 || to >= order.length) return;
+    const next = [...order];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setOrder(next);
+    try {
+      await onReorder?.(next.map((h) => h.id));
+    } catch {
+      setOrder(highlights);
+    }
+  }
 
   // Nothing highlighted and no right to highlight anything: the section would
   // be a heading over an empty box, so it does not render at all. An editor
@@ -85,11 +120,35 @@ export default function HighlightShelf({
         </p>
       ) : (
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] items-start gap-x-4 gap-y-6">
-          {highlights.map((h) => {
+          {order.map((h, index) => {
             const art =
               (h.thumb_path ? fileUrls[h.thumb_path] : undefined) ??
               h.thumb_url ??
               (h.external_url ? thumbs[h.external_url] : undefined);
+            // A PDF with no cover draws its own first page. The cache key is
+            // the file, not the highlight, so the same handout on two
+            // projects renders once.
+            const pdfKey = h.source_kind === "handout" ? h.source_id : h.file_path;
+            const artNode =
+              !art && h.media_kind === "pdf" && fetchPdfBytes && pdfKey ? (
+                <PdfThumbnail
+                  fileId={pdfKey}
+                  fetchBytes={() => fetchPdfBytes(h)}
+                  width={220}
+                  sizeBytes={h.file_size}
+                  className="h-full w-full object-contain"
+                  fallback={
+                    <span className="grid h-full w-full place-items-center text-runfree-navy/25">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="h-10 w-10" aria-hidden="true">
+                        <path d="M14 3v5h5" />
+                        <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
+                      </svg>
+                    </span>
+                  }
+                />
+              ) : undefined;
+            const isDragging = dragFrom === index;
+            const isTarget = dragTo === index && dragFrom !== null && dragFrom !== index;
 
             return (
               <ResourceCard
@@ -98,6 +157,32 @@ export default function HighlightShelf({
                 note={h.note}
                 media={h.media_kind}
                 art={art}
+                artNode={artNode}
+                liProps={
+                  canSort
+                    ? {
+                        draggable: true,
+                        onDragStart: () => setDragFrom(index),
+                        onDragEnter: () => dragFrom !== null && setDragTo(index),
+                        onDragOver: (e) => dragFrom !== null && e.preventDefault(),
+                        onDrop: (e) => {
+                          if (dragFrom !== null && dragTo !== null) {
+                            e.preventDefault();
+                            void move(dragFrom, dragTo);
+                          }
+                          setDragFrom(null);
+                          setDragTo(null);
+                        },
+                        onDragEnd: () => {
+                          setDragFrom(null);
+                          setDragTo(null);
+                        },
+                        className: `rounded-xl transition ${isDragging ? "opacity-40" : ""} ${
+                          isTarget ? "ring-2 ring-runfree-magenta ring-offset-2" : ""
+                        } cursor-grab active:cursor-grabbing`,
+                      }
+                    : undefined
+                }
                 // A stored file or a book opens in the portal's own viewer;
                 // anything else is somewhere else and says so by opening a tab.
                 onOpen={
@@ -108,21 +193,47 @@ export default function HighlightShelf({
                 href={h.external_url}
                 actions={
                   canManage ? (
-                    <button
-                      disabled={busy === h.id}
-                      aria-label={`Remove ${h.title}`}
-                      onClick={async () => {
-                        setBusy(h.id);
-                        try {
-                          await onRemove(h);
-                        } finally {
-                          setBusy(null);
-                        }
-                      }}
-                      className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep disabled:opacity-50"
-                    >
-                      {busy === h.id ? "Removing…" : "Remove"}
-                    </button>
+                    <span className="flex items-center gap-2">
+                      {canSort && (
+                        <>
+                          <button
+                            aria-label={`Move ${h.title} earlier`}
+                            disabled={index === 0}
+                            onClick={() => void move(index, index - 1)}
+                            className="grid h-6 w-6 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-runfree-magentaDeep disabled:opacity-30"
+                          >
+                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
+                              <path d="M12.5 4.5 7 10l5.5 5.5" />
+                            </svg>
+                          </button>
+                          <button
+                            aria-label={`Move ${h.title} later`}
+                            disabled={index === order.length - 1}
+                            onClick={() => void move(index, index + 1)}
+                            className="grid h-6 w-6 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-runfree-magentaDeep disabled:opacity-30"
+                          >
+                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
+                              <path d="M7.5 4.5 13 10l-5.5 5.5" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
+                      <button
+                        disabled={busy === h.id}
+                        aria-label={`Remove ${h.title}`}
+                        onClick={async () => {
+                          setBusy(h.id);
+                          try {
+                            await onRemove(h);
+                          } finally {
+                            setBusy(null);
+                          }
+                        }}
+                        className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep disabled:opacity-50"
+                      >
+                        {busy === h.id ? "Removing…" : "Remove"}
+                      </button>
+                    </span>
                   ) : undefined
                 }
               />

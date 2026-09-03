@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { LiHTMLAttributes, ReactNode } from "react";
 
 /**
  * One resource, as a card with a picture.
@@ -29,6 +29,14 @@ export type ResourceCardProps = {
   onOpen?: () => void;
   /** Rendered under the title — an Edit link, a Remove button. */
   actions?: ReactNode;
+  /**
+   * Art that draws itself — a PDF's first page rendered in the browser —
+   * used when there is no `art` URL. Andrew: "fix it to where the first
+   * page always loads from a PDF."
+   */
+  artNode?: ReactNode;
+  /** Drag handlers and the like, for a shelf that reorders its cards. */
+  liProps?: LiHTMLAttributes<HTMLLIElement>;
 };
 
 export default function ResourceCard({
@@ -39,6 +47,8 @@ export default function ResourceCard({
   href,
   onOpen,
   actions,
+  artNode,
+  liProps,
 }: ResourceCardProps) {
   const isVideo = media === "video";
 
@@ -73,6 +83,8 @@ export default function ResourceCard({
           loading="lazy"
           className="h-full w-full object-contain"
         />
+      ) : artNode ? (
+        artNode
       ) : (
         <span
           className={`grid h-full w-full place-items-center ${
@@ -139,7 +151,7 @@ export default function ResourceCard({
   );
 
   return (
-    <li className="min-w-0">
+    <li {...liProps} className={`min-w-0 ${liProps?.className ?? ""}`}>
       {onOpen ? (
         <button
           onClick={onOpen}

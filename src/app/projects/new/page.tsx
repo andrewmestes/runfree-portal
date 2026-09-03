@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getCurrentProfile, logout } from "@/lib/auth";
 import { createProject, listTemplates, type TemplateSummary } from "@/lib/projects";
+import { seedDefaultHighlights } from "@/lib/highlights";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
@@ -84,6 +85,16 @@ export default function NewProjectPage() {
         templateId: templateId || null,
         isGroup,
       });
+      // The template's default highlights (075) — best effort, never a
+      // reason to fail a project that already exists.
+      const defaults = templates.find((t) => t.id === templateId)?.ui.default_highlights ?? [];
+      if (defaults.length > 0) {
+        try {
+          await seedDefaultHighlights(accessToken, id, defaults);
+        } catch (err) {
+          console.warn("Default highlights were not added:", err);
+        }
+      }
       router.push(`/projects/${id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't create the project");

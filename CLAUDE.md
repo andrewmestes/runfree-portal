@@ -1295,6 +1295,30 @@ onboarding form) are all in place so nothing is lost when they come. A
 per-project custom GROUP (not just cards inside "Coach's Tools") would need
 project-level groups, which the schema does not have yet.
 
+## The Read & Watch shelf draws PDFs and takes an order (075)
+
+Andrew: "when I just added that resource to Athena's project, there's no
+image that loads. Please fix it to where the first page always loads from a
+PDF. Also, I'd like to be able to reorder anything on that shelf."
+
+A PDF highlight with no cover renders its own first page through the
+existing `PdfThumbnail` (pdf.js in the browser, cached in localStorage by
+file): `HighlightShelf` takes `fetchPdfBytes`, which the page answers from
+`/handouts/file/{id}` for a Drive handout and from the signed URL for a
+stored file. `ResourceCard` grew `artNode` for exactly this. Reordering is
+drag on a desktop and ‹ › arrows anywhere, persisted by `reorderHighlights`
+(positions 0..n); the shelf keeps a local order so a drop lands before the
+round trip. The same pattern went onto a section's "From our sessions" cards
+(`SessionCards`, `reorderDeliverables`), which Andrew asked for in the same
+breath.
+
+`templates.ui.default_highlights` names handout titles to highlight on a
+brand-new project — "Preparation Checklist" on Pivvot. The New Project page
+calls `seedDefaultHighlights` after `createProject`, matching titles against
+the handout library the project just inherited; best effort, and the
+shortest matching title wins. Athena's was added by hand and is the same
+Drive file.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

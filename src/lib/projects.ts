@@ -74,6 +74,8 @@ export type TemplateUi = {
   feedback?: string[];
   feedback_rating?: string;
   baseline_group?: string;
+  /** Handout titles highlighted on a new project at creation (075). */
+  default_highlights?: string[];
 };
 
 export type PrepItem = {
@@ -527,6 +529,7 @@ export type TemplateSummary = {
   slug: string;
   description: string | null;
   isGroup: boolean;
+  ui: TemplateUi;
 };
 
 /** Staff-only per read_templates — used to populate the "start from a template" picker. */
@@ -534,7 +537,7 @@ export async function listTemplates(accessToken: string): Promise<TemplateSummar
   const client = createUserClient(accessToken);
   const { data, error } = await client
     .from("templates")
-    .select("id, name, slug, description, is_group")
+    .select("id, name, slug, description, is_group, ui")
     .eq("is_active", true)
     .order("name", { ascending: true });
   if (error) throw error;
@@ -544,6 +547,7 @@ export async function listTemplates(accessToken: string): Promise<TemplateSummar
     slug: t.slug,
     description: t.description,
     isGroup: t.is_group,
+    ui: (t.ui ?? {}) as TemplateUi,
   }));
 }
 

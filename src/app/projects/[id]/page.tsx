@@ -99,6 +99,7 @@ import {
   listHighlights,
   type CatalogueEntry,
   type Highlight,
+  reorderHighlights,
 } from "@/lib/highlights";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
@@ -1180,6 +1181,49 @@ export default function ProjectDetailPage() {
     [imageUrls]
   );
 
+  // A PDF highlight's bytes, for the first-page art on the shelf (075).
+  const fetchHighlightPdf = useCallback(
+    async (h: Highlight): Promise<ArrayBuffer | null> => {
+      try {
+        if (h.source_kind === "handout" && h.source_id) {
+          if (!accessToken) return null;
+          const res = await fetch(`/api/projects/${projectId}/handouts/file/${h.source_id}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          return res.ok ? await res.arrayBuffer() : null;
+        }
+        if (h.file_path) {
+          const url = imageUrls[h.file_path];
+          if (!url) return null;
+          const res = await fetch(url);
+          return res.ok ? await res.arrayBuffer() : null;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    [accessToken, projectId, imageUrls]
+  );
+
+  // Andrew: "I'd like to be able to reorder anything on that shelf."
+  const reorderHighlightsOnShelf = useCallback(
+    async (ids: string[]) => {
+      if (!accessToken) return;
+      setHighlights((prev) => {
+        const byId = new Map(prev.map((h) => [h.id, h]));
+        return ids
+          .map((id, i) => {
+            const h = byId.get(id);
+            return h ? { ...h, position: i } : null;
+          })
+          .filter((h): h is Highlight => h !== null);
+      });
+      await reorderHighlights(accessToken, ids);
+    },
+    [accessToken]
+  );
+
   const removeHighlight = useCallback(
     async (h: Highlight) => {
       if (!accessToken) return;
@@ -1892,6 +1936,8 @@ export default function ProjectDetailPage() {
                 onOpenHighlight={openHighlight}
                 onAddHighlights={() => setPicking(true)}
                 onRemoveHighlight={removeHighlight}
+                onReorderHighlights={reorderHighlightsOnShelf}
+                fetchPdfBytes={fetchHighlightPdf}
                 onGoTo={goPanel}
                 onChanged={refresh}
               />
@@ -5147,6 +5193,8 @@ function DashboardPanel({
   onOpenHighlight,
   onAddHighlights,
   onRemoveHighlight,
+  onReorderHighlights,
+  fetchPdfBytes,
   onGoTo,
   onChanged,
 }: {
@@ -5167,6 +5215,8 @@ function DashboardPanel({
   onOpenHighlight: (h: Highlight) => void;
   onAddHighlights: () => void;
   onRemoveHighlight: (h: Highlight) => Promise<void>;
+  onReorderHighlights: (ids: string[]) => Promise<void>;
+  fetchPdfBytes: (h: Highlight) => Promise<ArrayBuffer | null>;
   onGoTo: (key: string) => void;
   onChanged: () => void;
 }) {
@@ -5234,6 +5284,8 @@ function DashboardPanel({
         onOpen={onOpenHighlight}
         onAdd={onAddHighlights}
         onRemove={onRemoveHighlight}
+        onReorder={onReorderHighlights}
+        fetchPdfBytes={fetchPdfBytes}
       />
 
       {/* No process card. It was added to fill an empty-looking dashboard,
@@ -6540,6 +6592,31 @@ function SessionCards({
 }) {
   const [adding, setAdding] = useState(false);
 
+  // Andrew: "In 'the process' where I would upload docs or notes 'from our
+  // sessions' i want the ability to reorder those cards." Drag on a desktop,
+  // the arrows anywhere; the order lands locally first and is saved behind.
+  const [order, setOrder] = useState(items);
+  const itemIds = items.map((d) => d.id).join("|");
+  useEffect(() => {
+    setOrder(items);
+  }, [itemIds, items]);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragTo, setDragTo] = useState<number | null>(null);
+  const canSort = canEdit && order.length > 1;
+  async function move(from: number, to: number) {
+    if (from === to || to < 0 || to >= order.length || !accessToken) return;
+    const next = [...order];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setOrder(next);
+    try {
+      await reorderDeliverables(accessToken, next.map((d) => d.id));
+      onChanged();
+    } catch {
+      setOrder(items);
+    }
+  }
+
   if (items.length === 0 && !canEdit) {
     return (
       <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">
@@ -6550,16 +6627,43 @@ function SessionCards({
 
   return (
     <div className="space-y-3">
-      {items.map((d) => (
-        <SessionCard
+      {order.map((d, index) => (
+        <div
           key={d.id}
-          item={d}
-          imageUrls={imageUrls}
-          files={cardFiles.filter((f) => f.deliverable_id === d.id)}
-          canEdit={canEdit}
-          accessToken={accessToken}
-          onChanged={onChanged}
-        />
+          draggable={canSort}
+          onDragStart={() => canSort && setDragFrom(index)}
+          onDragEnter={() => canSort && dragFrom !== null && setDragTo(index)}
+          onDragOver={(e) => canSort && dragFrom !== null && e.preventDefault()}
+          onDrop={(e) => {
+            if (dragFrom !== null && dragTo !== null) {
+              e.preventDefault();
+              void move(dragFrom, dragTo);
+            }
+            setDragFrom(null);
+            setDragTo(null);
+          }}
+          onDragEnd={() => {
+            setDragFrom(null);
+            setDragTo(null);
+          }}
+          className={`rounded-xl transition ${dragFrom === index ? "opacity-40" : ""} ${
+            dragTo === index && dragFrom !== null && dragFrom !== index
+              ? "ring-2 ring-runfree-magenta ring-offset-2"
+              : ""
+          } ${canSort ? "cursor-grab active:cursor-grabbing" : ""}`}
+        >
+          <SessionCard
+            item={d}
+            imageUrls={imageUrls}
+            files={cardFiles.filter((f) => f.deliverable_id === d.id)}
+            canEdit={canEdit}
+            accessToken={accessToken}
+            onChanged={onChanged}
+            onMove={canSort ? (dir) => void move(index, index + dir) : undefined}
+            isFirst={index === 0}
+            isLast={index === order.length - 1}
+          />
+        </div>
       ))}
 
       {canEdit &&
@@ -6594,6 +6698,9 @@ function SessionCard({
   canEdit,
   accessToken,
   onChanged,
+  onMove,
+  isFirst = false,
+  isLast = false,
 }: {
   item: ProjectDetail["deliverables"][number];
   imageUrls: Record<string, string>;
@@ -6602,6 +6709,10 @@ function SessionCard({
   canEdit: boolean;
   accessToken: string | null;
   onChanged: () => void;
+  /** Reorder within its list; the arrows next to Edit. */
+  onMove?: (dir: -1 | 1) => void;
+  isFirst?: boolean;
+  isLast?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -6701,6 +6812,30 @@ function SessionCard({
               >
                 Edit
               </button>
+            )}
+            {onMove && (
+              <span className="flex items-center gap-0.5">
+                <button
+                  aria-label={`Move ${name} up`}
+                  disabled={isFirst}
+                  onClick={() => onMove(-1)}
+                  className="grid h-6 w-6 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-runfree-magentaDeep disabled:opacity-30"
+                >
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
+                    <path d="M4.5 12.5 10 7l5.5 5.5" />
+                  </svg>
+                </button>
+                <button
+                  aria-label={`Move ${name} down`}
+                  disabled={isLast}
+                  onClick={() => onMove(1)}
+                  className="grid h-6 w-6 place-items-center rounded-md text-gray-400 transition hover:bg-gray-100 hover:text-runfree-magentaDeep disabled:opacity-30"
+                >
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
+                    <path d="M4.5 7.5 10 13l5.5-5.5" />
+                  </svg>
+                </button>
+              </span>
             )}
           </div>
         </div>

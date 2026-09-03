@@ -11,8 +11,10 @@ import {
 } from "@/lib/god-dreams";
 import {
   addVisionTemplate,
+  removeHorizonFile,
   removeVisionTemplate,
   saveHorizonBox,
+  uploadHorizonFile,
   type ExecutionData,
 } from "@/lib/execution";
 import { Chip, EditorActions } from "./ui";
@@ -51,8 +53,30 @@ export default function BeyondDetail({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const chosen = data.templates;
+
+  async function attach(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const up = await uploadHorizonFile(accessToken, projectId, file);
+      const old = box?.file_path ?? null;
+      await saveHorizonBox(accessToken, projectId, "beyond", 0, {
+        file_path: up.path,
+        file_name: up.name,
+        file_size: up.size,
+      });
+      if (old) await removeHorizonFile(accessToken, old).catch(() => {});
+      await onChanged();
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Could not attach that file");
+    } finally {
+      setUploading(false);
+    }
+  }
   const full = chosen.length >= MAX_TEMPLATES;
 
   return (
@@ -108,6 +132,59 @@ export default function BeyondDetail({
             {richTextIsEmpty(box?.body) ? "Write it" : "Edit"}
           </button>
         )}
+      </section>
+
+      {/* The full vivid description as a document (076). Andrew: "there's a
+          PDF that they could click on that has their full vivid description."
+          It opens from the board, beside the templates. */}
+      <section>
+        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
+          The full vivid description, as a PDF
+        </h4>
+        {box?.file_path ? (
+          <p className="mt-1.5 flex flex-wrap items-center gap-3 text-sm text-runfree-ink">
+            <span className="font-medium">{box.file_name ?? "Vivid description.pdf"}</span>
+            {canEdit && (
+              <button
+                onClick={async () => {
+                  if (!confirm("Remove the attached PDF?")) return;
+                  const old = box.file_path!;
+                  await saveHorizonBox(accessToken, projectId, "beyond", 0, {
+                    file_path: null,
+                    file_name: null,
+                    file_size: null,
+                  });
+                  await removeHorizonFile(accessToken, old).catch(() => {});
+                  await onChanged();
+                }}
+                className="text-[11px] font-semibold text-gray-500 transition hover:text-rose-600"
+              >
+                Remove
+              </button>
+            )}
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-gray-500">
+            The church&rsquo;s written vivid description, opened from the board with one click.
+          </p>
+        )}
+        {canEdit && (
+          <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink">
+            {uploading ? "Attaching…" : box?.file_path ? "Replace the PDF" : "Attach a PDF"}
+            <input
+              type="file"
+              accept="application/pdf"
+              className="sr-only"
+              disabled={uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void attach(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
+        {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
       </section>
 
       <section>

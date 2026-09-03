@@ -1208,6 +1208,7 @@ export type Database = {
           project_id: string;
           grouping: "strategy_input" | "measure_output";
           label: string;
+          category: string | null;
           prior_year: string | null;
           current: string | null;
           next_year: string | null;
@@ -1220,6 +1221,7 @@ export type Database = {
           project_id: string;
           grouping?: "strategy_input" | "measure_output";
           label: string;
+          category?: string | null;
           prior_year?: string | null;
           current?: string | null;
           next_year?: string | null;
@@ -1230,6 +1232,7 @@ export type Database = {
         Update: {
           grouping?: "strategy_input" | "measure_output";
           label?: string;
+          category?: string | null;
           prior_year?: string | null;
           current?: string | null;
           next_year?: string | null;
@@ -1261,6 +1264,10 @@ export type Database = {
           where_we_stand: string | null;
           where_were_headed: string | null;
           how_well_get_there: string | null;
+          title: string | null;
+          file_path: string | null;
+          file_name: string | null;
+          file_size: number | null;
           position: number;
           updated_at: string;
         };
@@ -1272,6 +1279,10 @@ export type Database = {
           where_we_stand?: string | null;
           where_were_headed?: string | null;
           how_well_get_there?: string | null;
+          title?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_size?: number | null;
           position?: number;
           updated_at?: string;
         };
@@ -1280,6 +1291,10 @@ export type Database = {
           where_we_stand?: string | null;
           where_were_headed?: string | null;
           how_well_get_there?: string | null;
+          title?: string | null;
+          file_path?: string | null;
+          file_name?: string | null;
+          file_size?: number | null;
           position?: number;
           updated_at?: string;
         };

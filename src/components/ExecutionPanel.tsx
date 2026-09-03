@@ -12,6 +12,7 @@ import {
   nextRenewalStop,
   renewalCycle,
   effectiveCurrent,
+  signedFileUrl,
   type ExecutionData,
 } from "@/lib/execution";
 import HorizonBoard, { VisionFrameMark, type Selection } from "./execution/HorizonBoard";
@@ -84,6 +85,8 @@ export default function ExecutionPanel({
    */
   const defaulted = useRef(false);
   const [showFinished, setShowFinished] = useState(false);
+  // Bumped when an empty Foreground slot is clicked; AddInitiative opens on it.
+  const [addSignal, setAddSignal] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -115,7 +118,9 @@ export default function ExecutionPanel({
       if (data.initiatives.find((i) => i.id === focusInitiativeId)?.is_complete) setShowFinished(true);
     } else if (live.length > 0) setSelected({ band: "foreground", id: live[0].id });
     else if (data.horizon.some((h) => h.horizon === "midground")) setSelected({ band: "midground" });
-    else if (data.horizon.length > 0 || canEdit) setSelected({ band: "beyond" });
+    // The Beyond detail is the editor (076) — the vision itself is on the
+    // board — so a reader is not landed on it.
+    else if (canEdit) setSelected({ band: "beyond" });
   }, [data, selected, canEdit, focusInitiativeId]);
 
   // A selected initiative that has since been deleted would leave the detail
@@ -134,9 +139,14 @@ export default function ExecutionPanel({
   return (
     <section className="pb-16">
       <header className="text-center">
-        <VisionFrameMark className="mx-auto h-9 w-9 text-runfree-navy" />
+        {/* God Dreams' own Execute mark, over the Vision Frame window. */}
+        <span className="mx-auto flex items-center justify-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/god-dreams/execute-icon.png" alt="" className="h-12 w-12" />
+          <VisionFrameMark className="h-8 w-8 text-runfree-navy/60" />
+        </span>
         <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
-          The Horizon Storyline, run
+          God Dreams · The Horizon Storyline, run
         </p>
         <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
           Execution
@@ -161,15 +171,28 @@ export default function ExecutionPanel({
             <BlockHeading
               eyebrow="One page, four horizons"
               title="Horizon Storyline"
-              note="Click any box to open it. Beyond the horizon sets the direction, the three-year vision names the priorities, this year's milestone makes it measurable, and the ninety-day initiatives are what your team is actually doing about it."
+              note="The Beyond-the-Horizon Vision sets the direction, the Background Horizon names four objectives for three years, the Mid-Ground Horizon makes this year measurable, and the Foreground Horizon is the four initiatives your team is moving in the next ninety days. Click an objective, the goal or an initiative to open it."
             />
             <HorizonBoard
               data={data}
               selected={selected}
               onSelect={setSelected}
               canEdit={canEdit}
+              onOpenFile={async (path) => {
+                const url = await signedFileUrl(accessToken, path);
+                if (url) window.open(url, "_blank", "noopener");
+              }}
+              onAddInitiative={canEdit ? () => setAddSignal((n) => n + 1) : undefined}
             />
-            {canEdit && <AddInitiative data={data} projectId={projectId} accessToken={accessToken} onChanged={load} />}
+            {canEdit && (
+              <AddInitiative
+                data={data}
+                projectId={projectId}
+                accessToken={accessToken}
+                onChanged={load}
+                signal={addSignal}
+              />
+            )}
 
             {/* Finished initiatives are the record of what the church did.
                 Marking one finished used to make it vanish from the only list
@@ -223,7 +246,7 @@ export default function ExecutionPanel({
                   : undefined
               }
             >
-              {selected.band === "beyond" && (
+              {selected.band === "beyond" && canEdit && (
                 <BeyondDetail
                   data={data}
                   projectId={projectId}
@@ -295,13 +318,13 @@ export default function ExecutionPanel({
 function detailEyebrow(s: Selection): string {
   switch (s.band) {
     case "beyond":
-      return "Beyond the horizon · 5–20 years";
+      return "Beyond-the-Horizon Vision · 5–20 years";
     case "background":
-      return "Background vision · 3 years";
+      return "Background Horizon · 3 years";
     case "midground":
-      return "Midground milestone · 1 year";
+      return "Mid-Ground Horizon · 1 year";
     case "foreground":
-      return "Foreground initiative · 90 days";
+      return "Foreground Horizon · 90 days · initiative dashboard";
   }
 }
 
@@ -309,9 +332,12 @@ function detailTitle(s: Selection, data: ExecutionData): string {
   if (s.band === "foreground") {
     return data.initiatives.find((i) => i.id === s.id)?.name ?? "Initiative";
   }
-  if (s.band === "background") return `Priority ${s.position + 1}`;
-  if (s.band === "midground") return "This year's milestone";
-  return "The long-range vision";
+  if (s.band === "background") {
+    const box = data.horizon.find((h) => h.horizon === "background" && h.position === s.position);
+    return box?.title?.trim() || `Objective ${s.position + 1}`;
+  }
+  if (s.band === "midground") return "The one-year goal";
+  return "Edit the vision";
 }
 
 /**
@@ -374,15 +400,21 @@ function AddInitiative({
   projectId,
   accessToken,
   onChanged,
+  signal = 0,
 }: {
   data: ExecutionData;
   projectId: string;
   accessToken: string;
   onChanged: () => Promise<void>;
+  /** Changes when an empty slot on the board is clicked. */
+  signal?: number;
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const live = data.initiatives.filter((i) => !i.is_complete).length;
+  useEffect(() => {
+    if (signal > 0) setAdding(true);
+  }, [signal]);
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-3">

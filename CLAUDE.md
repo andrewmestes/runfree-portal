@@ -1319,6 +1319,55 @@ the handout library the project just inherited; best effort, and the
 shortest matching title wins. Athena's was added by hand and is the same
 Drive file.
 
+## The Horizon Storyline, in God Dreams' own words (076)
+
+Andrew, 4 Sept 2026, on the Execution tab: "make sure that we add the
+correct language." The bands are now Beyond-the-Horizon Vision (5–20
+years), Background Horizon (3 years, four OBJECTIVES — "we typically call
+those objectives, not priorities"), Mid-Ground Horizon (the one-year goal)
+and Foreground Horizon (four 90-day initiatives). `HORIZON_DEFINITIONS` in
+`god-dreams.ts` carries the four definitions verbatim from The Horizon
+Storyline Overview handout; the Mid-Ground detail quotes its one.
+
+**The vision is said up front.** The Beyond box is two columns: the vivid
+description in full on the left (an editor's click opens the editor; a
+reader gets text, not a button), and on the right the church's two vision
+templates with their icons plus "The full vivid description" — a PDF on the
+`horizon_storyline` row (`file_path`, uploaded to `{project_id}/…` by
+`uploadHorizonFile`, opened through a signed URL). Andrew: "that way, we can
+remove the section underneath the horizon storyline that says the long
+range vision." So the Beyond detail is editor-only now and titled "Edit the
+vision"; a reader is never landed on it.
+
+**Objectives have a title and a description** (`horizon_storyline.title`;
+`body` is the description; the three notes columns stay). The board shows
+the title bold with the description clamped under it.
+
+**The Foreground always shows four slots.** Empty ones read "Initiative N";
+an editor's click on one opens the add form (AddInitiative's `signal`).
+Opening an initiative is its dashboard: owner ("Leader" became "Owner"),
+light, the strip (steps by colour, past due, cost, days left), the plan's
+six blocks, the action steps with owner/cost/light. Nothing new stored —
+Andrew's "each one of the four ninety day initiatives has the ability to be
+tracked" was already the shape; it just had the wrong words on it.
+
+**The Mid-Ground gauge is God Dreams' mosaic.** `MeasureMosaic` lights a row
+of tiles in the visual summary's palette (teal → gold → orange → magenta)
+from baseline to target — compact on the board, full with captions in the
+detail. Progress still counts from the baseline. The Execute icon from the
+God Dreams logo set heads the panel.
+
+**The Ministry Dashboard is a Measures Dashboard.** Andrew: "omit the
+strategy input for, like, attendance … move more towards the measures
+output … fully customizable … categories like a header as well as the
+individual measures." `scoreboard_metrics.category` is the header; rows are
+`measure_output`; a new header is created with its first measure; headers
+rename by rewriting their rows. Prior / Now / Goal (next yr.) stay, with the
+light and the trend, and a `Trajectory` line under any row whose three
+numbers parse. Athena's nine seeded strategy-input rows are not deleted —
+they fold away under "strategy inputs — set aside for now". `DASHBOARD_STARTER`
+is no longer offered.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

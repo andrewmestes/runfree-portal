@@ -5,7 +5,7 @@ import RichText, { RichTextView } from "@/components/RichText";
 import { richTextIsEmpty } from "@/lib/rich-text";
 import { BACKGROUND_NOTE_FIELDS } from "@/lib/god-dreams";
 import { saveHorizonBox, type ExecutionData, type HorizonBox } from "@/lib/execution";
-import { EditorActions } from "./ui";
+import { Cell, EditorActions } from "./ui";
 
 /**
  * One Background Vision priority, opened.
@@ -60,12 +60,27 @@ export default function BackgroundDetail({
 
   return (
     <div className="space-y-6">
+      {/* The objective's title (076). Andrew: "a title for the background
+          horizon objective and a full description that ties along with it." */}
       <section>
-        {/* Not "Priority N" — the detail shell above already says that, and
-            a heading that repeats the heading above it is the redundancy
-            Andrew flagged on the foreground. This names the field. */}
         <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-          In one line
+          Title
+        </h4>
+        <Cell
+          value={box?.title ?? null}
+          onSave={(v) =>
+            void saveHorizonBox(accessToken, projectId, "background", position, { title: v }).then(onChanged)
+          }
+          disabled={!canEdit}
+          placeholder={`Objective ${position + 1} — a name the team can say`}
+          ariaLabel="Objective title"
+          className="!px-0 font-display !text-lg font-extrabold tracking-tight !text-runfree-ink"
+        />
+      </section>
+
+      <section>
+        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
+          The objective, in full
         </h4>
         {editing === "body" ? (
           <div className="mt-2 space-y-2">
@@ -73,7 +88,7 @@ export default function BackgroundDetail({
               value={draft}
               onChange={setDraft}
               minHeight="6rem"
-              placeholder="One of the handful of things that must be true in three years."
+              placeholder="One of the four things that must be true in three years — a sentence or two, and why it matters."
             />
             <EditorActions busy={busy} onSave={() => save("body")} onCancel={() => setEditing(null)} />
           </div>

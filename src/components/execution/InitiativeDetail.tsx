@@ -98,12 +98,12 @@ export default function InitiativeDetail({
 
       {/* ------------------------------------------------- header fields */}
       <div className="grid gap-x-5 gap-y-3 rounded-xl bg-gray-50 px-4 py-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Leader">
+        <Field label="Owner">
           <Cell
             value={i.leader}
             onSave={(v) => void patch({ leader: v })}
             disabled={!canEdit}
-            placeholder="Who owns this"
+            placeholder="Who is in charge of this initiative"
           />
         </Field>
         <Field label="Team">
@@ -148,7 +148,7 @@ export default function InitiativeDetail({
       {/* ------------------------------------------------------- the plan */}
       <section>
         <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-          Initiative plan
+          The initiative — definition, deliverables, plan, timeline, costs
         </h4>
         <div className="mt-2 space-y-3">
           {PLAN_FIELDS.map((f) => {

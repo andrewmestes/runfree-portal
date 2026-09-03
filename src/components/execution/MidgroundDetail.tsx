@@ -3,13 +3,13 @@
 import { useState } from "react";
 import RichText, { RichTextView } from "@/components/RichText";
 import { richTextIsEmpty } from "@/lib/rich-text";
-import { MIDGROUND_TESTS } from "@/lib/god-dreams";
+import { HORIZON_DEFINITIONS, MIDGROUND_TESTS } from "@/lib/god-dreams";
+import { MeasureMosaic } from "./MeasureMosaic";
 import {
   createMeasure,
   deleteMeasure,
   deleteReading,
   logReading,
-  measureProgress,
   saveHorizonBox,
   updateMeasure,
   effectiveCurrent,
@@ -69,8 +69,14 @@ export default function MidgroundDetail({
     <div className="space-y-6">
       <section>
         <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-          The milestone
+          The one-year goal — qualitative and quantitative
         </h4>
+        {/* God Dreams' own definition, verbatim (Andrew: "give the specific
+            definition from the book"). */}
+        <blockquote className="mt-2 rounded-xl border-l-4 border-runfree-magenta/40 bg-white px-4 py-3 text-xs leading-relaxed text-gray-600 ring-1 ring-gray-200">
+          {HORIZON_DEFINITIONS.midground.definition}
+          <span className="mt-1 block text-[11px] text-gray-400">— God Dreams, The Horizon Storyline</span>
+        </blockquote>
         {editing ? (
           <div className="mt-2 space-y-2">
             <RichText
@@ -232,9 +238,7 @@ function MeasureRow({
 
   // The latest reading wins over the stamped column — see effectiveCurrent.
   const current = effectiveCurrent(m, readings);
-  const pct = measureProgress(m, current);
   const unit = m.unit ?? "";
-  const num = (v: number | null | undefined) => (v == null ? "—" : `${v}${unit}`);
 
   const patch = async (p: Parameters<typeof updateMeasure>[2]) => {
     await updateMeasure(accessToken, m.id, p);
@@ -252,33 +256,13 @@ function MeasureRow({
             className="!px-0 font-semibold !text-runfree-ink"
           />
         </div>
-        <p className="shrink-0 font-display text-lg font-extrabold tabular-nums text-runfree-ink">
-          {num(current)}
-          <span className="ml-1 text-xs font-semibold text-gray-500">
-            of {num(m.target)}
-          </span>
-        </p>
       </div>
 
-      {/* The gauge. Baseline sits at the left edge, target at the right —
-          which is why the label under it says where the baseline was, not
-          zero. */}
+      {/* The mosaic — God Dreams' tiles, lit from the baseline to the
+          target. The row above already carries the label and the number;
+          the mosaic repeats them small, so the caller hides its own. */}
       <div className="mt-2">
-        <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-          <div
-            className="h-full rounded-full bg-runfree-grad transition-all"
-            style={{ width: `${Math.round((pct ?? 0) * 100)}%` }}
-          />
-        </div>
-        <div className="mt-1 flex items-baseline justify-between text-[11px] text-gray-400">
-          <span>Baseline {num(m.baseline)}</span>
-          {pct != null && (
-            <span className="font-semibold text-runfree-magentaDeep">
-              {Math.round(pct * 100)}% of the way
-            </span>
-          )}
-          <span>Target {num(m.target)}</span>
-        </div>
+        <MeasureMosaic measure={m} readings={readings} tiles={24} />
       </div>
 
       {readings.length >= 2 && (

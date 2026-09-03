@@ -76,6 +76,8 @@ export type ScoreboardMetric = {
   id: string;
   project_id: string;
   grouping: ScoreboardGroup;
+  /** A header the church names — "Bible reading", "Evangelism" (076). */
+  category: string | null;
   label: string;
   prior_year: string | null;
   current: string | null;
@@ -97,6 +99,12 @@ export type HorizonBox = {
   where_we_stand: string | null;
   where_were_headed: string | null;
   how_well_get_there: string | null;
+  /** A Background objective's title (076); `body` is its full description. */
+  title: string | null;
+  /** The Beyond-the-Horizon vivid description as a PDF (076), under {project_id}/. */
+  file_path: string | null;
+  file_name: string | null;
+  file_size: number | null;
   position: number;
   updated_at: string;
 };
@@ -166,7 +174,7 @@ export const HORIZONS: {
 }[] = [
   {
     key: "beyond",
-    label: "Beyond the Horizon",
+    label: "Beyond-the-Horizon Vision",
     span: "5–20 years",
     boxes: 1,
     prompt:
@@ -174,17 +182,17 @@ export const HORIZONS: {
   },
   {
     key: "background",
-    label: "Background Vision",
+    label: "Background Horizon",
     span: "3 years",
     boxes: 4,
-    prompt: "The handful of things that must be true in three years.",
+    prompt: "The four objectives that must be true in three years.",
   },
   {
     key: "midground",
-    label: "Midground Milestone",
+    label: "Mid-Ground Horizon",
     span: "1 year",
     boxes: 1,
-    prompt: "The one marker that says this year counted.",
+    prompt: "The one-year goal — an inspiring picture and a measurable number.",
   },
 ];
 
@@ -358,11 +366,12 @@ export async function createMetric(
   projectId: string,
   grouping: ScoreboardGroup,
   label: string,
-  position: number
+  position: number,
+  category: string | null = null
 ): Promise<ScoreboardMetric> {
   const { data, error } = await createUserClient(accessToken)
     .from("scoreboard_metrics")
-    .insert({ project_id: projectId, grouping, label, position })
+    .insert({ project_id: projectId, grouping, label, position, category })
     .select("*")
     .single();
   if (error) throw error;
@@ -420,7 +429,19 @@ export async function saveHorizonBox(
   projectId: string,
   horizon: HorizonBand,
   position: number,
-  patch: Partial<Pick<HorizonBox, "body" | "where_we_stand" | "where_were_headed" | "how_well_get_there">>
+  patch: Partial<
+    Pick<
+      HorizonBox,
+      | "body"
+      | "where_we_stand"
+      | "where_were_headed"
+      | "how_well_get_there"
+      | "title"
+      | "file_path"
+      | "file_name"
+      | "file_size"
+    >
+  >
 ): Promise<void> {
   const { error } = await createUserClient(accessToken)
     .from("horizon_storyline")
@@ -435,6 +456,41 @@ export async function saveHorizonBox(
       { onConflict: "project_id,horizon,position" }
     );
   if (error) throw error;
+}
+
+/**
+ * The Beyond-the-Horizon vivid description as a file (076). Stored under the
+ * project's own folder in the private bucket, like a session document, so
+ * the existing storage policies (editors write, members read) apply.
+ */
+const BUCKET = "deliverable-images";
+
+export async function uploadHorizonFile(
+  accessToken: string,
+  projectId: string,
+  file: File
+): Promise<{ path: string; name: string; size: number }> {
+  const ext = (file.name.split(".").pop() || "pdf").toLowerCase().replace(/[^a-z0-9]/g, "") || "pdf";
+  const path = `${projectId}/horizon-beyond-${Date.now()}.${ext}`;
+  const { error } = await createUserClient(accessToken)
+    .storage.from(BUCKET)
+    .upload(path, file, { contentType: file.type || "application/pdf", upsert: false });
+  if (error) throw error;
+  return { path, name: file.name, size: file.size };
+}
+
+export async function removeHorizonFile(accessToken: string, path: string): Promise<void> {
+  const { error } = await createUserClient(accessToken).storage.from(BUCKET).remove([path]);
+  if (error) throw error;
+}
+
+/** A short-lived link to a stored file, for opening the vision PDF. */
+export async function signedFileUrl(accessToken: string, path: string): Promise<string | null> {
+  const { data, error } = await createUserClient(accessToken)
+    .storage.from(BUCKET)
+    .createSignedUrl(path, 60 * 60);
+  if (error) return null;
+  return data?.signedUrl ?? null;
 }
 
 /* ------------------------------------------- midground measures & readings */

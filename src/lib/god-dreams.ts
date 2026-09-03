@@ -240,6 +240,69 @@ export const FOREGROUND_MIX: { size: string; mix: InitiativeKind[] }[] = [
   },
 ];
 
+/* ------------------------------------------------ the horizon definitions */
+
+/**
+ * "Horizon Storyline Definitions", from The Horizon Storyline Overview
+ * handout — verbatim, for the same reason as everything else in this file.
+ * Andrew, 4 Sept 2026: "Maybe even give the specific definition from the
+ * book God Dreams there."
+ */
+export const HORIZON_DEFINITIONS: Record<
+  "beyond" | "background" | "midground" | "foreground",
+  { name: string; span: string; definition: string; benefits: string[] }
+> = {
+  beyond: {
+    name: "Beyond-the-Horizon Vision",
+    span: "5–20 years",
+    definition:
+      "The beyond-the-horizon vision is a vivid picture of a church's future five to twenty years away depending on the life stage and context of the church. It is an aspirational sense of destination and clarifies the church's ultimate contribution for the given time frame. It should build from a singular idea that can be stated as both a sentence and a vivid description narrative. It is primarily qualitative and will have a compelling character that feels almost unbelievable to the listener.",
+    benefits: [
+      "Shapes the destiny of the whole congregation.",
+      "Creates deeper meaning for individuals.",
+      "Cultivates heroic sacrifice among people.",
+      "Guides the development of long-term strategy (background).",
+    ],
+  },
+  background: {
+    name: "Background Horizon",
+    span: "3 years",
+    definition:
+      "The background vision contains four ideas, primarily qualitative, that clarify the four most strategic emphases in the next three years in order to fulfill the beyond-the-horizon vision. Each emphasis can be stated in one or two sentences. The background vision is not designed to inspire but to clarify.",
+    benefits: [
+      "Creates a broad-level road map to approach the future.",
+      "Directs long-term allocation of church resources.",
+      "Limits blind spots that would inhibit progress.",
+      "Provides context for short-range goal setting (midground).",
+    ],
+  },
+  midground: {
+    name: "Mid-Ground Horizon",
+    span: "1 year",
+    definition:
+      "The midground vision is a single emphasis stated as both a qualitative and quantitative goal in the next year. That means the midground or one-year vision should be both an inspiring picture and a measurable number. They accompany each other. Like the beyond-the-horizon vision, the midground vision is designed to inspire people and stretch their thinking of what might be possible. It can be stated in one sentence and adapted regularly for communication every day.",
+    benefits: [
+      "Generates excitement for what God is doing in the next year.",
+      "Focuses the attention, prayers, and resources of the church in a dramatic way.",
+      "Reveals progress for celebration (or recalibration).",
+      "Highlights one shared priority for all ministry areas.",
+      "Cuts through the complexity of life and ministry with one focus.",
+    ],
+  },
+  foreground: {
+    name: "Foreground Horizon",
+    span: "90 days",
+    definition:
+      "The foreground vision contains up to four specific initiatives that must be started within ninety days, as needed. The foreground initiatives are typically led by cross-functional staff teams or may be carried by individual ministry departments. Most initiatives support the midground vision directly or indirectly. Think of these as the four most important next steps in order to complete the single, midground vision.",
+    benefits: [
+      "Clarifies weekly action steps and daily priorities for leaders.",
+      "Sequences short-term projects, tasks, and goals.",
+      "Activates the unique gifts and abilities within the body.",
+      "Provides regular, positive accountability for individuals and teams.",
+    ],
+  },
+};
+
 /* ------------------------------------------- background vision note columns */
 
 /** The three columns of "Background Vision Notes - 3 years". */

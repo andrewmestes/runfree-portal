@@ -424,6 +424,7 @@ export type Database = {
           file_path: string | null;
           file_name: string | null;
           file_size: number | null;
+          thumb_path: string | null;
           /** Marks the combined module handout, which renders large; the rest render small beneath it. */
           is_primary: boolean;
           position: number;
@@ -441,6 +442,7 @@ export type Database = {
           file_path?: string | null;
           file_name?: string | null;
           file_size?: number | null;
+          thumb_path?: string | null;
           is_primary?: boolean;
           position?: number;
           created_at?: string;
@@ -455,6 +457,7 @@ export type Database = {
           file_path?: string | null;
           file_name?: string | null;
           file_size?: number | null;
+          thumb_path?: string | null;
           is_primary?: boolean;
           position?: number;
         };

@@ -1203,6 +1203,19 @@ the files were pulled first.
    now means "no Vision Frame sheet" (070) — null still means all seven — so
    the church frame does not sit above a coaching client's thrill lists.
 
+**Covers (071).** `template_resources.thumb_path` — a cover under
+`templates/{id}/thumbs/`, read by the same policy as the documents. A section
+whose walkthrough has any cover renders as `ResourceShelf` (a ranked grid of
+3:4 tiles, PDF/Link pills) instead of the numbered list; the eight Performance
+Practices cards were already a gallery because they ARE images. Andrew: "can
+we make the resources … a little more visual … book images/thumbnails/etc.?"
+The manifest for `import-template-files.ts` takes a `thumb` (path or URL) per
+entry, and a cover-only entry needs an existing row. The Younique chapter rows
+share the section art their Asana card had (the frame icon on chapters 9–13,
+the horizon icon on 14–25), cropped square so it fills the tile. File-backed
+template resources can be highlighted now too, cover and all — before 071 the
+catalogue only offered rows with a link.
+
 **Team or one person is the project's call now.** `projects.is_group` (069,
 null = the template's default) feeds `detail.isGroup`, which replaced every
 `detail.template?.isGroup ?? true`; the New Project page asks "Who is this

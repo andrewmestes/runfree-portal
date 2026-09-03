@@ -125,6 +125,90 @@ const PREP_HANDOUT = /prep(aration)?\s*checklist/i;
 const IMAGE_FILE = /\.(png|jpe?g|webp|gif)$/i;
 
 /**
+ * A section's resources as a shelf of covers — the coaching template's books
+ * and chapters, the way the Asana board showed them. A row with a cover shows
+ * it; one without gets a quiet document tile so the shelf stays even. Files
+ * open in the in-portal viewer, links in a new tab, and the rank stays on
+ * the corner because "Highly Recommended Resources (in ranked order)" was
+ * the point of the list.
+ */
+function ResourceShelf({
+  rows,
+  fileUrls,
+  onOpenFile,
+}: {
+  rows: ProjectDetail["resources"][number][];
+  fileUrls: Record<string, string>;
+  onOpenFile?: (signedUrl: string, title: string, sizeBytes: number | null) => void;
+}) {
+  return (
+    <ul className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
+      {rows.map((r, i) => {
+        const url = r.file_path ? fileUrls[r.file_path] : undefined;
+        const cover = r.thumb_path ? fileUrls[r.thumb_path] : undefined;
+        const href = r.external_url ? safeExternalUrl(r.external_url) : null;
+        const pill = url
+          ? r.kind === "handout"
+            ? "PDF"
+            : "Worksheet"
+          : href
+            ? r.kind === "video"
+              ? "Video"
+              : "Link"
+            : null;
+        const body = (
+          <>
+            <span className="relative block aspect-[3/4] overflow-hidden rounded-xl bg-runfree-indigo/40 ring-1 ring-gray-200">
+              {cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={cover}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-contain p-2 transition group-hover:scale-[1.03]"
+                />
+              ) : (
+                <span className="absolute inset-0 grid place-items-center text-runfree-navy/40">
+                  <DocIcon />
+                </span>
+              )}
+              <span className="absolute left-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-white/90 text-[11px] font-bold tabular-nums text-runfree-magenta shadow-sm">
+                {i + 1}
+              </span>
+              {pill && (
+                <span className="absolute bottom-2 right-2 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-magentaDeep shadow-sm">
+                  {pill}
+                  {href && !url ? " ↗" : ""}
+                </span>
+              )}
+            </span>
+            <span className="mt-2 block text-sm font-medium leading-snug text-runfree-ink">{r.title}</span>
+            {r.description && (
+              <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{r.description}</span>
+            )}
+          </>
+        );
+        const cls = "group block w-full rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta";
+        return (
+          <li key={r.id}>
+            {url && onOpenFile ? (
+              <button onClick={() => onOpenFile(url, r.title, r.file_size)} className={cls}>
+                {body}
+              </button>
+            ) : href ? (
+              <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+                {body}
+              </a>
+            ) : (
+              <div>{body}</div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
  * A numbered list of stored sheets that open in the in-portal viewer — the
  * Deliverables panel's worksheets. Same shape as a section's walkthrough,
  * without the exercise pills.
@@ -275,8 +359,10 @@ function signablePaths(detail: ProjectDetail): string[] {
     ...detail.deliverables.map((d) => d.file_path),
     ...detail.prepItems.map((p) => p.file_path),
     ...detail.prepItems.map((p) => p.thumb_path),
-    // Template worksheets (063) — Younique's LifePlan sheets and the like.
+    // Template worksheets (063) — Younique's LifePlan sheets and the like —
+    // and their covers (071).
     ...detail.resources.map((r) => r.file_path),
+    ...detail.resources.map((r) => r.thumb_path),
   ].filter((p): p is string => !!p);
 }
 
@@ -4838,6 +4924,10 @@ function ModulePanel({
   // gallery rather than a numbered list of titles.
   const cards = walkthroughAll.filter((r) => !!r.file_path && IMAGE_FILE.test(r.file_path));
   const walkthrough = walkthroughAll.filter((r) => !cards.includes(r));
+  // Covers (071) turn the numbered list into a shelf. Andrew: "can we make
+  // the resources in the coaching template a little more visual … book
+  // images/thumbnails/etc.?"
+  const hasCovers = walkthrough.some((r) => !!r.thumb_path);
 
   // Every chart for this module, including the ones a coach uploaded while
   // logging a session.
@@ -4952,7 +5042,19 @@ function ModulePanel({
           </Block>
         )}
 
-        {walkthrough.length > 0 && (
+        {walkthrough.length > 0 && hasCovers && (
+          <Block
+            title={
+              walkthrough.every((r) => r.kind === "handout")
+                ? `${walkthrough.length} document${walkthrough.length === 1 ? "" : "s"}`
+                : `${walkthrough.length} resources, in the order we recommend them`
+            }
+          >
+            <ResourceShelf rows={walkthrough} fileUrls={imageUrls} onOpenFile={onOpenFile} />
+          </Block>
+        )}
+
+        {walkthrough.length > 0 && !hasCovers && (
           <Block
             title={
               walkthrough.every((r) => r.kind === "handout")

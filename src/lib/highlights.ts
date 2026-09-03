@@ -107,21 +107,24 @@ export function buildCatalogue(
   for (const r of detail.resources) {
     // An exercise or handout with no link and no file is a label, not a
     // resource — highlighting one would put a card on the dashboard that
-    // does nothing when tapped.
-    if (!r.external_url) continue;
+    // does nothing when tapped. A stored file (063) counts: the coaching
+    // template's books are PDFs in template storage, and a coach wants to
+    // put "read this by month three" on the dashboard with its cover (071).
+    if (!r.external_url && !r.file_path) continue;
+    const isImage = !!r.file_path && /\.(png|jpe?g|webp|gif)$/i.test(r.file_path);
     out.push({
       key: `template_resource:${r.id}`,
       source_kind: "template_resource",
       source_id: r.id,
       title: r.title,
-      media_kind: r.kind === "video" ? "video" : "link",
+      media_kind: r.external_url ? (r.kind === "video" ? "video" : "link") : isImage ? "image" : "pdf",
       context: r.section,
       external_url: r.external_url,
-      file_path: null,
-      file_name: null,
-      file_mime: null,
-      file_size: null,
-      thumb_path: null,
+      file_path: r.file_path,
+      file_name: r.file_name,
+      file_mime: r.file_path ? (isImage ? "image/*" : "application/pdf") : null,
+      file_size: r.file_size,
+      thumb_path: r.thumb_path,
       thumb_url: null,
     });
   }

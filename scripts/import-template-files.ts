@@ -26,10 +26,12 @@ import { createClient } from "@supabase/supabase-js";
 type Entry = {
   section: string;
   title: string;
-  /** One of the two: a download URL, or a file already on disk. */
+  /** One of the two: a download URL, or a file already on disk. Neither, for a thumb-only entry. */
   url?: string;
   path?: string;
   name: string;
+  /** A cover image (071): a local path or a URL. Lands under templates/{id}/thumbs/. */
+  thumb?: string;
   kind?: "handout" | "exercise" | "link" | "video";
   position?: number;
   description?: string;
@@ -92,34 +94,55 @@ async function main() {
       .eq("title", f.title);
     if (qErr) throw qErr;
     const row = rows?.[0] ?? null;
-    console.log(`${row ? "attach       " : "insert+attach"}  ${f.section} › ${f.title}  ←  ${f.name}`);
+    const hasFile = !!(f.path || f.url);
+    console.log(
+      `${row ? (hasFile ? "attach       " : "thumb        ") : "insert+attach"}  ${f.section} › ${f.title}  ←  ${
+        hasFile ? f.name : "(cover only)"
+      }${f.thumb ? "  + cover" : ""}`
+    );
     if (!GO) continue;
 
-    let buf: Buffer;
-    let type: string | null;
-    if (f.path) {
+    // Bytes from disk or from a URL.
+    const load = async (src: string, label: string): Promise<{ buf: Buffer; type: string | null }> => {
+      if (/^https?:\/\//.test(src)) {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error(`${label}: HTTP ${res.status} — expired URL? list the attachments again`);
+        return { buf: Buffer.from(await res.arrayBuffer()), type: res.headers.get("content-type") };
+      }
       // Already on disk — downloaded earlier, while the Asana URLs were live.
-      buf = readFileSync(f.path);
-      type = null;
-    } else if (f.url) {
-      const res = await fetch(f.url);
-      if (!res.ok) throw new Error(`${f.name}: HTTP ${res.status} — expired URL? list the attachments again`);
-      buf = Buffer.from(await res.arrayBuffer());
-      type = res.headers.get("content-type");
-    } else {
-      throw new Error(`${f.name}: needs a url or a path`);
-    }
-    const e = ext(f.name, type);
-    if (e === "pdf" && buf.subarray(0, 4).toString() !== "%PDF") {
-      throw new Error(`${f.name}: not a PDF (${type}) — expired URL served a page instead`);
-    }
-    const path = `templates/${tpl.id}/${slug(f.title)}.${e}`;
-    const { error: upErr } = await admin.storage
-      .from(BUCKET)
-      .upload(path, buf, { contentType: MIME[e] ?? type ?? "application/octet-stream", upsert: true });
-    if (upErr) throw new Error(`${f.name}: upload — ${upErr.message}`);
+      return { buf: readFileSync(src), type: null };
+    };
 
-    const patch = { file_path: path, file_name: f.name, file_size: buf.length };
+    const patch: Record<string, string | number> = {};
+    let size = 0;
+    if (hasFile) {
+      const { buf, type } = await load((f.path ?? f.url)!, f.name);
+      const e = ext(f.name, type);
+      if (e === "pdf" && buf.subarray(0, 4).toString() !== "%PDF") {
+        throw new Error(`${f.name}: not a PDF (${type}) — expired URL served a page instead`);
+      }
+      const path = `templates/${tpl.id}/${slug(f.title)}.${e}`;
+      const { error: upErr } = await admin.storage
+        .from(BUCKET)
+        .upload(path, buf, { contentType: MIME[e] ?? type ?? "application/octet-stream", upsert: true });
+      if (upErr) throw new Error(`${f.name}: upload — ${upErr.message}`);
+      Object.assign(patch, { file_path: path, file_name: f.name, file_size: buf.length });
+      size = buf.length;
+    }
+    if (f.thumb) {
+      const { buf, type } = await load(f.thumb, `${f.title} cover`);
+      const e = ext(f.thumb.split("/").pop() ?? "", type);
+      if (!/^(png|jpe?g|webp)$/.test(e)) throw new Error(`${f.title}: cover must be png/jpg/webp, got .${e}`);
+      const tpath = `templates/${tpl.id}/thumbs/${slug(f.title)}.${e}`;
+      const { error: tErr } = await admin.storage
+        .from(BUCKET)
+        .upload(tpath, buf, { contentType: MIME[e], upsert: true });
+      if (tErr) throw new Error(`${f.title} cover: upload — ${tErr.message}`);
+      patch.thumb_path = tpath;
+    }
+    if (!hasFile && !f.thumb) throw new Error(`${f.title}: needs a url, a path, or a thumb`);
+    if (!hasFile && !row) throw new Error(`${f.title}: a cover-only entry needs an existing row`);
+
     if (row) {
       const { error: e2 } = await admin.from("template_resources").update(patch).eq("id", row.id);
       if (e2) throw e2;
@@ -136,7 +159,9 @@ async function main() {
       if (e3) throw e3;
     }
     done++;
-    console.log(`               ✓ ${path}  ${(buf.length / 1024).toFixed(0)} KB`);
+    console.log(
+      `               ✓ ${String(patch.file_path ?? patch.thumb_path)}${size ? `  ${(size / 1024).toFixed(0)} KB` : ""}`
+    );
   }
   console.log(GO ? `\n${done} file${done === 1 ? "" : "s"} attached` : "\ndry run — add --go to write");
 }

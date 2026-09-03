@@ -1820,6 +1820,146 @@ async function main() {
       await supabaseAdmin.from("midground_measures").delete().eq("project_id", projectA.id);
     }
 
+
+    // -----------------------------------------------------------------
+    // 28. The coaching round (072). A client is a viewer, and three writes
+    // are theirs to make: answers on a client-editable prep item, the
+    // pre-session prep answers, and feedback on a session. Each goes
+    // through a SECURITY DEFINER function that checks membership and, for
+    // items, the group's client_editable flag. Nothing else opens.
+    // -----------------------------------------------------------------
+    {
+      const asAdmin = createUserClient(adminA.accessToken);
+      const asViewer = createUserClient(viewerA.accessToken);
+      const asOutsider = createUserClient(viewerB.accessToken);
+
+      const { data: tpl, error: tplErr } = await supabaseAdmin
+        .from("templates")
+        .insert({ name: `RLS Coaching ${RUN}`, slug: `rls-coaching-${RUN}`, is_active: false })
+        .select("id")
+        .single();
+      if (tplErr || !tpl) throw new Error(`28 template: ${tplErr?.message}`);
+      cleanupTemplateIds.push(tpl.id);
+
+      const { data: groups, error: gErr } = await supabaseAdmin
+        .from("template_prep_groups")
+        .insert([
+          { template_id: tpl.id, section: "PREPARATION", key: "rls-open", title: "Open", kind: "notes", position: 1, client_editable: true },
+          { template_id: tpl.id, section: "PREPARATION", key: "rls-closed", title: "Closed", kind: "notes", position: 2, client_editable: false },
+        ])
+        .select("id, key");
+      if (gErr || !groups) throw new Error(`28 groups: ${gErr?.message}`);
+      const openGroup = groups.find((g) => g.key === "rls-open")!;
+      const closedGroup = groups.find((g) => g.key === "rls-closed")!;
+
+      const { data: items, error: iErr } = await supabaseAdmin
+        .from("prep_items")
+        .insert([
+          { project_id: projectA.id, group_id: openGroup.id, title: "Open question", position: 1 },
+          { project_id: projectA.id, group_id: closedGroup.id, title: "Closed question", position: 1 },
+        ])
+        .select("id, group_id");
+      if (iErr || !items) throw new Error(`28 items: ${iErr?.message}`);
+      const openItem = items.find((i) => i.group_id === openGroup.id)!;
+      const closedItem = items.find((i) => i.group_id === closedGroup.id)!;
+
+      const { error: answerErr } = await asViewer.rpc("set_prep_item_notes", {
+        p_item: openItem.id,
+        p_notes: "My answer",
+      });
+      const { data: answered } = await supabaseAdmin.from("prep_items").select("notes").eq("id", openItem.id).single();
+      record(
+        "28a. a viewer can answer a client-editable prep item",
+        !answerErr && answered?.notes === "My answer",
+        answerErr?.message ?? `notes=${answered?.notes}`
+      );
+
+      const { error: closedErr } = await asViewer.rpc("set_prep_item_notes", {
+        p_item: closedItem.id,
+        p_notes: "Should not land",
+      });
+      const { data: closedAfter } = await supabaseAdmin.from("prep_items").select("notes").eq("id", closedItem.id).single();
+      record(
+        "28b. a viewer cannot write a prep item the template did not open",
+        !!closedErr && closedAfter?.notes === null,
+        closedErr ? "correctly rejected" : `notes=${closedAfter?.notes}`
+      );
+
+      const { error: outsiderErr } = await asOutsider.rpc("set_prep_item_notes", {
+        p_item: openItem.id,
+        p_notes: "Outsider",
+      });
+      const { data: outsiderAfter } = await supabaseAdmin.from("prep_items").select("notes").eq("id", openItem.id).single();
+      record(
+        "28c. an outsider cannot answer through the function",
+        !!outsiderErr && outsiderAfter?.notes === "My answer",
+        outsiderErr ? "correctly rejected" : `notes=${outsiderAfter?.notes}`
+      );
+
+      const { data: session, error: sErr } = await asAdmin
+        .from("sessions")
+        .insert({ project_id: projectA.id, title: `RLS Session ${RUN}`, published_at: new Date().toISOString() })
+        .select("id")
+        .single();
+      if (sErr || !session) throw new Error(`28 session: ${sErr?.message}`);
+
+      const { error: prepErr } = await asViewer.rpc("submit_session_prep", {
+        p_session: session.id,
+        p_answers: ["a", "b"],
+      });
+      const { data: prepRow } = await supabaseAdmin.from("sessions").select("prep_answers").eq("id", session.id).single();
+      const prepMap = (prepRow?.prep_answers ?? {}) as Record<string, { answers?: unknown }>;
+      record(
+        "28d. a viewer can submit pre-session answers, keyed by their id",
+        !prepErr && Array.isArray(prepMap[viewerA.id]?.answers),
+        prepErr?.message ?? `keys=${Object.keys(prepMap).join(",")}`
+      );
+
+      const { error: fbOutsiderErr } = await asOutsider.rpc("submit_session_feedback", {
+        p_session: session.id,
+        p_answers: { rating: 1, answers: ["nope"] },
+      });
+      record("28e. an outsider cannot leave session feedback", !!fbOutsiderErr, fbOutsiderErr ? "correctly rejected" : "accepted");
+
+      const { error: fbErr } = await asViewer.rpc("submit_session_feedback", {
+        p_session: session.id,
+        p_answers: { rating: 9, answers: ["great"] },
+      });
+      const { data: fbRow } = await supabaseAdmin.from("sessions").select("feedback").eq("id", session.id).single();
+      const fbMap = (fbRow?.feedback ?? {}) as Record<string, unknown>;
+      record(
+        "28f. a viewer can leave session feedback",
+        !fbErr && viewerA.id in fbMap,
+        fbErr?.message ?? `keys=${Object.keys(fbMap).join(",")}`
+      );
+
+      const { error: tickErr2 } = await asViewer.rpc("set_prep_item_done", { p_item: openItem.id, p_done: true });
+      const { data: ticked } = await supabaseAdmin.from("prep_items").select("is_done").eq("id", openItem.id).single();
+      record(
+        "28h. a viewer can tick a client-editable prep item (074)",
+        !tickErr2 && ticked?.is_done === true,
+        tickErr2?.message ?? `is_done=${ticked?.is_done}`
+      );
+      const { error: tickClosedErr } = await asViewer.rpc("set_prep_item_done", { p_item: closedItem.id, p_done: true });
+      const { data: tickedClosed } = await supabaseAdmin.from("prep_items").select("is_done").eq("id", closedItem.id).single();
+      record(
+        "28i. a viewer cannot tick a prep item the template did not open",
+        !!tickClosedErr && tickedClosed?.is_done === false,
+        tickClosedErr ? "correctly rejected" : `is_done=${tickedClosed?.is_done}`
+      );
+
+      // A viewer still cannot touch the session row itself.
+      const { error: directErr } = await asViewer
+        .from("sessions")
+        .update({ title: "hijacked" })
+        .eq("id", session.id);
+      const { data: titleAfter } = await supabaseAdmin.from("sessions").select("title").eq("id", session.id).single();
+      record(
+        "28g. a viewer cannot update a session directly",
+        !!directErr || titleAfter?.title !== "hijacked",
+        directErr ? "correctly rejected" : `title=${titleAfter?.title}`
+      );
+    }
   } finally {
     // ---------------------------------------------------------------------
     // Cleanup — storage objects and templates first (no FK relationship to

@@ -52,6 +52,28 @@ export type PrepGroup = {
   description: string | null;
   kind: PrepGroupKind;
   position: number;
+  /** The client fills these items in (072) — answers go through set_prep_item_notes. */
+  client_editable: boolean;
+  /** Off until a coach shows it on a given project (072). */
+  hidden_by_default: boolean;
+};
+
+/**
+ * Per-template presentation (072): navigation labels (null hides a panel),
+ * wording, the pre-session questions, the feedback questions, and which
+ * prep group draws the baseline card. All optional; the defaults are the
+ * church engagement the portal was built for.
+ */
+export type TemplateUi = {
+  nav?: Partial<Record<"prepare" | "team" | "process" | "execution", string | null>>;
+  wording?: Partial<
+    Record<"tasks" | "task_add" | "tasks_theirs" | "team_title" | "process_eyebrow" | "materials", string>
+  >;
+  session_prep?: string[];
+  session_prep_note?: string;
+  feedback?: string[];
+  feedback_rating?: string;
+  baseline_group?: string;
 };
 
 export type PrepItem = {
@@ -131,6 +153,8 @@ export type ProjectDetail = {
    * both teams and individuals" — so it is chosen per project.
    */
   isGroup: boolean;
+  /** Template group keys a coach has hidden on this project (072). */
+  hiddenGroups: string[];
   template: {
     id: string;
     name: string;
@@ -144,6 +168,7 @@ export type ProjectDetail = {
     frameElements: string[] | null;
     /** 067: prompts and roster labels. */
     voice: "church" | "organization";
+    ui: TemplateUi;
   } | null;
   /** Per-module notes, keyed by section. */
   sectionNotes: Record<string, string>;
@@ -189,7 +214,7 @@ export async function getProjectDetail(
 
   const { data: project, error: projectErr } = await client
     .from("projects")
-    .select("*, templates(id, name, slug, structure, has_vision_stack, is_group, process_kind, frame_elements, voice)")
+    .select("*, templates(id, name, slug, structure, has_vision_stack, is_group, process_kind, frame_elements, voice, ui)")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -299,6 +324,7 @@ export async function getProjectDetail(
         process_kind?: "modules" | "sections" | "frame" | null;
         frame_elements?: string[] | null;
         voice?: "church" | "organization" | null;
+        ui?: unknown;
       }
     | null;
   const template = t
@@ -312,6 +338,7 @@ export async function getProjectDetail(
         processKind: t.process_kind ?? "sections",
         frameElements: t.frame_elements ?? null,
         voice: t.voice ?? "church",
+        ui: (t.ui ?? {}) as TemplateUi,
       }
     : null;
 
@@ -328,6 +355,7 @@ export async function getProjectDetail(
     priorities: project.priorities,
     prioritiesUpdatedAt: project.priorities_updated_at,
     isGroup: project.is_group ?? t?.is_group ?? true,
+    hiddenGroups: project.hidden_groups ?? [],
     template,
     sectionNotes: Object.fromEntries(
       (notesRes.data ?? []).map((n) => [n.section, n.body ?? ""])
@@ -1119,10 +1147,22 @@ export async function stampTemplatePrepItems(
 
   const { data: groups, error: groupsErr } = await client
     .from("template_prep_groups")
-    .select("id")
+    .select("id, key, hidden_by_default")
     .eq("template_id", templateId);
   if (groupsErr) throw groupsErr;
   if (!groups || groups.length === 0) return;
+
+  // Tools the template keeps off until a coach shows them (072). The Younique
+  // exercises on a coaching project, for instance — "as something serves
+  // within a conversation, we can then share it."
+  const hidden = groups.filter((g) => g.hidden_by_default).map((g) => g.key);
+  if (hidden.length > 0) {
+    const { error: hideErr } = await client
+      .from("projects")
+      .update({ hidden_groups: hidden })
+      .eq("id", projectId);
+    if (hideErr) throw hideErr;
+  }
 
   const { data: defaults, error: defaultsErr } = await client
     .from("template_prep_items")
@@ -1296,6 +1336,68 @@ export async function updateProject(
   const client = createUserClient(accessToken);
   const { error } = await client.from("projects").update(patch).eq("id", projectId);
   if (error) throw error;
+}
+
+/** Which template tools are hidden on this project (072). Admins only, per manage_projects. */
+export async function setHiddenGroups(accessToken: string, projectId: string, keys: string[]) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("projects").update({ hidden_groups: keys }).eq("id", projectId);
+  if (error) throw error;
+}
+
+/** A member ticks a client-editable prep item (074) — the Coaching Commitments. */
+export async function setPrepItemDone(accessToken: string, itemId: string, done: boolean) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.rpc("set_prep_item_done", { p_item: itemId, p_done: done });
+  if (error) throw error;
+}
+
+/** A member's answer on a client-editable prep item (072). */
+export async function setPrepItemNotes(accessToken: string, itemId: string, notes: string) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.rpc("set_prep_item_notes", { p_item: itemId, p_notes: notes });
+  if (error) throw error;
+}
+
+/** A member's answers to the pre-session questions (072). */
+export async function submitSessionPrep(accessToken: string, sessionId: string, answers: string[]) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.rpc("submit_session_prep", { p_session: sessionId, p_answers: answers });
+  if (error) throw error;
+}
+
+/** A member's feedback on a session (072): a rating and the answers. */
+export async function submitSessionFeedback(
+  accessToken: string,
+  sessionId: string,
+  payload: { rating: number | null; answers: string[] }
+) {
+  const client = createUserClient(accessToken);
+  const { error } = await client.rpc("submit_session_feedback", { p_session: sessionId, p_answers: payload });
+  if (error) throw error;
+}
+
+/** One person's saved answers on a session, from prep_answers or feedback. */
+export type SessionAnswers = { answers: string[]; rating?: number | null; at: string };
+export function answersByProfile(raw: unknown): Record<string, SessionAnswers> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, SessionAnswers> = {};
+  for (const [pid, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== "object") continue;
+    const rec = v as { answers?: unknown; at?: unknown };
+    const inner = rec.answers;
+    if (Array.isArray(inner)) {
+      out[pid] = { answers: inner.map((x) => (typeof x === "string" ? x : "")), at: String(rec.at ?? "") };
+    } else if (inner && typeof inner === "object") {
+      const o = inner as { answers?: unknown; rating?: unknown };
+      out[pid] = {
+        answers: Array.isArray(o.answers) ? o.answers.map((x) => (typeof x === "string" ? x : "")) : [],
+        rating: typeof o.rating === "number" ? o.rating : null,
+        at: String(rec.at ?? ""),
+      };
+    }
+  }
+  return out;
 }
 
 export async function removeMember(accessToken: string, projectId: string, profileId: string) {

@@ -1222,6 +1222,79 @@ null = the template's default) feeds `detail.isGroup`, which replaced every
 for?" with the template's default pre-selected. Executive Coaching defaults
 to one person; the same template serves a team by flipping that.
 
+## The coaching templates after Brooke's feedback (3 Sept 2026)
+
+Andrew met Brooke, walked her through the first Executive Coaching template,
+and brought back a transcript. What it turned into (072, 073):
+
+**Two templates.** `executive-coaching` ("Executive Coaching (1-on-1)",
+one person) and `executive-coaching-team` ("Executive Team Coaching", a
+team). Brooke: "I think we're gonna need both." The team one is the one-on-one
+one cloned in SQL — rows copied, storage paths rewritten to the new template
+id, objects copied by `scripts/copy-template-files.ts` — then shaped: Will's
+team deliverables visible (thrill lists, role description, chronic
+complaints, storyboard, the assessments), plus Team Outcomes, a Team
+Manifesto ("a clarified, almost contractual agreement that's written out at
+the end of a team training"), Roles and Responsibilities, Team Insights.
+
+**`templates.ui` names the panels and carries the questions.** `nav`
+(prepare → "Onboarding", team → "Client Info" or "Team", process →
+"Resources", execution → null hides it), `wording` (tasks → "Commitments",
+task_add, tasks_theirs, team_title, process_eyebrow, materials for the
+highlight picker's tab), `session_prep` (Brooke's five questions before every
+session, from an empty upcoming session on the Asana board), `feedback` and
+`feedback_rating` (a draft — she said the Typeform "needs to be recreated"),
+`baseline_group`. Brooke: "it's not a process. These are all resources."
+
+**A client can write, in four places only.** `write_prep_items` is
+editors-only and the client is a viewer, so four SECURITY DEFINER
+functions open exactly what the template says: `set_prep_item_notes` and
+`set_prep_item_done` (074; only on groups with `client_editable` — the
+Coaching Commitments are ticked this way), `submit_session_prep`,
+`submit_session_feedback` — the last two keyed by profile id in
+`sessions.prep_answers` / `sessions.feedback` so a team does not overwrite
+itself. RLS checks 28a–28i pin them. The onboarding form is the
+"Onboarding Form" group (client_editable); a viewer sees Answer / Edit your
+answer on each question. Editors still use Edit.
+
+**Hidden tools.** `template_prep_groups.hidden_by_default` is stamped into
+`projects.hidden_groups` at creation; an admin's Hide on a card and the
+"Hidden tools" strip (Deliverables, and any section panel) toggle it through
+`setHiddenGroups`. Hidden groups leave every list, and a worksheet whose
+description names a hidden tool ("For YQ: Offenders.") goes with it. Brooke:
+"we would probably want to hide that, maybe not delete it … as something
+serves within a conversation, we can then share it."
+
+**The rest of the panels.** Onboarding = Coaching Commitments (checklist),
+Onboarding Form, Your Coach (contact, scheduling and video-call placeholders
+— Brooke's own links were never copied). Client Info = the roster, the
+Coaching Agreement (files, "start date, stop date"), Assessments and
+Profiles, the baseline card ("Where we began": the onboarding answers read
+back, stress as a meter), Milestones and Mountaintops. Deliverables leads
+with the coaching tools (Your Vision, Vision–Reality Gap, Rackets and
+Limiting Beliefs, 90-Day Sprint, FACTS Inventory, Coach's Tools) with the
+Younique tools hidden behind them. Whiteboard is a `WHITEBOARD` group (files)
+plus every session photo, newest first — "the price of admission". Healthy
+Practices are `layout = 'practice'` rows drawn as coloured cards from the
+steps in `description`; the screenshots are gone. Commitments are
+`project_tasks` under their new name: the coach adds them on a session, the
+client ticks them, the dashboard lists them.
+
+**Sessions.** A viewer sees the prep questions on an upcoming session and the
+feedback form on a held one; an editor sees everyone's answers, and on a held
+session a "Draft the recap email" link (a mailto with the takeaways, the
+summary as plain text and the commitments — no AI, just the draft Brooke
+asked for). The dashboard nudges: prep due within three days, feedback due
+within ten, and for the coach "No next session on the calendar".
+
+**Not built, on purpose.** The AI pieces Brooke raised — a transcript graded
+for talk ratio and questions asked, a real-time coaching assistant, birthday
+gifts from a favourites list — need a model and a budget the portal does not
+have; the placeholders (transcript, summary, feedback, favourites in the
+onboarding form) are all in place so nothing is lost when they come. A
+per-project custom GROUP (not just cards inside "Coach's Tools") would need
+project-level groups, which the schema does not have yet.
+
 ## Checking it on a phone
 
 `scripts/mobile-audit.ts` drives Chrome as an emulated iPhone (390x844, DPR 3,

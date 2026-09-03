@@ -127,6 +127,7 @@ export type Database = {
           frame_elements: string[] | null;
           /** Prompts and roster labels: a church, or any other organization. */
           voice: "church" | "organization";
+          ui: unknown;
           created_at: string;
         };
         Insert: {
@@ -139,6 +140,7 @@ export type Database = {
           process_kind?: "modules" | "sections" | "frame";
           frame_elements?: string[] | null;
           voice?: "church" | "organization";
+          ui?: unknown;
           created_at?: string;
         };
         Update: {
@@ -166,6 +168,7 @@ export type Database = {
           priorities: string | null;
           priorities_updated_at: string | null;
           is_group: boolean | null;
+          hidden_groups: string[];
           created_by: string;
           archived_at: string | null;
           created_at: string;
@@ -183,6 +186,7 @@ export type Database = {
           priorities?: string | null;
           priorities_updated_at?: string | null;
           is_group?: boolean | null;
+          hidden_groups?: string[];
           created_by: string;
           archived_at?: string | null;
           created_at?: string;
@@ -199,6 +203,7 @@ export type Database = {
           priorities?: string | null;
           priorities_updated_at?: string | null;
           is_group?: boolean | null;
+          hidden_groups?: string[];
           archived_at?: string | null;
         };
         Relationships: [
@@ -287,6 +292,8 @@ export type Database = {
           commitments: string | null;
           /** What we covered — the session recap a coach writes afterwards. */
           recap: string | null;
+          prep_answers: unknown;
+          feedback: unknown;
           published_at: string | null;
           created_at: string;
         };
@@ -302,6 +309,8 @@ export type Database = {
           takeaways?: string | null;
           commitments?: string | null;
           recap?: string | null;
+          prep_answers?: unknown;
+          feedback?: unknown;
           published_at?: string | null;
           created_at?: string;
         };
@@ -315,6 +324,8 @@ export type Database = {
           takeaways?: string | null;
           commitments?: string | null;
           recap?: string | null;
+          prep_answers?: unknown;
+          feedback?: unknown;
           published_at?: string | null;
         };
         Relationships: [
@@ -425,6 +436,7 @@ export type Database = {
           file_name: string | null;
           file_size: number | null;
           thumb_path: string | null;
+          layout: string;
           /** Marks the combined module handout, which renders large; the rest render small beneath it. */
           is_primary: boolean;
           position: number;
@@ -443,6 +455,7 @@ export type Database = {
           file_name?: string | null;
           file_size?: number | null;
           thumb_path?: string | null;
+          layout?: string;
           is_primary?: boolean;
           position?: number;
           created_at?: string;
@@ -458,6 +471,7 @@ export type Database = {
           file_name?: string | null;
           file_size?: number | null;
           thumb_path?: string | null;
+          layout?: string;
           is_primary?: boolean;
           position?: number;
         };
@@ -737,6 +751,8 @@ export type Database = {
           description: string | null;
           kind: "dates" | "checklist" | "reading" | "files" | "notes";
           position: number;
+          client_editable: boolean;
+          hidden_by_default: boolean;
         };
         Insert: {
           id?: string;
@@ -747,6 +763,8 @@ export type Database = {
           description?: string | null;
           kind: "dates" | "checklist" | "reading" | "files" | "notes";
           position?: number;
+          client_editable?: boolean;
+          hidden_by_default?: boolean;
         };
         Update: {
           section?: string;
@@ -754,6 +772,8 @@ export type Database = {
           description?: string | null;
           kind?: "dates" | "checklist" | "reading" | "files" | "notes";
           position?: number;
+          client_editable?: boolean;
+          hidden_by_default?: boolean;
         };
         Relationships: [
           {
@@ -1392,6 +1412,26 @@ export type Database = {
        */
       set_task_done: {
         Args: { p_task_id: string; p_done: boolean };
+        Returns: undefined;
+      };
+      /** A member ticks a client-editable prep item (074). */
+      set_prep_item_done: {
+        Args: { p_item: string; p_done: boolean };
+        Returns: undefined;
+      };
+      /** A member answers a client-editable prep item (072). */
+      set_prep_item_notes: {
+        Args: { p_item: string; p_notes: string };
+        Returns: undefined;
+      };
+      /** A member's answers to the template's pre-session questions (072). */
+      submit_session_prep: {
+        Args: { p_session: string; p_answers: unknown };
+        Returns: undefined;
+      };
+      /** A member's feedback on a session (072). */
+      submit_session_feedback: {
+        Args: { p_session: string; p_answers: unknown };
         Returns: undefined;
       };
       /**

@@ -23,12 +23,15 @@ import {
  * the August 24 session" is a real assignment.
  */
 export default function ResourcePicker({
+  groupLabels,
   catalogue,
   alreadyKeys,
   booksLoading,
   onCancel,
   onAdd,
 }: {
+  /** Per-template names for the tabs (072): "Coaching materials" instead of "Exercises & handouts". */
+  groupLabels?: Partial<Record<string, string | undefined>>;
   catalogue: CatalogueEntry[];
   /** Keys already on the shelf — shown, but not selectable twice. */
   alreadyKeys: Set<string>;
@@ -150,7 +153,7 @@ export default function ResourcePicker({
                       : "bg-gray-100 text-gray-600 hover:text-runfree-ink"
                   }`}
                 >
-                  {g.label}
+                  {groupLabels?.[g.key] ?? g.label}
                   <span className={`ml-1.5 tabular-nums ${on ? "text-white/80" : "text-gray-400"}`}>
                     {pending ? "…" : n}
                   </span>

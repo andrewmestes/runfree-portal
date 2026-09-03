@@ -38,12 +38,19 @@ import {
   updateContact,
   updatePrepItem,
   updateProject,
+  setHiddenGroups,
+  setPrepItemNotes,
+  setPrepItemDone,
+  submitSessionPrep,
+  submitSessionFeedback,
+  answersByProfile,
   updateSession,
   type ChurchContact,
   type PrepGroup,
   type PrepGroupKind,
   type PrepItem,
   type ProjectTask,
+  type TemplateUi,
   type TaskOwner,
   type ProjectDetail,
   type ProjectMember,
@@ -205,6 +212,457 @@ function ResourceShelf({
         );
       })}
     </ul>
+  );
+}
+
+/** One line in the navy banner that points somewhere (072). */
+function NudgeRow({
+  label,
+  title,
+  hint,
+  onClick,
+}: {
+  label: string;
+  title: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">{label}</p>
+      <button
+        onClick={onClick}
+        className="group flex w-full items-center gap-3 rounded-xl bg-white/10 px-3 py-2.5 text-left outline-none transition hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/60"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-white">{title}</span>
+          <span className="mt-0.5 block text-[11px] text-white/60">{hint}</span>
+        </span>
+        <span aria-hidden className="shrink-0 text-white/60 transition-transform group-hover:translate-x-1">
+          →
+        </span>
+      </button>
+    </div>
+  );
+}
+
+const BASELINE_SKIP = /favorite|free time|birthday|occupation|marital|kids|worked with a coach/i;
+
+/**
+ * "Here's where we start" (072): the onboarding answers read back as a
+ * baseline, with the stress score as a meter. Brooke: "taking that
+ * information and making an aggregate here … simple bullets of just here's
+ * where we start."
+ */
+function BaselineCard({ group, items }: { group: PrepGroup; items: PrepItem[] }) {
+  const answered = items.filter((i) => !!i.notes?.trim());
+  const stressItem = items.find((i) => /stress/i.test(i.title) && /1 to 10|1-10/i.test(i.title));
+  const stress = stressItem?.notes ? Number(/\b(10|[1-9])\b/.exec(stressItem.notes)?.[1] ?? NaN) : NaN;
+  const shown = answered.filter((i) => !BASELINE_SKIP.test(i.title) && i !== stressItem);
+  return (
+    <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200/80">
+      <div className="h-1 bg-runfree-grad" />
+      <div className="p-5 sm:p-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magenta">Where we began</p>
+        <h4 className="mt-1 font-display text-xl font-bold text-runfree-ink">The starting line</h4>
+        <p className="mt-1 text-xs text-gray-500">
+          Drawn from the {group.title.toLowerCase()} — what we measure the growth against.{" "}
+          {answered.length}/{items.length} answered.
+        </p>
+        {!Number.isNaN(stress) && (
+          <div className="mt-5">
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs font-semibold text-gray-600">Stress right now</span>
+              <span className="font-display text-lg font-bold tabular-nums text-runfree-ink">
+                {stress}
+                <span className="text-xs font-semibold text-gray-400">/10</span>
+              </span>
+            </div>
+            <div className="mt-1.5 grid grid-cols-10 gap-1">
+              {Array.from({ length: 10 }, (_, i) => (
+                <span
+                  key={i}
+                  className={`h-2 rounded-full ${
+                    i < stress ? (stress >= 8 ? "bg-runfree-orange" : "bg-runfree-magenta") : "bg-gray-100"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+        {shown.length > 0 ? (
+          <dl className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
+            {shown.map((i) => (
+              <div key={i.id}>
+                <dt className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{i.title}</dt>
+                <dd className="mt-1 whitespace-pre-line text-sm leading-relaxed text-runfree-ink">{i.notes}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="mt-4 rounded-xl border border-dashed border-gray-200 py-4 text-center text-xs text-gray-400">
+            The {group.title.toLowerCase()} fills this in.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** The client's answers before a session (072), saved through submit_session_prep. */
+function SessionPrepForm({
+  questions,
+  note,
+  mine,
+  sessionId,
+  accessToken,
+  onChanged,
+}: {
+  questions: string[];
+  note?: string;
+  mine?: { answers: string[]; at: string };
+  sessionId: string;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(!mine);
+  const [answers, setAnswers] = useState<string[]>(() => questions.map((_, i) => mine?.answers[i] ?? ""));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await submitSessionPrep(accessToken, sessionId, answers);
+      setOpen(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="rounded-xl bg-runfree-pink/50 p-4 ring-1 ring-runfree-magenta/20">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h5 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
+            Before this session
+          </h5>
+          {note && <p className="mt-0.5 text-xs text-gray-600">{note}</p>}
+          {mine && !open && (
+            <p className="mt-1 text-xs text-gray-500">
+              Answered {mine.at ? formatSessionDate(mine.at.slice(0, 10)) : ""}.
+            </p>
+          )}
+        </div>
+        {!open && (
+          <button
+            onClick={() => setOpen(true)}
+            className="shrink-0 text-[11px] font-bold text-runfree-magentaDeep hover:underline"
+          >
+            {mine ? "Edit answers" : "Answer"}
+          </button>
+        )}
+      </div>
+      {open && (
+        <form onSubmit={save} className="mt-3 space-y-3">
+          {questions.map((q, i) => (
+            <label key={i} className="block">
+              <span className="block text-sm font-medium leading-snug text-runfree-ink">
+                {i + 1}. {q}
+              </span>
+              <textarea
+                rows={2}
+                value={answers[i]}
+                onChange={(e) => setAnswers((a) => a.map((x, j) => (j === i ? e.target.value : x)))}
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+              />
+            </label>
+          ))}
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-lg bg-runfree-grad px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? "Saving…" : "Save answers"}
+            </button>
+            {mine && (
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg px-3 py-2 text-xs font-medium text-gray-500 hover:text-runfree-ink"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/** A minute of feedback after a session (072), saved through submit_session_feedback. */
+function SessionFeedbackForm({
+  questions,
+  ratingLabel,
+  mine,
+  sessionId,
+  accessToken,
+  onChanged,
+}: {
+  questions: string[];
+  ratingLabel?: string;
+  mine?: { answers: string[]; rating?: number | null; at: string };
+  sessionId: string;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rating, setRating] = useState<number | null>(mine?.rating ?? null);
+  const [answers, setAnswers] = useState<string[]>(() => questions.map((_, i) => mine?.answers[i] ?? ""));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await submitSessionFeedback(accessToken, sessionId, { rating, answers });
+      setOpen(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="rounded-xl bg-gray-50 p-4 ring-1 ring-gray-200">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h5 className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">Your feedback</h5>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {mine
+              ? `Sent${mine.rating != null ? ` — ${mine.rating}/10` : ""}. Thank you.`
+              : "A minute, honestly. It is how your coach gets better at coaching you."}
+          </p>
+        </div>
+        {!open && (
+          <button
+            onClick={() => setOpen(true)}
+            className="shrink-0 text-[11px] font-bold text-runfree-magentaDeep hover:underline"
+          >
+            {mine ? "Edit" : "Give feedback"}
+          </button>
+        )}
+      </div>
+      {open && (
+        <form onSubmit={save} className="mt-3 space-y-3">
+          <div>
+            <span className="block text-sm font-medium text-runfree-ink">
+              {ratingLabel ?? "How valuable was this session, 1 to 10?"}
+            </span>
+            <div className="mt-1.5 grid grid-cols-10 gap-1">
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                <button
+                  type="button"
+                  key={n}
+                  onClick={() => setRating(n)}
+                  aria-pressed={rating === n}
+                  className={`h-9 rounded-lg text-xs font-bold tabular-nums transition ${
+                    rating === n
+                      ? "bg-runfree-grad text-white shadow-sm"
+                      : "bg-white text-gray-600 ring-1 ring-gray-200 hover:ring-runfree-magenta"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+          {questions.map((q, i) => (
+            <label key={i} className="block">
+              <span className="block text-sm font-medium leading-snug text-runfree-ink">{q}</span>
+              <textarea
+                rows={2}
+                value={answers[i]}
+                onChange={(e) => setAnswers((a) => a.map((x, j) => (j === i ? e.target.value : x)))}
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+              />
+            </label>
+          ))}
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-lg bg-runfree-grad px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? "Sending…" : "Send feedback"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-lg px-3 py-2 text-xs font-medium text-gray-500 hover:text-runfree-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/** What the client(s) wrote before and after — the coach's view (072). */
+function SessionAnswersPanel({
+  prepQuestions,
+  feedbackQuestions,
+  prepMap,
+  feedbackMap,
+  nameOf,
+  isUpcoming,
+}: {
+  prepQuestions: string[];
+  feedbackQuestions: string[];
+  prepMap: Record<string, { answers: string[]; at: string }>;
+  feedbackMap: Record<string, { answers: string[]; rating?: number | null; at: string }>;
+  nameOf: (pid: string) => string;
+  isUpcoming: boolean;
+}) {
+  const prepPeople = Object.keys(prepMap);
+  const fbPeople = Object.keys(feedbackMap);
+  return (
+    <div className="space-y-4">
+      {prepQuestions.length > 0 && (
+        <div>
+          <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+            Prep answers
+          </h5>
+          {prepPeople.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-gray-200 py-3 text-center text-xs text-gray-400">
+              {isUpcoming ? "Nothing yet — the questions are waiting on their side." : "No prep answers were given."}
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {prepPeople.map((pid) => (
+                <li key={pid} className="rounded-xl bg-runfree-pink/40 p-3">
+                  <p className="text-xs font-semibold text-runfree-magentaDeep">{nameOf(pid)}</p>
+                  <ol className="mt-1.5 space-y-1.5">
+                    {prepQuestions.map((q, i) => (
+                      <li key={i} className="text-sm">
+                        <span className="block text-[11px] leading-snug text-gray-500">{q}</span>
+                        <span className="block whitespace-pre-line leading-relaxed text-runfree-ink">
+                          {prepMap[pid].answers[i] || <span className="text-gray-400">—</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {feedbackQuestions.length > 0 && fbPeople.length > 0 && (
+        <div>
+          <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">Feedback</h5>
+          <ul className="space-y-3">
+            {fbPeople.map((pid) => (
+              <li key={pid} className="rounded-xl bg-gray-50 p-3 ring-1 ring-gray-200">
+                <p className="flex items-center justify-between text-xs font-semibold text-runfree-ink">
+                  {nameOf(pid)}
+                  {feedbackMap[pid].rating != null && (
+                    <span className="font-display text-base font-bold tabular-nums text-runfree-magentaDeep">
+                      {feedbackMap[pid].rating}/10
+                    </span>
+                  )}
+                </p>
+                <ol className="mt-1.5 space-y-1.5">
+                  {feedbackQuestions.map((q, i) => (
+                    <li key={i} className="text-sm">
+                      <span className="block text-[11px] leading-snug text-gray-500">{q}</span>
+                      <span className="block whitespace-pre-line leading-relaxed text-runfree-ink">
+                        {feedbackMap[pid].answers[i] || <span className="text-gray-400">—</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The tools a coach has hidden on this project (072), for the admin to bring
+ * back one at a time.
+ */
+function HiddenTools({ groups, onShow }: { groups: PrepGroup[]; onShow: (key: string) => void }) {
+  return (
+    <div className="mt-6 rounded-2xl border border-dashed border-gray-300 px-5 py-4">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+        Hidden tools — only you see this
+      </p>
+      <p className="mt-1 text-xs text-gray-500">
+        Kept off the client&rsquo;s page until a conversation calls for one. Show a tool and it appears
+        for them, empty and ready to fill in.
+      </p>
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {groups.map((g) => (
+          <li key={g.id}>
+            <button
+              onClick={() => onShow(g.key)}
+              className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-runfree-pink hover:text-runfree-magentaDeep"
+            >
+              {g.title} <span className="text-runfree-magentaDeep">· Show</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const PRACTICE_TONES = [
+  "bg-runfree-navy",
+  "bg-runfree-magenta",
+  "bg-runfree-orange",
+  "bg-runfree-navyDeep",
+  "bg-[#0F766E]",
+  "bg-runfree-magentaDeep",
+  "bg-[#6D28D9]",
+  "bg-[#B45309]",
+];
+
+/** One Performance Practice: a coloured header and its numbered steps (072). */
+function PracticeCard({ title, steps, tone }: { title: string; steps: string[]; tone: number }) {
+  return (
+    <li className="flex flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">
+      <div className={`${PRACTICE_TONES[tone % PRACTICE_TONES.length]} px-5 py-4`}>
+        <h4 className="font-display text-lg font-bold leading-tight text-white">{title}</h4>
+      </div>
+      <ol className="flex-1 space-y-2.5 px-5 py-4">
+        {steps.map((step, i) => (
+          <li key={i} className="flex gap-3 text-sm leading-snug text-runfree-ink">
+            <span className="w-5 shrink-0 text-right text-xs font-bold tabular-nums text-runfree-magenta">
+              {i + 1}
+            </span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+    </li>
   );
 }
 
@@ -386,6 +844,7 @@ function nonModuleSections(detail: ProjectDetail, includeEmptyDeclared = false):
     PREP_SECTION,
     "TEAM",
     "DELIVERABLES",
+    "WHITEBOARD",
     ...detail.prepGroups.map((g) => g.section).filter((x) => !declared.includes(x)),
   ]);
   const inUse = new Set<string>(
@@ -1086,6 +1545,8 @@ export default function ProjectDetailPage() {
   // process overview. Deriving it from the groups the template declares means
   // a third template names its own prepare section and lands in the right
   // place without another branch here.
+  // Per-template presentation (072): labels, wording, questions.
+  const ui: TemplateUi = detail.template?.ui ?? {};
   const moduleSections = new Set(modules.map((m) => m.section));
   // Declared process sections keep their own groups (ModulePanel renders
   // them); see nonModuleSections.
@@ -1123,24 +1584,47 @@ export default function ProjectDetailPage() {
   // Andrew's IA: key dates, preparation, deliverables and team-coaching work
   // are four different things that were all sharing one "prepare" block.
   // A group's `section` now says which of them it belongs to.
+  // Tools a coach has hidden on this project (072). They leave every list;
+  // an admin gets them back from a "Hidden tools" strip.
+  const hiddenKeys = new Set(detail.hiddenGroups);
+  const whiteboardGroups = allNonModuleGroups.filter(
+    (g) => g.section === "WHITEBOARD" && !hiddenKeys.has(g.key)
+  );
+  const hiddenDeliverables = allNonModuleGroups.filter(
+    (g) => g.section === "DELIVERABLES" && hiddenKeys.has(g.key)
+  );
+  const hiddenTitles = hiddenDeliverables.map((g) => g.title);
+  const sessionPhotos = [...detail.deliverables]
+    .filter((d) => d.kind === "session_image")
+    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
   // Dates are dates whichever section their group sits in — Younique files
   // its Key Dates under the declared "Recommended Prework", and they still
   // belong on the Key Dates panel, not inside that section.
   const dateGroups = detail.prepGroups.filter(
     (g) => g.kind === "dates" && !moduleSections.has(g.section)
   );
-  const deliverableGroups = allNonModuleGroups.filter((g) => g.section === "DELIVERABLES");
+  const deliverableGroups = allNonModuleGroups.filter(
+    (g) => g.section === "DELIVERABLES" && !hiddenKeys.has(g.key)
+  );
   // Worksheets filed under DELIVERABLES — the one-page sheets a coaching
   // deliverable is filled in from — open from the Deliverables panel.
   const deliverableSheets = detail.resources
-    .filter((r) => r.section === "DELIVERABLES" && r.file_path)
+    .filter(
+      (r) =>
+        r.section === "DELIVERABLES" &&
+        r.file_path &&
+        // A worksheet for a hidden tool is hidden with it ("For YQ: Offenders.").
+        !hiddenTitles.some((t) => (r.description ?? "").includes(t))
+    )
     .sort((a, b) => a.position - b.position);
-  const teamGroups = allNonModuleGroups.filter((g) => g.section === "TEAM");
+  const teamGroups = allNonModuleGroups.filter((g) => g.section === "TEAM" && !hiddenKeys.has(g.key));
   const prepareGroups = allNonModuleGroups.filter(
     (g) =>
       g.kind !== "dates" &&
       g.section !== "DELIVERABLES" &&
-      g.section !== "TEAM"
+      g.section !== "TEAM" &&
+      g.section !== "WHITEBOARD" &&
+      !hiddenKeys.has(g.key)
   );
   const stackItems = detail.deliverables.filter((d) => d.kind === "vision_stack");
   const stackReady = stackItems.filter((d) => d.published_at).length;
@@ -1221,6 +1705,20 @@ export default function ProjectDetailPage() {
   const processKind = detail.template?.processKind ?? (modules.length > 0 ? "modules" : "sections");
   const daySections = modules.length > 0 ? [] : nonModuleSections(detail, processKind === "frame");
 
+  // A coach hides and shows the template's tools per project (072). Brooke:
+  // "we would probably want to hide that, maybe not delete it … and then as
+  // something serves within a conversation, we can then share it."
+  async function hideGroup(key: string) {
+    if (!accessToken || !detail) return;
+    await setHiddenGroups(accessToken, projectId, Array.from(new Set([...detail.hiddenGroups, key])));
+    refresh();
+  }
+  async function showGroup(key: string) {
+    if (!accessToken || !detail) return;
+    await setHiddenGroups(accessToken, projectId, detail.hiddenGroups.filter((k) => k !== key));
+    refresh();
+  }
+
   const panelItems = [
     // Always present, and always first: it is the landing panel, and unlike
     // every other entry it does not depend on the project having any
@@ -1233,9 +1731,9 @@ export default function ProjectDetailPage() {
 
     // Who, and when.
     prepareGroups.length > 0 || prepResources.length > 0
-      ? { key: "prepare", label: "Preparation", group: 2 }
+      ? { key: "prepare", label: ui.nav?.prepare ?? "Preparation", group: 2 }
       : null,
-    { key: "team", label: "Team", group: 2 },
+    { key: "team", label: ui.nav?.team ?? "Team", group: 2 },
     dateGroups.length > 0 ? { key: "dates", label: "Key Dates", group: 2 } : null,
 
     // The work as it happens.
@@ -1248,20 +1746,29 @@ export default function ProjectDetailPage() {
     // looking like it did not belong in its own tab.
     { key: "sessions", label: "Sessions", group: 3 },
     modules.length > 0 || daySections.length > 0
-      ? { key: "process", label: "The Process", group: 3 }
+      ? { key: "process", label: ui.nav?.process ?? "The Process", group: 3 }
       : null,
     // Reading behind the process. Unconditional, and no longer "Will's Books"
     // — Andrew: "let's change the column from 'Will's Books' to just 'Books'."
     { key: "books", label: "Books", group: 3 },
 
     // What it produced, and what happens after we leave.
-    hasDeliverables ? { key: "deliverables", label: "Deliverables", group: 4 } : null,
+    hasDeliverables || (canManage && hiddenDeliverables.length > 0)
+      ? { key: "deliverables", label: "Deliverables", group: 4 }
+      : null,
+    // The sketch wall (072). Only where the template declares one — a Pivvot
+    // church's chart photos already live under their modules.
+    whiteboardGroups.length > 0 ? { key: "whiteboard", label: "Whiteboard", group: 4 } : null,
     // Execution is the one panel that is not about the six months — it is the
     // Horizon Storyline being run, ninety days at a time, after we leave.
     //
     // Shown to an editor always (somebody has to start it) and to everyone
     // else only once there is something in it.
-    detail.hasExecution || canEdit ? { key: "execution", label: "Execution", group: 4 } : null,
+    ui.nav?.execution === null
+      ? null
+      : detail.hasExecution || canEdit
+        ? { key: "execution", label: ui.nav?.execution ?? "Execution", group: 4 }
+        : null,
   ].filter((x): x is { key: string; label: string; group: number } => x !== null);
 
   // Landing on Overview. Andrew: "when someone logs in to their project, it
@@ -1426,6 +1933,7 @@ export default function ProjectDetailPage() {
 
             {activePanel === "team" && (
               <TeamSection
+                title={ui.wording?.team_title}
                 id="team"
                 detail={detail}
                 imageUrls={imageUrls}
@@ -1464,6 +1972,7 @@ export default function ProjectDetailPage() {
               <PrepareSection
                 id="prepare"
                 isGroup={detail.isGroup}
+                title={ui.nav?.prepare ?? undefined}
                 standalone
                 prep={prepResources}
                 overview={overviewResources}
@@ -1509,6 +2018,8 @@ export default function ProjectDetailPage() {
                   onUploadDeliverable={uploadDeliverable}
                   onToggleDeliverable={toggleDeliverable}
                   thumbs={thumbs}
+                  onHideGroup={canManage ? hideGroup : undefined}
+                  onShowGroup={canManage ? showGroup : undefined}
                 />
 
                 {orphanSections.length > 0 && (
@@ -1533,6 +2044,8 @@ export default function ProjectDetailPage() {
                           onUploadDeliverable={uploadDeliverable}
                           onToggleDeliverable={toggleDeliverable}
                           thumbs={thumbs}
+                          onHideGroup={canManage ? hideGroup : undefined}
+                          onShowGroup={canManage ? showGroup : undefined}
                         />
                       ))}
                     </div>
@@ -1550,8 +2063,11 @@ export default function ProjectDetailPage() {
             {activePanel === "process" && modules.length === 0 && daySections.length > 0 && (
               <section id="process">
                 <SectionHeading
-                  eyebrow={processKind === "frame" ? "The Vision Frame" : "Step by step"}
-                  title="The Process"
+                  eyebrow={
+                    ui.wording?.process_eyebrow ??
+                    (processKind === "frame" ? "The Vision Frame" : "Step by step")
+                  }
+                  title={ui.nav?.process ?? "The Process"}
                 />
                 <div className="mt-8">
                   {processKind === "frame" ? (
@@ -1592,6 +2108,8 @@ export default function ProjectDetailPage() {
                   onUploadDeliverable={uploadDeliverable}
                   onToggleDeliverable={toggleDeliverable}
                   thumbs={thumbs}
+                  onHideGroup={canManage ? hideGroup : undefined}
+                  onShowGroup={canManage ? showGroup : undefined}
                 />
               </section>
             )}
@@ -1599,6 +2117,7 @@ export default function ProjectDetailPage() {
             {activePanel === "sessions" && (
               <SessionsSection
                 id="sessions"
+                myProfileId={profile.id}
                 sessions={detail.sessions}
                 detail={detail}
                 imageUrls={imageUrls}
@@ -1655,6 +2174,7 @@ export default function ProjectDetailPage() {
                   <div className="mt-6">
                     <PrepCards
                       emphasised
+                      onHide={canManage ? hideGroup : undefined}
                       groups={deliverableGroups}
                       items={detail.prepItems}
                       projectId={projectId}
@@ -1665,6 +2185,52 @@ export default function ProjectDetailPage() {
                     />
                   </div>
                 )}
+                {canManage && hiddenDeliverables.length > 0 && (
+                  <HiddenTools groups={hiddenDeliverables} onShow={showGroup} />
+                )}
+              </section>
+            )}
+
+            {/* The sketch wall (072). Brooke: "having a place of, like, tools
+                discovered, tools discussed, whiteboarding from session …
+                this is like the price of admission." The template's
+                Whiteboard group takes photos and notes; the photos filed on
+                sessions show underneath, newest first. */}
+            {activePanel === "whiteboard" && (
+              <section id="whiteboard">
+                <SectionHeading eyebrow="The sketch wall" title="Whiteboard" />
+                <div className="mt-8 space-y-8">
+                  <PrepCards
+                    groups={whiteboardGroups}
+                    items={detail.prepItems}
+                    projectId={projectId}
+                    canEdit={canEdit}
+                    accessToken={accessToken}
+                    fileUrls={imageUrls}
+                    onChanged={refresh}
+                    stacked
+                  />
+                  {sessionPhotos.length > 0 && (
+                    <div>
+                      <h4 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                        From our sessions
+                      </h4>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {sessionPhotos.map((d) => (
+                          <SessionCard
+                            key={d.id}
+                            item={d}
+                            imageUrls={imageUrls}
+                            files={cardFiles.filter((f) => f.deliverable_id === d.id)}
+                            canEdit={canEdit}
+                            accessToken={accessToken}
+                            onChanged={refresh}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </section>
             )}
 
@@ -1697,6 +2263,7 @@ export default function ProjectDetailPage() {
 
       {picking && detail && (
         <ResourcePicker
+          groupLabels={{ handouts: ui.wording?.materials }}
           catalogue={buildCatalogue(detail, books, handouts)}
           alreadyKeys={
             new Set(
@@ -3190,6 +3757,7 @@ function AddTask({
   sessionId,
   moduleOptions,
   onChanged,
+  label,
 }: {
   projectId: string;
   accessToken: string | null;
@@ -3198,6 +3766,8 @@ function AddTask({
   sessionId?: string | null;
   moduleOptions?: string[];
   onChanged: () => void;
+  /** "Add a commitment" on a coaching project (072). */
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -3248,7 +3818,7 @@ function AddTask({
         onClick={() => setOpen(true)}
         className="min-h-[44px] w-full rounded-xl border border-dashed border-white/30 text-xs font-semibold text-white/70 transition hover:border-white/60 hover:bg-white/5 hover:text-white"
       >
-        + Add homework or a next step
+        + {label ?? "Add homework or a next step"}
       </button>
     );
   }
@@ -3998,6 +4568,7 @@ function PrioritiesBanner({
   onChanged: () => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const wording = detail.template?.ui.wording ?? {};
 
   /**
    * The Horizon Storyline steps assigned to me, on this project.
@@ -4058,7 +4629,39 @@ function PrioritiesBanner({
   const todayIso = new Date().toISOString().slice(0, 10);
   const processStarted = detail.sessions.some((x) => x.held_on !== null && x.held_on <= todayIso);
 
-  if (!hasPriorities(detail, canEdit) && mySteps.length === 0 && openPrep.length === 0) return null;
+  // Coaching nudges (072). Brooke: "is there an alert that we can create
+  // where it's like you haven't scheduled your next session or your
+  // session's coming in the next 48 hours? Make sure you answer your five
+  // prep questions." Three rows, each only while it is true.
+  const uiT = detail.template?.ui ?? {};
+  const upcoming = detail.sessions
+    .filter((x) => x.held_on !== null && x.held_on >= todayIso)
+    .sort((a, b) => a.held_on!.localeCompare(b.held_on!));
+  const nextSession = upcoming[0] ?? null;
+  const daysToNext = nextSession
+    ? Math.round((Date.parse(nextSession.held_on!) - Date.parse(todayIso)) / 86_400_000)
+    : null;
+  const prepDue =
+    !canEdit &&
+    (uiT.session_prep?.length ?? 0) > 0 &&
+    !!nextSession &&
+    daysToNext !== null &&
+    daysToNext <= 3 &&
+    !answersByProfile(nextSession.prep_answers)[myProfileId];
+  const lastHeld =
+    [...detail.sessions]
+      .filter((x) => x.held_on !== null && x.held_on <= todayIso)
+      .sort((a, b) => b.held_on!.localeCompare(a.held_on!))[0] ?? null;
+  const feedbackDue =
+    !canEdit &&
+    (uiT.feedback?.length ?? 0) > 0 &&
+    !!lastHeld &&
+    Date.parse(todayIso) - Date.parse(lastHeld.held_on!) <= 10 * 86_400_000 &&
+    !answersByProfile(lastHeld.feedback)[myProfileId];
+  const noNextSession = canEdit && (uiT.session_prep?.length ?? 0) > 0 && !nextSession;
+  const nudges = prepDue || feedbackDue || noNextSession;
+
+  if (!hasPriorities(detail, canEdit) && mySteps.length === 0 && openPrep.length === 0 && !nudges) return null;
 
   return (
     <section className="overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
@@ -4161,6 +4764,37 @@ function PrioritiesBanner({
                 things' part of this to go away after a process starts." The
                 first session held is the start; from that day the row is
                 gone, whatever is still unticked under Preparation. */}
+            {nudges && (
+              <div className="mb-4 space-y-2">
+                {prepDue && nextSession && (
+                  <NudgeRow
+                    label="Before your next session"
+                    title={`${nextSession.title} is ${
+                      daysToNext === 0 ? "today" : daysToNext === 1 ? "tomorrow" : `in ${daysToNext} days`
+                    } — answer the prep questions`}
+                    hint={uiT.session_prep_note ?? "Ten minutes, before you meet."}
+                    onClick={() => onGoTo("sessions")}
+                  />
+                )}
+                {feedbackDue && lastHeld && (
+                  <NudgeRow
+                    label="After your last session"
+                    title={`How was ${lastHeld.title}?`}
+                    hint="A minute of feedback helps your coach coach you."
+                    onClick={() => onGoTo("sessions")}
+                  />
+                )}
+                {noNextSession && (
+                  <NudgeRow
+                    label="Coach"
+                    title="No next session on the calendar"
+                    hint="Add it under Sessions so the prep questions are waiting for them."
+                    onClick={() => onGoTo("sessions")}
+                  />
+                )}
+              </div>
+            )}
+
             {openPrep.length > 0 && !processStarted && (
               <div className="mb-4">
                 <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">
@@ -4186,7 +4820,7 @@ function PrioritiesBanner({
                         : `${openPrep.length} things to do before we begin`}
                     </span>
                     <span className="mt-0.5 block text-[11px] text-white/60">
-                      The list, and the checklist itself, are under Preparation.
+                      The list, and the checklist itself, are under {detail.template?.ui.nav?.prepare ?? "Preparation"}.
                     </span>
                   </span>
                   <span
@@ -4201,7 +4835,7 @@ function PrioritiesBanner({
 
             {theirs.length > 0 && (ours.length > 0 || mySteps.length > 0 || openPrep.length > 0) && (
               <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">
-                Your team
+                {wording.tasks_theirs ?? "Your team"}
               </p>
             )}
 
@@ -4261,6 +4895,7 @@ function PrioritiesBanner({
             {canEdit && adding && (
               <div className="pt-1">
                 <AddTask
+                      label={wording?.task_add}
                   projectId={projectId}
                   accessToken={accessToken}
                   siblings={detail.tasks}
@@ -4874,6 +5509,8 @@ function ModulePanel({
   onUploadDeliverable,
   onToggleDeliverable,
   thumbs,
+  onHideGroup,
+  onShowGroup,
 }: {
   section: string;
   detail: ProjectDetail;
@@ -4893,13 +5530,22 @@ function ModulePanel({
   onUploadDeliverable?: (item: StackEntry, file: File) => Promise<void>;
   onToggleDeliverable?: (item: StackEntry) => Promise<void>;
   thumbs: Record<string, string>;
+  /** Admins hide and show the template's tools per project (072). */
+  onHideGroup?: (key: string) => void;
+  onShowGroup?: (key: string) => void;
 }) {
   if (!section) return null;
 
   const resources = detail.resources.filter((r) => r.section === section);
   const videos = resources.filter((r) => r.kind === "video" && r.external_url);
   const exercises = resources.filter((r) => r.kind === "exercise" || r.kind === "link");
-  const sectionGroups = detail.prepGroups.filter((g) => g.section === section && g.kind !== "dates");
+  const hiddenHere = new Set(detail.hiddenGroups);
+  const sectionGroups = detail.prepGroups.filter(
+    (g) => g.section === section && g.kind !== "dates" && !hiddenHere.has(g.key)
+  );
+  const hiddenGroupsHere = detail.prepGroups.filter(
+    (g) => g.section === section && g.kind !== "dates" && hiddenHere.has(g.key)
+  );
 
   // Handouts come from Drive, keyed by module number — not from
   // template_resources, whose handout rows are just titles with nowhere to
@@ -4922,8 +5568,13 @@ function ModulePanel({
   // An image handout IS its content — the Performance Practices cards are
   // eight coloured index cards, not eight documents — so those show as a
   // gallery rather than a numbered list of titles.
-  const cards = walkthroughAll.filter((r) => !!r.file_path && IMAGE_FILE.test(r.file_path));
-  const walkthrough = walkthroughAll.filter((r) => !cards.includes(r));
+  // The Performance Practices, drawn by the portal (072). Brooke, on the
+  // screenshots: "I hate how it looks … less childlike and more RunFree."
+  const practices = walkthroughAll.filter((r) => r.layout === "practice");
+  const cards = walkthroughAll.filter(
+    (r) => r.layout !== "practice" && !!r.file_path && IMAGE_FILE.test(r.file_path)
+  );
+  const walkthrough = walkthroughAll.filter((r) => !cards.includes(r) && !practices.includes(r));
   // Covers (071) turn the numbered list into a shelf. Andrew: "can we make
   // the resources in the coaching template a little more visual … book
   // images/thumbnails/etc.?"
@@ -4969,6 +5620,7 @@ function ModulePanel({
     !!primaryHandout ||
     walkthrough.length > 0 ||
     cards.length > 0 ||
+    practices.length > 0 ||
     sectionGroups.length > 0 ||
     sectionSessions.length > 0 ||
     videos.length > 0 ||
@@ -5002,6 +5654,21 @@ function ModulePanel({
               </p>
             )}
           </div>
+        )}
+
+        {practices.length > 0 && (
+          <Block title={`${practices.length} practice${practices.length === 1 ? "" : "s"}`}>
+            <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {practices.map((r, i) => (
+                <PracticeCard
+                  key={r.id}
+                  title={r.title}
+                  steps={(r.description ?? "").split("\n").filter((x) => x.trim().length > 0)}
+                  tone={i}
+                />
+              ))}
+            </ul>
+          </Block>
         )}
 
         {cards.length > 0 && (
@@ -5126,9 +5793,13 @@ function ModulePanel({
               thumbs={thumbs}
               onOpenFile={onOpenFile}
               onChanged={onChanged}
+              onHide={onHideGroup}
               stacked
             />
           </Block>
+        )}
+        {onShowGroup && hiddenGroupsHere.length > 0 && (
+          <HiddenTools groups={hiddenGroupsHere} onShow={onShowGroup} />
         )}
 
         {(primaryHandout || otherHandouts.length > 0) && (
@@ -6689,9 +7360,12 @@ function PrepCards({
   stacked = false,
   emphasised = false,
   soloTitle = false,
+  onHide,
 }: {
   /** The panel heading already names this one group — do not repeat it. */
   soloTitle?: boolean;
+  /** Admins hide a tool on this project (072); the card grows a "Hide" control. */
+  onHide?: (key: string) => void;
   groups: PrepGroup[];
   items: PrepItem[];
   projectId: string;
@@ -6729,6 +7403,7 @@ function PrepCards({
       <div className="space-y-3">
         {groups.map((g) => (
           <PrepCard
+            onHide={onHide}
             key={g.id}
             group={g}
             items={items.filter((i) => i.group_id === g.id)}
@@ -6761,6 +7436,7 @@ function PrepCards({
         {groups.map((g, i) => (
           <li key={g.id}>
             <PrepCard
+            onHide={onHide}
               group={g}
               items={items.filter((x) => x.group_id === g.id)}
               projectId={projectId}
@@ -6795,6 +7471,7 @@ function PrepCards({
     <div className={`grid gap-5 ${cols}`}>
       {groups.map((g) => (
         <PrepCard
+            onHide={onHide}
           key={g.id}
           group={g}
           items={items.filter((i) => i.group_id === g.id)}
@@ -6827,7 +7504,9 @@ function PrepCard({
   step,
   emphasised = false,
   soloTitle = false,
+  onHide,
 }: {
+  onHide?: (key: string) => void;
   group: PrepGroup;
   items: PrepItem[];
   projectId: string;
@@ -7025,7 +7704,18 @@ function PrepCard({
           )}
           </div>
         </div>
-        {counter}
+        <span className="flex shrink-0 items-center gap-2">
+          {counter}
+          {onHide && (
+            <button
+              onClick={() => onHide(group.key)}
+              className="text-[11px] font-medium text-gray-400 transition hover:text-runfree-magentaDeep"
+              title="Hide this tool on this project"
+            >
+              Hide
+            </button>
+          )}
+        </span>
       </header>
       )}
 
@@ -7481,17 +8171,39 @@ function PrepRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  async function toggle() {
+  // A client answers (072). Viewers cannot write prep_items; this goes
+  // through set_prep_item_notes, which the template opens per group.
+  const [answering, setAnswering] = useState(false);
+  const [draft, setDraft] = useState("");
+  // A checklist row is ticked, not answered.
+  const canAnswer = !canEdit && group.client_editable && group.kind !== "checklist";
+  async function saveAnswer(e: React.FormEvent) {
+    e.preventDefault();
     if (!accessToken || busy) return;
     setBusy(true);
     try {
-      await updatePrepItem(accessToken, item.id, { is_done: !item.is_done });
+      await setPrepItemNotes(accessToken, item.id, draft);
+      setAnswering(false);
       onChanged();
     } finally {
       setBusy(false);
     }
   }
+
+  async function toggle() {
+    if (!accessToken || busy) return;
+    setBusy(true);
+    try {
+      // A client ticks through set_prep_item_done (074); an editor writes
+      // the row. Same result, different door.
+      if (canEdit) await updatePrepItem(accessToken, item.id, { is_done: !item.is_done });
+      else await setPrepItemDone(accessToken, item.id, !item.is_done);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+  const canTick = canEdit || group.client_editable;
 
   async function remove() {
     if (!accessToken) return;
@@ -7530,13 +8242,13 @@ function PrepRow({
       {group.kind === "checklist" && (
         <button
           onClick={toggle}
-          disabled={!canEdit || busy}
+          disabled={!canTick || busy}
           aria-label={item.is_done ? `Mark "${item.title}" not done` : `Mark "${item.title}" done`}
           className={`relative mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition before:absolute before:-inset-2 before:content-[''] ${
             item.is_done
               ? "border-runfree-magenta bg-runfree-magenta text-white"
               : "border-gray-300 bg-white hover:border-runfree-magenta"
-          } ${canEdit ? "" : "cursor-default opacity-70"}`}
+          } ${canTick ? "" : "cursor-default opacity-70"}`}
         >
           {item.is_done && (
             <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
@@ -7575,11 +8287,51 @@ function PrepRow({
           </p>
         )}
 
-        {item.notes && (
+        {item.notes && !answering && (
           <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-gray-500">
             {item.notes}
           </p>
         )}
+
+        {canAnswer &&
+          (answering ? (
+            <form onSubmit={saveAnswer} className="mt-2 space-y-2">
+              <textarea
+                autoFocus
+                rows={3}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Your answer, in your own words."
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="rounded-lg bg-runfree-grad px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {busy ? "Saving…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAnswering(false)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:text-runfree-ink"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={() => {
+                setDraft(item.notes ?? "");
+                setAnswering(true);
+              }}
+              className="mt-1.5 text-[11px] font-bold text-runfree-magentaDeep transition hover:underline"
+            >
+              {item.notes ? "Edit your answer" : "Answer"}
+            </button>
+          ))}
 
         {group.kind === "checklist" && item.due_on && (
           <p className="mt-1 text-[11px] font-semibold text-runfree-magentaDeep">
@@ -7996,12 +8748,15 @@ function PrepareSection({
   onOpenHandout,
   onOpenFile,
   isGroup = true,
+  title,
   standalone = false,
 }: {
   id: string;
   /** True when this is a panel in its own right rather than a row. */
   /** False for a 1:1 engagement, which has no team to prepare. */
   isGroup?: boolean;
+  /** The template's own name for this panel (072) — "Onboarding" on coaching. */
+  title?: string;
   standalone?: boolean;
   prep: ProjectDetail["resources"];
   overview: ProjectDetail["resources"];
@@ -8116,7 +8871,10 @@ function PrepareSection({
         {/* "Your Team" is Pivvot's vocabulary. A Younique client is one
             person, and being told to prepare a team they do not have reads
             as the wrong portal. */}
-        <SectionHeading eyebrow="Before you begin" title={isGroup ? "Prepare Your Team" : "Your Preparation"} />
+        <SectionHeading
+          eyebrow="Before you begin"
+          title={title ?? (isGroup ? "Prepare Your Team" : "Your Preparation")}
+        />
         <div className="mt-8">{body}</div>
       </section>
     );
@@ -8176,6 +8934,7 @@ function SessionsSection({
   moduleOptions,
   canEdit,
   canAssignTasks,
+  myProfileId,
   accessToken,
   projectId,
   onChanged,
@@ -8189,6 +8948,7 @@ function SessionsSection({
   canEdit: boolean;
   /** Task create/edit/complete — admins plus anyone granted it (053). */
   canAssignTasks: boolean;
+  myProfileId?: string;
   accessToken: string | null;
   projectId: string;
   onChanged: () => void;
@@ -8255,6 +9015,12 @@ function SessionsSection({
             moduleOptions={moduleOptions}
             canEdit={canEdit}
             canAssignTasks={canAssignTasks}
+            wording={detail.template?.ui.wording}
+            ui={detail.template?.ui}
+            myProfileId={myProfileId}
+            members={detail.members}
+            projectName={detail.name}
+            clientEmails={detail.members.filter((m) => !m.isStaff).map((m) => m.email)}
             voice={detail.template?.voice ?? "church"}
             thumb={s.recording_url ? thumbs[s.recording_url] : undefined}
             tasks={detail.tasks.filter((t) => t.session_id === s.id)}
@@ -8347,6 +9113,12 @@ function SessionRow({
   moduleOptions,
   canEdit,
   canAssignTasks,
+  wording,
+  ui,
+  myProfileId,
+  members = [],
+  projectName,
+  clientEmails = [],
   voice = "church",
   thumb,
   tasks,
@@ -8362,6 +9134,15 @@ function SessionRow({
   canEdit: boolean;
   /** Task create/edit/complete — admins plus anyone granted it (053). */
   canAssignTasks: boolean;
+  /** Template wording (072): "Commitments" on a coaching project. */
+  wording?: TemplateUi["wording"];
+  /** The template's questions (072): pre-session prep and post-session feedback. */
+  ui?: TemplateUi;
+  myProfileId?: string;
+  members?: ProjectDetail["members"];
+  projectName?: string;
+  /** Who a recap email goes to — the client side of the roster. */
+  clientEmails?: string[];
   /** 067: "church team" or "client team" on the publish checkbox. */
   voice?: "church" | "organization";
   /** Loom still for the collapsed row. */
@@ -8425,6 +9206,40 @@ function SessionRow({
   }
 
   const loomId = session.recording_url ? extractLoomId(session.recording_url) : null;
+
+  // Brooke's five questions before every session, and feedback after (072).
+  const prepQuestions = ui?.session_prep ?? [];
+  const feedbackQuestions = ui?.feedback ?? [];
+  const prepMap = answersByProfile(session.prep_answers);
+  const feedbackMap = answersByProfile(session.feedback);
+  const myPrep = myProfileId ? prepMap[myProfileId] : undefined;
+  const myFeedback = myProfileId ? feedbackMap[myProfileId] : undefined;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isUpcoming = !session.held_on || session.held_on >= todayIso;
+  const isHeld = !!session.held_on && session.held_on <= todayIso;
+  const nameOf = (pid: string) =>
+    members.find((m) => m.profileId === pid)?.fullName ?? "A team member";
+  const recapHref = (() => {
+    const strip = (html: string) =>
+      html
+        .replace(/<\/(p|div|li|h[1-6]|br)>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    const lines: string[] = [];
+    if (session.takeaways) lines.push(session.takeaways.trim(), "");
+    if (session.recap) lines.push(strip(session.recap), "");
+    if (tasks.length > 0) {
+      lines.push(`${wording?.tasks ?? "Next steps"}:`);
+      for (const t of tasks) lines.push(`- ${t.title}${t.due_on ? ` (by ${formatSessionDate(t.due_on)})` : ""}`);
+      lines.push("");
+    }
+    lines.push("See you at the next one.");
+    const subject = `${projectName ? `${projectName} — ` : ""}${session.title}: recap`;
+    return `mailto:${clientEmails.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
+  })();
 
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
@@ -8571,7 +9386,7 @@ function SessionRow({
                   also appear at the top of the project and in the module. */}
               <div>
                 <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-                  Next steps &amp; homework
+                  {wording?.tasks ?? "Next steps & homework"}
                 </h5>
                 <div className="space-y-2.5">
                   {/* Tasks follow the task grant (053), not the editor role —
@@ -8587,6 +9402,7 @@ function SessionRow({
                   />
                   {canAssignTasks && (
                     <AddTask
+                      label={wording?.task_add}
                       projectId={projectId}
                       accessToken={accessToken}
                       siblings={tasks}
@@ -8601,6 +9417,29 @@ function SessionRow({
                   </p>
                 </div>
               </div>
+              {(prepQuestions.length > 0 || feedbackQuestions.length > 0) && (
+                <SessionAnswersPanel
+                  prepQuestions={prepQuestions}
+                  feedbackQuestions={feedbackQuestions}
+                  prepMap={prepMap}
+                  feedbackMap={feedbackMap}
+                  nameOf={nameOf}
+                  isUpcoming={isUpcoming}
+                />
+              )}
+              {isHeld && clientEmails.length > 0 && (
+                <div>
+                  <a
+                    href={recapHref}
+                    className="inline-flex items-center gap-2 rounded-lg bg-runfree-indigo px-3.5 py-2 text-xs font-bold text-runfree-navy transition hover:bg-runfree-indigo/70"
+                  >
+                    Draft the recap email
+                  </a>
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Opens your mail app with the takeaways, the summary and the {(wording?.tasks ?? "next steps").toLowerCase()} filled in.
+                  </p>
+                </div>
+              )}
               <div>
                 <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
                   Photos from this session
@@ -8648,10 +9487,20 @@ function SessionRow({
             </>
           ) : (
             <>
+              {prepQuestions.length > 0 && isUpcoming && (
+                <SessionPrepForm
+                  questions={prepQuestions}
+                  note={ui?.session_prep_note}
+                  mine={myPrep}
+                  sessionId={session.id}
+                  accessToken={accessToken}
+                  onChanged={onChanged}
+                />
+              )}
               {tasks.length > 0 && (
                 <div>
                   <h5 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-                    Next steps &amp; homework
+                    {wording?.tasks ?? "Next steps & homework"}
                   </h5>
                   <TaskList
                     tasks={tasks}
@@ -8698,6 +9547,17 @@ function SessionRow({
                   session row would bury the recording and the assignments
                   underneath it. */}
               {session.recap && <SessionRecap recap={session.recap} />}
+
+              {feedbackQuestions.length > 0 && isHeld && (
+                <SessionFeedbackForm
+                  questions={feedbackQuestions}
+                  ratingLabel={ui?.feedback_rating}
+                  mine={myFeedback}
+                  sessionId={session.id}
+                  accessToken={accessToken}
+                  onChanged={onChanged}
+                />
+              )}
 
               {/* `commitments` is no longer rendered. It was one of the three
                   places next steps lived — Andrew: "currently there's three
@@ -8822,6 +9682,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function TeamSection({
   id,
+  title,
   detail,
   imageUrls,
   canManage,
@@ -8833,6 +9694,8 @@ function TeamSection({
   onChanged,
 }: {
   id: string;
+  /** "Your Coach" on a coaching project (072). */
+  title?: string;
   detail: ProjectDetail;
   imageUrls: Record<string, string>;
   canManage: boolean;
@@ -8853,6 +9716,19 @@ function TeamSection({
   // Andrew: "make sure that Will Mancini comes before Brooke Domek, but the
   // lead navigator is always first."
   const RUNFREE_ORDER = ["will@runfree.co", "brooke@runfree.co"];
+  // "Here's where we start" (072): the onboarding answers, read back as a
+  // baseline. Brooke: "having a starting place … I want to be able to go
+  // back … versus where we are now."
+  const baselineKey = detail.template?.ui.baseline_group;
+  const baselineGroup = baselineKey ? detail.prepGroups.find((g) => g.key === baselineKey) : undefined;
+  const baseline = baselineGroup
+    ? {
+        group: baselineGroup,
+        items: detail.prepItems
+          .filter((i) => i.group_id === baselineGroup.id)
+          .sort((a, b) => a.position - b.position),
+      }
+    : null;
   const runfree = detail.members
     .filter((m) => m.isStaff)
     .sort((a, b) => {
@@ -8900,7 +9776,7 @@ function TeamSection({
       {/* Same heading style as "Your Team" above it. Andrew: "I like the size
           of the title, your team. I want you to make the... your run free
           team the same style of header." */}
-      <SectionHeading eyebrow="Working alongside you" title="Your RunFree Team" />
+      <SectionHeading eyebrow="Working alongside you" title={title ?? "Your RunFree Team"} />
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {runfree.map((m) => (
           <div key={m.profileId}>
@@ -8967,6 +9843,12 @@ function TeamSection({
           accessToken={accessToken}
           onChanged={onChanged}
         />
+      )}
+
+      {baseline && (
+        <div className="mt-12">
+          <BaselineCard group={baseline.group} items={baseline.items} />
+        </div>
       )}
 
       {teamGroups.length > 0 && (

@@ -185,14 +185,18 @@
 @media (pointer: coarse) {
   button.text-\[11px\]:not(.absolute),
   button.text-\[10px\]:not(.absolute),
+  button.text-xs:not(.absolute):not(.rounded-lg):not(.rounded-full),
   a.text-\[11px\]:not(.absolute),
+  a.text-xs:not(.absolute),
   footer a,
   a[href^="mailto:"] {
     position: relative;
   }
   button.text-\[11px\]:not(.absolute)::after,
   button.text-\[10px\]:not(.absolute)::after,
+  button.text-xs:not(.absolute):not(.rounded-lg):not(.rounded-full)::after,
   a.text-\[11px\]:not(.absolute)::after,
+  a.text-xs:not(.absolute)::after,
   footer a::after,
   a[href^="mailto:"]::after {
     content: "";

@@ -59,13 +59,21 @@ Do, in order:
    not done, initiatives with no check-in for fourteen or more days
    (`initiative_updates`, else `last_review_on`, else `start_date`),
    midground measures with no reading in thirty days, and
-   `project_highlights` rows with a null `thumb_path` and no cached art.
+   `project_highlights` rows with both `thumb_path` and `thumb_url` null
+   whose `media_kind` is not `video` or `pdf` (those two draw their own art
+   at render time) — list them by project and title, not just a count.
 4. **Experience.** Start the dev server in the background
    (`./node_modules/.bin/next dev -p 3001`, log to
    `/tmp/next-dev-3001.log`), wait for `http://localhost:3001/` to answer,
-   then run `scripts/mobile-audit.ts` against Athena and `scripts/sweep.ts`.
-   Read what they report: spills, console errors, broken images. Stop the
-   dev server when done (`pkill -f "next dev -p 3001"`).
+   then run `scripts/mobile-audit.ts <Athena id>` and
+   `scripts/sweep.ts <Athena id>` (both take the project id as their first
+   argument). Read what they report: spills, console errors, broken images,
+   tiny tap targets. Stop the dev server when done
+   (`pkill -f "next dev -p 3001"`). Both scripts create and delete their own
+   throwaway account; confirm afterwards that none remains. Supabase
+   `get_advisors` for performance returns more than the tool can display —
+   grep its saved output for lint names and count them rather than reading
+   it; only a change in those counts is worth a line.
 5. **Repo.** On `main`, `git status` must be clean and `git log origin/main
    -1` must be the deployed commit. If not, report it; do not commit
    someone else's work.

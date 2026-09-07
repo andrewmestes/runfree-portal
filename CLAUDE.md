@@ -1430,3 +1430,54 @@ dependency problem and is really a clobbered build directory. It has happened
 twice in this repo.
 
 If it does happen: stop the dev server, `rm -rf .next`, start it again.
+
+## The Execution tab, reviewed against God Dreams and the goal-tracking tools (077)
+
+Andrew, 6 Sept 2026: "the intuitive functionality, and the overall feel of
+the execution tab needs work. I want you to review that site based on the
+God Dreams material, current competitor's online execution and goal
+tracking websites, and do anything you can to improve it."
+
+The review (Ninety, Bloom Growth, Rhythm Systems, Cascade, Perdoo, Quantive,
+Lattice, Weekdone, ClearPoint, AchieveIt, Tability, plus the church
+dashboards) found one thing every tool that survives a quarter has and this
+tab lacked: a **weekly check-in** on each priority, and visible staleness
+when it is skipped. Will's Action Step List already asks for it on paper —
+"Last Review / This Review" in the sheet header.
+
+- **`initiative_updates`** (077): one row per check-in — `status`, `note`,
+  `on_date`, `author_profile_id` (defaults to `auth.uid()`). Written under
+  `may_manage_tasks` like the steps, read by the whole project. `postUpdate`
+  stamps `initiatives.status` and `last_review_on` best-effort, the same
+  two-call shape as `logReading`; `effectiveStatus()` prefers the newest
+  check-in, so the board never disagrees with the history. **Status changes
+  go through a check-in** — the bare RagPicker on an initiative is gone,
+  because two ways to set a light drift, and Rhythm's rule (change the
+  colour, say why) is the one worth keeping. `STALE_AFTER_DAYS` is 14.
+  RLS checks 29a–29e.
+- **The board reads as distance.** `HorizonBoard` has a left rail per band
+  that darkens from the far horizon to the near one, with "You are here" on
+  the Foreground (the book's own figure 15.1). The four identical navy
+  header bars had made the horizons blur into one table.
+- **The detail opens under the band that was clicked** — `HorizonBoard`
+  takes `detail` and renders it after the selected band. It used to render
+  below the whole board, three bands away from a Background objective.
+  `ExecutionPanel` scrolls `#execution-detail` into view (`nearest`) only
+  on a user's click, not the default selection.
+- **An initiative box says how it is going**: `StepStrip` (the steps' lights
+  end to end — still no percentage), owner, days left, days since check-in
+  (amber when stale).
+- **`InitiativeDetail` is ordered for the meeting**: light + last check-in
+  + "Post this week's check-in" → strip → owner/team/dates → action steps →
+  check-in history → the plan, folded (open by default only when nothing is
+  written and someone can write it; the Type select lives in there now).
+- **This week** merges reasons per initiative (one line, "at risk · no
+  check-in for 9 days"), every line is a button that opens the initiative,
+  and the fourth tile is the day of the ninety with a bar.
+- **`SetupStrip`** (editors, until complete): Vision / Four objectives /
+  One-year goal / Four initiatives, each a button to its band.
+- **Renewal Cycle** shows the next stop only; "Show the full three-year
+  cycle" unfolds the twelve. `Trajectory` on the Measures Dashboard is a
+  positioned div now — a stretched SVG drew every dot as an ellipse.
+- `BackgroundDetail` hides the Title field from readers: the shell already
+  prints it.

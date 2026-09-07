@@ -1145,6 +1145,47 @@ export type Database = {
         ];
       };
       /** One row of the Action Step List under an initiative. */
+      /** A weekly check-in on an initiative (077): the light chosen and the story behind it. */
+      initiative_updates: {
+        Row: {
+          id: string;
+          initiative_id: string;
+          project_id: string;
+          status: "red" | "amber" | "green";
+          note: string | null;
+          on_date: string;
+          author_profile_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          initiative_id: string;
+          project_id: string;
+          status: "red" | "amber" | "green";
+          note?: string | null;
+          on_date?: string;
+          author_profile_id?: string | null;
+        };
+        Update: {
+          status?: "red" | "amber" | "green";
+          note?: string | null;
+          on_date?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "initiative_updates_initiative_id_fkey";
+            columns: ["initiative_id"];
+            referencedRelation: "initiatives";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "initiative_updates_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       initiative_steps: {
         Row: {
           id: string;

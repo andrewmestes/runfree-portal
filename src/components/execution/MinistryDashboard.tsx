@@ -424,18 +424,38 @@ function Trajectory({ prior, now, goal }: { prior: number | null; now: number; g
   const lo = Math.min(prior ?? now, now, goal);
   const hi = Math.max(prior ?? now, now, goal);
   const span = hi - lo || 1;
-  const x = (v: number) => 4 + ((v - lo) / span) * 92;
+  const pct = (v: number) => `${2 + ((v - lo) / span) * 96}%`;
   const reached = goal >= (prior ?? now) ? now >= goal : now <= goal;
+  const from = prior ?? now;
+  // Positioned with percentages on a real element rather than a stretched
+  // SVG — a non-uniform viewBox drew every dot as an ellipse.
   return (
-    <svg viewBox="0 0 100 10" className="mt-1.5 h-2.5 w-full max-w-md" aria-hidden="true" preserveAspectRatio="none">
-      <line x1="4" y1="5" x2="96" y2="5" stroke="#E5E7EB" strokeWidth="2" strokeLinecap="round" />
+    <div className="relative mt-2 h-3 w-full max-w-md" aria-hidden="true">
+      <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-gray-200" />
+      <div
+        className="absolute top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-runfree-navy/40"
+        style={{ left: pct(Math.min(from, now)), width: `calc(${pct(Math.max(from, now))} - ${pct(Math.min(from, now))})` }}
+      />
       {prior != null && (
-        <line x1={x(prior)} y1="5" x2={x(now)} y2="5" stroke="#1F378C" strokeWidth="2" strokeLinecap="round" opacity="0.35" />
+        <span
+          title={`Prior year ${prior}`}
+          className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-400"
+          style={{ left: pct(prior) }}
+        />
       )}
-      {prior != null && <circle cx={x(prior)} cy="5" r="2.2" fill="#9CA3AF" />}
-      <circle cx={x(goal)} cy="5" r="2.6" fill="none" stroke={reached ? "#10B981" : "#F15A25"} strokeWidth="1.6" />
-      <circle cx={x(now)} cy="5" r="2.8" fill="#C21F73" />
-    </svg>
+      <span
+        title={`Goal ${goal}`}
+        className={`absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-white ${
+          reached ? "border-emerald-500" : "border-runfree-orange"
+        }`}
+        style={{ left: pct(goal) }}
+      />
+      <span
+        title={`Now ${now}`}
+        className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-runfree-magentaDeep ring-2 ring-white"
+        style={{ left: pct(now) }}
+      />
+    </div>
   );
 }
 

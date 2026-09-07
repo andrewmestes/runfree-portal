@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { nextRenewalStop, renewalCycle, type ExecutionData } from "@/lib/execution";
 import { BlockHeading, prettyDate, todayIso } from "./ui";
 
@@ -28,6 +28,9 @@ export default function RenewalCycle({
   canEdit: boolean;
 }) {
   const today = todayIso();
+  // Twelve dates over three years is a calendar, not a page. Show the next
+  // stop; the rest unfolds on request.
+  const [all, setAll] = useState(false);
   const anchor = useMemo(
     () =>
       data.initiatives
@@ -66,10 +69,10 @@ export default function RenewalCycle({
       />
 
       <ol className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
-        {stops.map((s, n) => {
+        {(all ? stops : stops.filter((s) => s.on === next?.on || (!next && s === stops[stops.length - 1]))).map((s, n, shown) => {
           const past = s.on < today;
           const isNext = next?.on === s.on;
-          const yearBreak = n === 0 || stops[n - 1].year !== s.year;
+          const yearBreak = all && (n === 0 || shown[n - 1].year !== s.year);
           return (
             <Fragment key={s.on + s.marker}>
               {/* A labelled row rather than a heavier rule. The border version
@@ -122,9 +125,18 @@ export default function RenewalCycle({
         })}
       </ol>
 
-      <p className="mt-2.5 text-[11px] text-gray-400">
-        Counted from {prettyDate(anchor)}, the earliest start date on a live initiative.
-      </p>
+      <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-2">
+        <button
+          onClick={() => setAll((v) => !v)}
+          aria-expanded={all}
+          className="text-xs font-semibold text-runfree-magentaDeep transition hover:underline"
+        >
+          {all ? "Show only the next stop" : "Show the full three-year cycle — 12 dates"}
+        </button>
+        <p className="text-[11px] text-gray-400">
+          Counted from {prettyDate(anchor)}, the earliest start date on a live initiative.
+        </p>
+      </div>
     </section>
   );
 }

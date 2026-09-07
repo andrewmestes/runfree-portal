@@ -251,38 +251,52 @@ export default function HelpPage() {
             built for one meeting a week, about fifteen minutes long.
             <br />
             <br />
-            The centre of the page is your <strong>Horizon Storyline</strong> — the same
-            one-page sheet from the retreat, with four bands:
+            The top of the page is <strong>This week</strong>: what needs attention, what
+            nobody has checked in on, what is past due, and which day of the ninety you
+            are on. Every line is a button that opens the initiative it names.
+            <br />
+            <br />
+            Under it is your <strong>Horizon Storyline</strong> — the same one-page sheet
+            from the retreat, far to near:
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>
-                <strong>Beyond the Horizon</strong> (5–20 years) — the long-range dream,
-                and the one or two of Will&rsquo;s twelve vision templates that describe it.
+                <strong>Beyond-the-Horizon Vision</strong> (5–20 years) — the vivid
+                description in full, the two vision templates that describe it, and the
+                full description as a PDF.
               </li>
               <li>
-                <strong>Background Vision</strong> (3 years) — four priorities. Open any
-                one and you get its notes: where we stand, where we&rsquo;re headed, and
-                how we&rsquo;ll get there.
+                <strong>Background Horizon</strong> (3 years) — four objectives, each with
+                a title and a full description. Open one for its notes: where we stand,
+                where we&rsquo;re headed, how we&rsquo;ll get there.
               </li>
               <li>
-                <strong>Midground Milestone</strong> (1 year) — the one marker that says
-                this year counted, <em>and</em> the numbers behind it. Each measure runs
-                from a baseline to a target and you log where it is as the year goes on.
+                <strong>Mid-Ground Horizon</strong> (1 year) — the one-year goal, both the
+                sentence and the numbers behind it. Each measure runs from a baseline to a
+                target and lights a row of tiles as the year goes on.
               </li>
               <li>
-                <strong>Foreground Initiatives</strong> (90 days) — up to four, each with
-                a leader, a plan, and action steps carrying a person, a date and a light.
+                <strong>Foreground Horizon</strong> (90 days) — four initiatives, each with
+                an owner, a light, its action steps as a strip of colour, and how long
+                since anyone checked in.
               </li>
             </ul>
-            <strong>Click any box and it opens underneath.</strong> That is the whole
-            navigation — the sheet is the menu.
+            <strong>Click any box and it opens right under its band.</strong> That is the
+            whole navigation — the sheet is the menu.
             <br />
             <br />
-            Below it, the <strong>Ministry Dashboard</strong> is your standing scoreboard
-            (the rows are yours to name), and the <strong>Renewal Cycle</strong> turns the
-            review rhythm into real dates — half a day at ninety days, a full day at six
-            months, half a day at nine, a two-day retreat at the year, three years
-            running. That sits <em>on top of</em> your normal weekly and monthly meetings,
-            not instead of them.
+            Opening an initiative gives you its dashboard: post <strong>this week&rsquo;s
+            check-in</strong> (a light and a sentence — what moved, or what is in the way
+            and the plan), the action steps with a person, a date and a light on each, the
+            check-ins so far, and the plan folded underneath. An initiative nobody has
+            checked in on for two weeks shows it in amber, on the board and at the top of
+            the page.
+            <br />
+            <br />
+            Below the storyline, the <strong>Measures Dashboard</strong> is your standing
+            scoreboard — headers you name, measures under each, prior year, now and next
+            year&rsquo;s goal — and the <strong>Renewal Cycle</strong> shows the next
+            review date, with the full three-year rhythm one click away. That rhythm sits{" "}
+            <em>on top of</em> your normal weekly and monthly meetings, not instead of them.
             <br />
             <br />
             There is no percentage complete anywhere in it, and that is deliberate — a
@@ -498,19 +512,25 @@ export default function HelpPage() {
               project, they will not see it until you add the first initiative.
               <br />
               <br />
-              Start with the scoreboard: <strong>Start from Will&rsquo;s dashboard</strong>{" "}
-              drops in the nine rows off the printed sheet, and the church renames or
-              deletes whatever does not apply. Then add initiatives. The{" "}
-              <strong>Renewal Cycle</strong> counts from the earliest start date on a live
-              initiative, so put a real start date on the first one and the twelve review
-              dates fill themselves in.
+              A setup strip above the board tracks the four things a storyline needs —
+              the vision, four objectives, the one-year goal, four initiatives — and
+              disappears when they are all in. Put a real start date on the first
+              initiative: the ninety-day clock at the top of the page and the{" "}
+              <strong>Renewal Cycle</strong> both count from the earliest one.
               <br />
               <br />
-              <strong>Who can change what.</strong> The plan and the scoreboard are yours
-              and any editor&rsquo;s. The action steps and their lights follow the same
-              switch as tasks — admins, plus anyone you have given task access to on the
-              Access dialog. That is on purpose: the person accountable for a step is
-              usually church staff, not a portal editor.
+              <strong>The weekly habit is the check-in.</strong> Whoever owns an initiative
+              opens it, picks the light, and writes one sentence. If it is not green, the
+              sentence is the plan to get back there. That is what keeps the board honest
+              past the first quarter — the tools that die by the third quarter die of
+              silence, not of red.
+              <br />
+              <br />
+              <strong>Who can change what.</strong> The storyline, the plan and the
+              scoreboard are yours and any editor&rsquo;s. Check-ins, action steps and
+              their lights follow the same switch as tasks — admins, plus anyone you have
+              given task access to on the Access dialog. That is on purpose: the person
+              accountable for an initiative is usually church staff, not a portal editor.
               <br />
               <br />
               <strong>Copy update</strong> at the top of the tab puts the whole picture —

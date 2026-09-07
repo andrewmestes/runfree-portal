@@ -61,22 +61,25 @@ export default function BackgroundDetail({
   return (
     <div className="space-y-6">
       {/* The objective's title (076). Andrew: "a title for the background
-          horizon objective and a full description that ties along with it." */}
-      <section>
-        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-          Title
-        </h4>
-        <Cell
-          value={box?.title ?? null}
-          onSave={(v) =>
-            void saveHorizonBox(accessToken, projectId, "background", position, { title: v }).then(onChanged)
-          }
-          disabled={!canEdit}
-          placeholder={`Objective ${position + 1} — a name the team can say`}
-          ariaLabel="Objective title"
-          className="!px-0 font-display !text-lg font-extrabold tracking-tight !text-runfree-ink"
-        />
-      </section>
+          horizon objective and a full description that ties along with it."
+          The shell above already prints it, so a reader is not shown it
+          twice; an editor gets the field. */}
+      {canEdit && (
+        <section>
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
+            Title
+          </h4>
+          <Cell
+            value={box?.title ?? null}
+            onSave={(v) =>
+              void saveHorizonBox(accessToken, projectId, "background", position, { title: v }).then(onChanged)
+            }
+            placeholder={`Objective ${position + 1} — a name the team can say`}
+            ariaLabel="Objective title"
+            className="!px-0 font-display !text-lg font-extrabold tracking-tight !text-runfree-ink"
+          />
+        </section>
+      )}
 
       <section>
         <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">

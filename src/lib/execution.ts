@@ -72,6 +72,25 @@ export type InitiativeStep = {
   created_at: string;
 };
 
+/**
+ * A weekly check-in on an initiative (077).
+ *
+ * The one record every execution tool that lasts has at its centre: the
+ * owner says what colour it is and what changed, and the board can say how
+ * long it has been since anyone said anything. Will's Action Step List asks
+ * for it on paper — "Last Review" / "This Review" in the sheet's header.
+ */
+export type InitiativeUpdate = {
+  id: string;
+  initiative_id: string;
+  project_id: string;
+  status: RagStatus;
+  note: string | null;
+  on_date: string;
+  author_profile_id: string | null;
+  created_at: string;
+};
+
 export type ScoreboardMetric = {
   id: string;
   project_id: string;
@@ -150,6 +169,7 @@ export type VisionTemplateRow = {
 export type ExecutionData = {
   initiatives: Initiative[];
   steps: InitiativeStep[];
+  updates: InitiativeUpdate[];
   metrics: ScoreboardMetric[];
   horizon: HorizonBox[];
   measures: MidgroundMeasure[];
@@ -264,7 +284,7 @@ export async function getExecutionData(
   projectId: string
 ): Promise<ExecutionData> {
   const client = createUserClient(accessToken);
-  const [inits, steps, metrics, horizon, measures, readings, templates] = await Promise.all([
+  const [inits, steps, metrics, horizon, measures, readings, templates, updates] = await Promise.all([
     client.from("initiatives").select("*").eq("project_id", projectId).order("position"),
     client.from("initiative_steps").select("*").eq("project_id", projectId).order("position"),
     client.from("scoreboard_metrics").select("*").eq("project_id", projectId).order("position"),
@@ -272,9 +292,16 @@ export async function getExecutionData(
     client.from("midground_measures").select("*").eq("project_id", projectId).order("position"),
     client.from("measure_readings").select("*").eq("project_id", projectId).order("on_date"),
     client.from("project_vision_templates").select("*").eq("project_id", projectId).order("position"),
+    client
+      .from("initiative_updates")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("on_date", { ascending: false })
+      .order("created_at", { ascending: false }),
   ]);
   if (inits.error) throw inits.error;
   if (steps.error) throw steps.error;
+  if (updates.error) throw updates.error;
   if (metrics.error) throw metrics.error;
   if (horizon.error) throw horizon.error;
   if (measures.error) throw measures.error;
@@ -288,7 +315,85 @@ export async function getExecutionData(
     measures: (measures.data ?? []) as MidgroundMeasure[],
     readings: (readings.data ?? []) as MeasureReading[],
     templates: (templates.data ?? []) as VisionTemplateRow[],
+    updates: (updates.data ?? []) as InitiativeUpdate[],
   };
+}
+
+/* ------------------------------------------------------------- check-ins */
+
+/**
+ * Post this week's check-in.
+ *
+ * Writes the update AND stamps the initiative's light and `last_review_on`,
+ * so the board and the history never disagree — the same two-call shape as
+ * `logReading`. The stamp is best effort: the person posting is usually
+ * church staff with the task grant (053), and `initiatives` is editor-only,
+ * so `latestUpdate()` is what the board reads first.
+ */
+export async function postUpdate(
+  accessToken: string,
+  projectId: string,
+  initiativeId: string,
+  status: RagStatus,
+  note: string | null,
+  onDate: string
+): Promise<void> {
+  const client = createUserClient(accessToken);
+  const { error } = await client.from("initiative_updates").insert({
+    project_id: projectId,
+    initiative_id: initiativeId,
+    status,
+    note,
+    on_date: onDate,
+  });
+  if (error) throw error;
+  await client
+    .from("initiatives")
+    .update({ status, last_review_on: onDate })
+    .eq("id", initiativeId);
+}
+
+export async function deleteUpdate(accessToken: string, id: string): Promise<void> {
+  const { error } = await createUserClient(accessToken)
+    .from("initiative_updates")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** The newest check-in on an initiative, or null. `updates` arrives newest first. */
+export function latestUpdate(updates: InitiativeUpdate[], initiativeId: string): InitiativeUpdate | null {
+  return updates.find((u) => u.initiative_id === initiativeId) ?? null;
+}
+
+/** The light to show: the newest check-in wins over the stamped column. */
+export function effectiveStatus(i: Initiative, updates: InitiativeUpdate[]): RagStatus {
+  return latestUpdate(updates, i.id)?.status ?? i.status;
+}
+
+/** Whole days between two ISO dates (b - a). */
+export function daysBetween(aIso: string, bIso: string): number {
+  const [ay, am, ad] = aIso.split("-").map(Number);
+  const [by, bm, bd] = bIso.split("-").map(Number);
+  return Math.floor((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
+}
+
+/** Days since the last check-in; falls back to `last_review_on`, then the start date; null if none of those. */
+export function daysSinceUpdate(i: Initiative, updates: InitiativeUpdate[], todayIso: string): number | null {
+  const on = latestUpdate(updates, i.id)?.on_date ?? i.last_review_on ?? i.start_date;
+  return on ? daysBetween(on, todayIso) : null;
+}
+
+/**
+ * The weekly cadence, with a week of grace: an initiative nobody has spoken
+ * to in two weeks is stale. Tability and AchieveIt both surface exactly this
+ * — the dashboard that dies by the third quarter dies of silence, not of red.
+ */
+export const STALE_AFTER_DAYS = 14;
+
+export function isStale(i: Initiative, updates: InitiativeUpdate[], todayIso: string): boolean {
+  const d = daysSinceUpdate(i, updates, todayIso);
+  return d != null && d >= STALE_AFTER_DAYS;
 }
 
 /* --------------------------------------------------------------- writing */

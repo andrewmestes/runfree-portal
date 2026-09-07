@@ -1782,6 +1782,78 @@ async function main() {
         );
       }
 
+      // Check-ins (077) follow the action steps: the task grant posts them,
+      // the editor role alone does not, and the whole project reads them.
+      {
+        const { data: host } = await asEditor
+          .from("initiatives")
+          .insert({ project_id: projectA.id, name: `check-in host ${RUN}` })
+          .select("id")
+          .single();
+        if (host) {
+          const { error: editorPostErr } = await asEditor
+            .from("initiative_updates")
+            .insert({ project_id: projectA.id, initiative_id: host.id, status: "amber", note: "editor alone" });
+          record(
+            "29a. an editor alone CANNOT post a check-in (053 gate)",
+            !!editorPostErr,
+            editorPostErr ? "correctly rejected" : "insert unexpectedly succeeded"
+          );
+
+          const { data: posted, error: adminPostErr } = await asAdmin
+            .from("initiative_updates")
+            .insert({ project_id: projectA.id, initiative_id: host.id, status: "green", note: "admin", on_date: "2026-09-01" })
+            .select("id, author_profile_id")
+            .single();
+          record(
+            "29b. an admin can post a check-in, stamped with their profile",
+            !adminPostErr && !!posted && posted.author_profile_id === adminA.id,
+            adminPostErr ? adminPostErr.message : `author ${posted?.author_profile_id === adminA.id ? "matches" : "wrong"}`
+          );
+
+          await supabaseAdmin
+            .from("project_members")
+            .update({ can_manage_tasks: true })
+            .eq("project_id", projectA.id)
+            .eq("profile_id", viewerA.id);
+          const { data: grantedPost, error: grantedPostErr } = await asViewer
+            .from("initiative_updates")
+            .insert({ project_id: projectA.id, initiative_id: host.id, status: "red", note: "granted viewer" })
+            .select("id")
+            .single();
+          record(
+            "29c. a granted viewer CAN post a check-in (053)",
+            !grantedPostErr && !!grantedPost,
+            grantedPostErr ? grantedPostErr.message : "created"
+          );
+          await supabaseAdmin
+            .from("project_members")
+            .update({ can_manage_tasks: false })
+            .eq("project_id", projectA.id)
+            .eq("profile_id", viewerA.id);
+
+          const { data: viewerSees } = await asViewer
+            .from("initiative_updates")
+            .select("id")
+            .eq("initiative_id", host.id);
+          record(
+            "29d. a viewer CAN read the check-ins",
+            (viewerSees ?? []).length >= 2,
+            `${(viewerSees ?? []).length} row(s)`
+          );
+
+          const { data: outsiderSees } = await asOutsider
+            .from("initiative_updates")
+            .select("id")
+            .eq("initiative_id", host.id);
+          record(
+            "29e. an outsider sees no check-ins",
+            (outsiderSees ?? []).length === 0,
+            `${(outsiderSees ?? []).length} row(s) leaked`
+          );
+        }
+      }
+
       // Assigning a step to a person is a step write, so it follows the step
       // policy rather than needing one of its own.
       {

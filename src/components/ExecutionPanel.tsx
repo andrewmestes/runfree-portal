@@ -5,8 +5,13 @@ import type { ProjectMember } from "@/lib/projects";
 import {
   RAG_DOT,
   RAG_LABEL,
+  STALE_AFTER_DAYS,
   createInitiative,
+  daysBetween,
+  daysSinceUpdate,
+  effectiveStatus,
   getExecutionData,
+  isStale,
   updateInitiative,
   measureProgress,
   nextRenewalStop,
@@ -14,7 +19,9 @@ import {
   effectiveCurrent,
   signedFileUrl,
   type ExecutionData,
+  type Initiative,
 } from "@/lib/execution";
+import { richTextIsEmpty } from "@/lib/rich-text";
 import HorizonBoard, { VisionFrameMark, type Selection } from "./execution/HorizonBoard";
 import BeyondDetail from "./execution/BeyondDetail";
 import BackgroundDetail from "./execution/BackgroundDetail";
@@ -34,15 +41,19 @@ import { BlockHeading, Cell, isDateish, prettyDate, todayIso } from "./execution
  *
  * So the page is ordered the way that meeting runs:
  *
- *   This week      — what is red, what is overdue, when the next review is
- *   Horizon Board  — the 1:4:1:4 sheet, and the navigator for everything below
- *   (detail)       — whichever box is selected, in full
- *   Ministry Dashboard — the monthly numbers
- *   Renewal Cycle  — the rhythm, as dates
+ *   This week      — what is red, what is stale, what is overdue, how long
+ *                    is left in the ninety days, when the next renewal is.
+ *                    Every line is a button that opens the thing it names.
+ *   Horizon Board  — the 1:4:1:4 sheet, and the navigator for everything
+ *                    below. The detail opens under the band that was clicked.
+ *   Measures       — the scoreboard.
+ *   Renewal Cycle  — the next stop, with the rest folded.
  *
- * The board doubling as the navigator is what removed the duplicated
- * "Foreground Initiatives" heading Andrew flagged: there is now one place
- * initiatives are listed, and one detail area under it.
+ * 6 Sept 2026 — Andrew: "the intuitive functionality, and the overall feel of
+ * the execution tab needs work." What the review against God Dreams and the
+ * goal-tracking tools (Ninety, Rhythm, Perdoo, Lattice, Tability) changed is
+ * recorded on each component; the thread through all of it is the weekly
+ * check-in (077) and the staleness it makes visible.
  *
  * It loads its own data when opened rather than riding on `getProjectDetail`,
  * for the same reason the books panel does.
@@ -61,7 +72,7 @@ export default function ExecutionPanel({
   accessToken: string;
   /** editor or admin: owns the storyline, the plans and the scoreboard. */
   canEdit: boolean;
-  /** may_manage_tasks: owns action steps, their lights, and measure readings. */
+  /** may_manage_tasks: owns action steps, check-ins and measure readings. */
   canManageSteps: boolean;
   churchName: string;
   members: ProjectMember[];
@@ -87,6 +98,8 @@ export default function ExecutionPanel({
   const [showFinished, setShowFinished] = useState(false);
   // Bumped when an empty Foreground slot is clicked; AddInitiative opens on it.
   const [addSignal, setAddSignal] = useState(0);
+  // A user's click, as opposed to the default selection — only that scrolls.
+  const userSelected = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -115,6 +128,7 @@ export default function ExecutionPanel({
     const live = data.initiatives.filter((i) => !i.is_complete);
     if (focusInitiativeId && data.initiatives.some((i) => i.id === focusInitiativeId)) {
       setSelected({ band: "foreground", id: focusInitiativeId });
+      userSelected.current = true;
       if (data.initiatives.find((i) => i.id === focusInitiativeId)?.is_complete) setShowFinished(true);
     } else if (live.length > 0) setSelected({ band: "foreground", id: live[0].id });
     else if (data.horizon.some((h) => h.horizon === "midground")) setSelected({ band: "midground" });
@@ -130,20 +144,105 @@ export default function ExecutionPanel({
     if (!data.initiatives.some((i) => i.id === selected.id)) setSelected(null);
   }, [data, selected]);
 
+  /**
+   * Bring the detail into view when a person opens something.
+   *
+   * The detail renders under the band that was clicked, so on a desktop it
+   * is usually already on screen and `nearest` moves nothing. On a phone the
+   * four bands stack and the detail can land a screen below the thumb.
+   */
+  useEffect(() => {
+    if (!selected || !userSelected.current) return;
+    const el = document.getElementById("execution-detail");
+    if (!el) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.requestAnimationFrame(() =>
+      el.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" })
+    );
+  }, [selected]);
+
+  const select = (s: Selection | null) => {
+    userSelected.current = true;
+    setSelected(s);
+  };
+
   if (error) return <p className="py-10 text-center text-sm text-gray-500">{error}</p>;
   if (!data) return <p className="py-10 text-center text-sm text-gray-400">Loading…</p>;
 
   const written =
     data.horizon.length + data.initiatives.length + data.metrics.length + data.templates.length;
 
+  const detail = selected ? (
+    <DetailShell
+      title={detailTitle(selected, data)}
+      eyebrow={detailEyebrow(selected)}
+      onClose={() => select(null)}
+      onRename={
+        selected.band === "foreground" && canEdit
+          ? async (v) => {
+              await updateInitiative(accessToken, selected.id, { name: v });
+              await load();
+            }
+          : undefined
+      }
+    >
+      {selected.band === "beyond" && canEdit && (
+        <BeyondDetail
+          data={data}
+          projectId={projectId}
+          accessToken={accessToken}
+          canEdit={canEdit}
+          onChanged={load}
+        />
+      )}
+      {selected.band === "background" && (
+        <BackgroundDetail
+          data={data}
+          position={selected.position}
+          projectId={projectId}
+          accessToken={accessToken}
+          canEdit={canEdit}
+          onChanged={load}
+        />
+      )}
+      {selected.band === "midground" && (
+        <MidgroundDetail
+          data={data}
+          projectId={projectId}
+          accessToken={accessToken}
+          canEdit={canEdit}
+          canLog={canManageSteps}
+          onChanged={load}
+        />
+      )}
+      {selected.band === "foreground" &&
+        (() => {
+          const i = data.initiatives.find((x) => x.id === selected.id);
+          if (!i) return null;
+          return (
+            <InitiativeDetail
+              initiative={i}
+              data={data}
+              members={members}
+              projectId={projectId}
+              accessToken={accessToken}
+              canEdit={canEdit}
+              canManageSteps={canManageSteps}
+              onChanged={load}
+            />
+          );
+        })()}
+    </DetailShell>
+  ) : null;
+
   return (
     <section className="pb-16">
-      <header className="text-center">
+      <header className="flex flex-col items-center text-center">
         {/* God Dreams' own Execute mark, over the Vision Frame window. */}
-        <span className="mx-auto flex items-center justify-center gap-3">
+        <span className="flex items-center justify-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/god-dreams/execute-icon.png" alt="" className="h-12 w-12" />
-          <VisionFrameMark className="h-8 w-8 text-runfree-navy/60" />
+          <img src="/brand/god-dreams/execute-icon.png" alt="" className="h-11 w-11" />
+          <VisionFrameMark className="h-7 w-7 text-runfree-navy/60" />
         </span>
         <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
           God Dreams · The Horizon Storyline, run
@@ -151,10 +250,9 @@ export default function ExecutionPanel({
         <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
           Execution
         </h2>
-        <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-gray-500">
-          One page for the weekly fifteen minutes: what the church is becoming, what
-          that means this year, and what four things are moving in the next ninety
-          days.
+        <p className="mx-auto mt-1.5 max-w-lg text-sm leading-relaxed text-gray-500">
+          The weekly fifteen minutes: what is moving in the next ninety days, and what it is
+          for.
         </p>
       </header>
 
@@ -165,24 +263,26 @@ export default function ExecutionPanel({
         </p>
       ) : (
         <>
-          <ThisWeek data={data} members={members} />
+          <ThisWeek data={data} members={members} onOpen={select} />
 
           <section className="mt-10">
             <BlockHeading
               eyebrow="One page, four horizons"
               title="Horizon Storyline"
-              note="The Beyond-the-Horizon Vision sets the direction, the Background Horizon names four objectives for three years, the Mid-Ground Horizon makes this year measurable, and the Foreground Horizon is the four initiatives your team is moving in the next ninety days. Click an objective, the goal or an initiative to open it."
+              note="Far to near: the vision, four three-year objectives, this year's goal, and the four initiatives moving now. Click anything to open it."
             />
+            {canEdit && <SetupStrip data={data} onOpen={select} onAddInitiative={() => setAddSignal((n) => n + 1)} />}
             <HorizonBoard
               data={data}
               selected={selected}
-              onSelect={setSelected}
+              onSelect={select}
               canEdit={canEdit}
               onOpenFile={async (path) => {
                 const url = await signedFileUrl(accessToken, path);
                 if (url) window.open(url, "_blank", "noopener");
               }}
               onAddInitiative={canEdit ? () => setAddSignal((n) => n + 1) : undefined}
+              detail={detail}
             />
             {canEdit && (
               <AddInitiative
@@ -190,6 +290,7 @@ export default function ExecutionPanel({
                 projectId={projectId}
                 accessToken={accessToken}
                 onChanged={load}
+                onCreated={(id) => select({ band: "foreground", id })}
                 signal={addSignal}
               />
             )}
@@ -214,7 +315,7 @@ export default function ExecutionPanel({
                       .map((i) => (
                         <li key={i.id}>
                           <button
-                            onClick={() => setSelected({ band: "foreground", id: i.id })}
+                            onClick={() => select({ band: "foreground", id: i.id })}
                             aria-pressed={selected?.band === "foreground" && selected.id === i.id}
                             className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
                               selected?.band === "foreground" && selected.id === i.id
@@ -231,69 +332,6 @@ export default function ExecutionPanel({
               </div>
             )}
           </section>
-
-          {selected && (
-            <DetailShell
-              title={detailTitle(selected, data)}
-              eyebrow={detailEyebrow(selected)}
-              onClose={() => setSelected(null)}
-              onRename={
-                selected.band === "foreground" && canEdit
-                  ? async (v) => {
-                      await updateInitiative(accessToken, selected.id, { name: v });
-                      await load();
-                    }
-                  : undefined
-              }
-            >
-              {selected.band === "beyond" && canEdit && (
-                <BeyondDetail
-                  data={data}
-                  projectId={projectId}
-                  accessToken={accessToken}
-                  canEdit={canEdit}
-                  onChanged={load}
-                />
-              )}
-              {selected.band === "background" && (
-                <BackgroundDetail
-                  data={data}
-                  position={selected.position}
-                  projectId={projectId}
-                  accessToken={accessToken}
-                  canEdit={canEdit}
-                  onChanged={load}
-                />
-              )}
-              {selected.band === "midground" && (
-                <MidgroundDetail
-                  data={data}
-                  projectId={projectId}
-                  accessToken={accessToken}
-                  canEdit={canEdit}
-                  canLog={canManageSteps}
-                  onChanged={load}
-                />
-              )}
-              {selected.band === "foreground" &&
-                (() => {
-                  const i = data.initiatives.find((x) => x.id === selected.id);
-                  if (!i) return null;
-                  return (
-                    <InitiativeDetail
-                      initiative={i}
-                      data={data}
-                      members={members}
-                      projectId={projectId}
-                      accessToken={accessToken}
-                      canEdit={canEdit}
-                      canManageSteps={canManageSteps}
-                      onChanged={load}
-                    />
-                  );
-                })()}
-            </DetailShell>
-          )}
 
           <MinistryDashboard
             data={data}
@@ -341,10 +379,11 @@ function detailTitle(s: Selection, data: ExecutionData): string {
 }
 
 /**
- * The one detail area, under the board.
+ * The one detail area, opened under the band it belongs to.
  *
  * A single shell rather than four differently-shaped panels: whatever you
- * click lands in the same place, at the same width, with the same way out.
+ * click lands in the same shape, with the same way out. Flat, because it
+ * sits inside the board now rather than as a card below it.
  */
 function DetailShell({
   eyebrow,
@@ -361,8 +400,9 @@ function DetailShell({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-6 overflow-hidden rounded-2xl bg-gray-50 ring-1 ring-gray-200">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3.5 sm:px-6">
+    <section className="relative">
+      <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-runfree-grad" />
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 bg-white px-5 py-3.5 sm:px-7">
         {/* flex-1 as well as min-w-0: without it the rename Cell's w-full
             input was only as wide as the eyebrow above it. */}
         <div className="min-w-0 flex-1">
@@ -390,8 +430,86 @@ function DetailShell({
           Close
         </button>
       </div>
-      <div className="px-4 py-5 sm:px-6">{children}</div>
+      <div className="px-5 py-5 sm:px-7">{children}</div>
     </section>
+  );
+}
+
+/**
+ * Where the storyline stands, for the person building it.
+ *
+ * Four chips in the sheet's order, each done or not, each a button to the
+ * band it names. Shown to editors only, and only until everything is in —
+ * a finished storyline needs no scaffolding.
+ */
+function SetupStrip({
+  data,
+  onOpen,
+  onAddInitiative,
+}: {
+  data: ExecutionData;
+  onOpen: (s: Selection) => void;
+  onAddInitiative: () => void;
+}) {
+  const beyond = data.horizon.find((h) => h.horizon === "beyond");
+  const objectives = [0, 1, 2, 3].filter((n) => {
+    const b = data.horizon.find((h) => h.horizon === "background" && h.position === n);
+    return b && (b.title?.trim() || !richTextIsEmpty(b.body));
+  }).length;
+  const mid = data.horizon.find((h) => h.horizon === "midground");
+  const live = data.initiatives.filter((i) => !i.is_complete).length;
+  const steps: { label: string; done: boolean; detail: string; go: () => void }[] = [
+    {
+      label: "Vision",
+      done: !!beyond && !richTextIsEmpty(beyond.body),
+      detail: data.templates.length > 0 ? `${data.templates.length} template${data.templates.length === 1 ? "" : "s"}` : "no templates yet",
+      go: () => onOpen({ band: "beyond" }),
+    },
+    {
+      label: "Four objectives",
+      done: objectives === 4,
+      detail: `${objectives} of 4`,
+      go: () => onOpen({ band: "background", position: Math.min(objectives, 3) }),
+    },
+    {
+      label: "One-year goal",
+      done: !!mid && !richTextIsEmpty(mid.body),
+      detail: data.measures.length > 0 ? `${data.measures.length} measure${data.measures.length === 1 ? "" : "s"}` : "no measure yet",
+      go: () => onOpen({ band: "midground" }),
+    },
+    {
+      label: "Four initiatives",
+      done: live >= 4,
+      detail: `${live} of 4`,
+      go: live >= 4 ? () => onOpen({ band: "foreground", id: data.initiatives.filter((i) => !i.is_complete)[0].id }) : onAddInitiative,
+    },
+  ];
+  if (steps.every((s) => s.done)) return null;
+  return (
+    <ol className="mb-3 flex flex-wrap gap-2">
+      {steps.map((s, n) => (
+        <li key={s.label}>
+          <button
+            onClick={s.go}
+            className={`flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-xs font-semibold ring-1 transition ${
+              s.done
+                ? "bg-white text-gray-400 ring-gray-200"
+                : "bg-white text-runfree-ink ring-runfree-magenta/40 hover:bg-runfree-pink"
+            }`}
+          >
+            <span
+              className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-extrabold ${
+                s.done ? "bg-emerald-500 text-white" : "bg-runfree-indigo text-runfree-navy"
+              }`}
+            >
+              {s.done ? "✓" : n + 1}
+            </span>
+            {s.label}
+            <span className={`font-normal ${s.done ? "text-gray-300" : "text-gray-400"}`}>{s.detail}</span>
+          </button>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -400,12 +518,14 @@ function AddInitiative({
   projectId,
   accessToken,
   onChanged,
+  onCreated,
   signal = 0,
 }: {
   data: ExecutionData;
   projectId: string;
   accessToken: string;
   onChanged: () => Promise<void>;
+  onCreated: (id: string) => void;
   /** Changes when an empty slot on the board is clicked. */
   signal?: number;
 }) {
@@ -423,10 +543,12 @@ function AddInitiative({
           onSubmit={async (e) => {
             e.preventDefault();
             if (!name.trim()) return;
-            await createInitiative(accessToken, projectId, name.trim(), data.initiatives.length);
+            const created = await createInitiative(accessToken, projectId, name.trim(), data.initiatives.length);
             setName("");
             setAdding(false);
             await onChanged();
+            // Land on the new initiative so its plan can be written straight away.
+            onCreated(created.id);
           }}
           className="flex w-full flex-wrap items-center gap-2"
         >
@@ -434,7 +556,7 @@ function AddInitiative({
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Name this initiative"
+            placeholder="Name this initiative — a verb and a thing: “Launch the Next Steps path”"
             className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
           />
           <button
@@ -456,16 +578,22 @@ function AddInitiative({
         </form>
       ) : (
         <>
-          <button
-            onClick={() => setAdding(true)}
-            className="rounded-lg px-3 py-2 text-xs font-semibold text-runfree-magentaDeep transition hover:bg-runfree-pink"
-          >
-            + Add an initiative
-          </button>
-          {live > 4 && (
+          {live < 4 && (
+            <button
+              onClick={() => setAdding(true)}
+              className="rounded-lg px-3 py-2 text-xs font-semibold text-runfree-magentaDeep transition hover:bg-runfree-pink"
+            >
+              + Add an initiative
+            </button>
+          )}
+          {live >= 4 && (
             <p className="text-[11px] text-gray-400">
-              The sheet gives four boxes. {live} are live — worth asking which are
-              really this quarter&rsquo;s.
+              Four initiatives are live — the sheet&rsquo;s full. Finish one to make room, or
+              {" "}
+              <button onClick={() => setAdding(true)} className="font-semibold text-runfree-magentaDeep hover:underline">
+                add a fifth anyway
+              </button>
+              .
             </p>
           )}
         </>
@@ -477,19 +605,30 @@ function AddInitiative({
 /**
  * The weekly standup, assembled.
  *
+ * Every line is a button that opens the initiative it names: the card is
+ * the agenda, the board underneath is where the meeting happens. Four
+ * numbers across the top; the fourth is how far into the ninety days the
+ * team is, because the Foreground Horizon IS ninety days and that clock is
+ * what turns "at risk" into a decision.
+ *
  * Andrew asked for a per-project weekly email; sending is blocked on
- * `RESEND_API_KEY`, and a Send button that silently does nothing is worse
- * than no button. What is built is the thing that email would contain, on the
- * page, with a copy button — so it is already useful, and it is the payload
- * the moment Resend is configured.
+ * `RESEND_API_KEY`. What is built is the thing that email would contain, on
+ * the page, with a copy button.
  */
-function ThisWeek({ data, members }: { data: ExecutionData; members: ProjectMember[] }) {
+function ThisWeek({
+  data,
+  members,
+  onOpen,
+}: {
+  data: ExecutionData;
+  members: ProjectMember[];
+  onOpen: (s: Selection) => void;
+}) {
   const today = todayIso();
   const [copied, setCopied] = useState(false);
 
   // The sheet's free-text "Accountable" first; failing that, the portal
-  // member the step is assigned to. The digest used to name only the former,
-  // so a step assigned through the dropdown went out with no owner.
+  // member the step is assigned to.
   const owner = (s: ExecutionData["steps"][number]) =>
     s.accountable ||
     (s.assignee_profile_id
@@ -500,10 +639,23 @@ function ThisWeek({ data, members }: { data: ExecutionData; members: ProjectMemb
       : null);
 
   const live = data.initiatives.filter((i) => !i.is_complete);
-  const attention = live.filter((i) => i.status !== "green");
-  // Only steps on LIVE initiatives. A finished initiative's leftover red
-  // steps were still counted here, so the headline said "2 past due" over a
-  // board that showed none.
+  const statusOf = (i: Initiative) => effectiveStatus(i, data.updates);
+  const attention = live.filter((i) => statusOf(i) !== "green");
+  const stale = live.filter((i) => isStale(i, data.updates, today));
+  // One line per initiative, whatever the reasons — an initiative that is
+  // both at risk and unheard-from is one conversation, not two.
+  const flagged = live
+    .map((i) => {
+      const reasons: string[] = [];
+      if (statusOf(i) !== "green") reasons.push(RAG_LABEL[statusOf(i)].toLowerCase());
+      if (isStale(i, data.updates, today)) {
+        const d = daysSinceUpdate(i, data.updates, today);
+        reasons.push(d != null && d > 365 ? "never checked in" : `no check-in for ${d} days`);
+      }
+      return { i, reasons };
+    })
+    .filter((f) => f.reasons.length > 0);
+  // Only steps on LIVE initiatives.
   const liveIds = new Set(live.map((i) => i.id));
   const due = data.steps.filter(
     (s) =>
@@ -518,26 +670,28 @@ function ThisWeek({ data, members }: { data: ExecutionData; members: ProjectMemb
     [live]
   );
   const next = anchor ? nextRenewalStop(renewalCycle(anchor), today) : null;
+  const dayOf = anchor ? daysBetween(anchor, today) + 1 : null;
 
-  // "Behind" needs a clock. Measured against the year since the earliest
-  // initiative started: at half the year a measure should be about halfway.
-  // The old rule — under 50%, full stop — called every measure behind on day
-  // one, under a heading that said everything was on track. With no anchor
-  // nothing can be behind, only unstarted.
+  // "Behind" needs a clock — the year since the earliest initiative started.
   const elapsed = anchor
     ? Math.min(1, Math.max(0, (Date.parse(today) - Date.parse(anchor)) / (365 * 86_400_000)))
     : null;
   const behind = data.measures.filter((m) => {
     const p = measureProgress(m, effectiveCurrent(m, data.readings));
     return p != null && elapsed != null && p + 0.1 < elapsed;
-  }).length;
-  const talk = attention.length + due.length + behind;
+  });
+  const talk = flagged.length + due.length + behind.length;
 
   if (live.length === 0 && data.measures.length === 0) return null;
 
   const lines: string[] = [`Where we are — ${prettyDate(today)}`, ""];
   for (const i of live) {
-    lines.push(`${i.name} — ${RAG_LABEL[i.status]}${i.leader ? ` (${i.leader})` : ""}`);
+    const since = daysSinceUpdate(i, data.updates, today);
+    lines.push(
+      `${i.name} — ${RAG_LABEL[statusOf(i)]}${i.leader ? ` (${i.leader})` : ""}${
+        since != null && since >= STALE_AFTER_DAYS ? ` — no check-in for ${since} days` : ""
+      }`
+    );
     for (const s of data.steps.filter((s) => s.initiative_id === i.id && s.status !== "green")) {
       const who = owner(s);
       lines.push(
@@ -552,8 +706,11 @@ function ThisWeek({ data, members }: { data: ExecutionData; members: ProjectMemb
     const now = effectiveCurrent(m, data.readings);
     lines.push(`${m.label}: ${now ?? "—"}${m.unit ?? ""} of ${m.target ?? "—"}${m.unit ?? ""}`);
   }
-  if (next) lines.push("", `Next review: ${prettyDate(next.on)} — ${next.length}, ${next.marker} in.`);
+  if (dayOf != null) lines.push("", `Day ${dayOf} of 90.`);
+  if (next) lines.push(`Next renewal: ${prettyDate(next.on)} — ${next.length}, ${next.marker} in.`);
   const digest = lines.join("\n").trim();
+
+  const initiativeOf = (id: string) => live.find((i) => i.id === id);
 
   return (
     <section className="mt-8">
@@ -568,6 +725,12 @@ function ThisWeek({ data, members }: { data: ExecutionData; members: ProjectMemb
                 ? "Everything is on track"
                 : `${talk} thing${talk === 1 ? "" : "s"} to talk about`}
             </h3>
+            {next && (
+              <p className="mt-1 text-xs text-white/60">
+                Next renewal {prettyDate(next.on)} · {next.length.toLowerCase()} ·{" "}
+                {daysBetween(today, next.on)} days away
+              </p>
+            )}
           </div>
           <button
             onClick={async () => {
@@ -589,49 +752,86 @@ function ThisWeek({ data, members }: { data: ExecutionData; members: ProjectMemb
           <Stat n={live.length} label="In flight" />
           <Stat n={attention.length} label="Need attention" tone={attention.length ? "amber" : undefined} />
           <Stat n={due.length} label="Past due" tone={due.length ? "rose" : undefined} />
-          {data.measures.length > 0 ? (
-            <Stat n={behind} label="Measures behind" tone={behind ? "amber" : undefined} />
-          ) : (
+          {dayOf != null ? (
             <div className="rounded-xl bg-white/5 px-3 py-3">
-              <dd className="font-display text-sm font-extrabold leading-tight">
-                {next ? prettyDate(next.on) : "—"}
+              <dd className="font-display text-2xl font-extrabold leading-none">
+                {Math.min(dayOf, 90)}
+                <span className="text-sm font-semibold text-white/40"> / 90</span>
               </dd>
-              <dt className="mt-1 text-[11px] uppercase tracking-wide text-white/50">Next review</dt>
+              <dt className="mt-1.5 text-[11px] uppercase tracking-wide text-white/50">
+                {dayOf > 90 ? `Day ${dayOf} — renewal due` : "Day of the ninety"}
+              </dt>
+              <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10" aria-hidden>
+                <div
+                  className="h-full rounded-full bg-runfree-grad"
+                  style={{ width: `${Math.min(100, (dayOf / 90) * 100)}%` }}
+                />
+              </div>
             </div>
+          ) : (
+            <Stat n={stale.length} label="Stale" tone={stale.length ? "amber" : undefined} />
           )}
         </dl>
 
-        {(attention.length > 0 || due.length > 0) && (
-          <ul className="mt-4 space-y-1.5 border-t border-white/10 pt-4">
-            {attention.map((i) => (
-              <li key={i.id} className="flex items-start gap-2 text-sm text-white/80">
-                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${RAG_DOT[i.status]}`} />
-                <span>
-                  <span className="font-semibold text-white">{i.name}</span> —{" "}
-                  {RAG_LABEL[i.status].toLowerCase()}
-                  {i.leader ? ` · ${i.leader}` : ""}
-                </span>
-              </li>
+        {talk > 0 && (
+          <ul className="mt-4 space-y-1 border-t border-white/10 pt-4">
+            {flagged.map(({ i, reasons }) => (
+              <Line
+                key={`a-${i.id}`}
+                dot={statusOf(i) === "green" ? "bg-amber-300/70" : RAG_DOT[statusOf(i)]}
+                onClick={() => onOpen({ band: "foreground", id: i.id })}
+              >
+                <span className="font-semibold text-white">{i.name}</span> — {reasons.join(" · ")}
+                {i.leader ? <span className="text-white/50"> · {i.leader}</span> : null}
+              </Line>
             ))}
             {due.map((s) => (
-              <li key={s.id} className="flex items-start gap-2 text-sm text-white/80">
-                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-rose-400" />
-                <span>
-                  {s.description}
-                  {owner(s) ? ` · ${owner(s)}` : ""} — due {prettyDate(s.by_when)}
-                </span>
-              </li>
+              <Line
+                key={`d-${s.id}`}
+                dot="bg-rose-400"
+                onClick={() => onOpen({ band: "foreground", id: s.initiative_id })}
+              >
+                {s.description}
+                {owner(s) ? ` · ${owner(s)}` : ""} — due {prettyDate(s.by_when)}
+                {initiativeOf(s.initiative_id) ? (
+                  <span className="text-white/50"> · {initiativeOf(s.initiative_id)!.name}</span>
+                ) : null}
+              </Line>
+            ))}
+            {behind.map((m) => (
+              <Line key={`m-${m.id}`} dot="bg-amber-300/70" onClick={() => onOpen({ band: "midground" })}>
+                <span className="font-semibold text-white">{m.label}</span> — behind the year&rsquo;s pace
+              </Line>
             ))}
           </ul>
         )}
-
-        {next && data.measures.length > 0 && (
-          <p className="mt-4 border-t border-white/10 pt-3 text-xs text-white/50">
-            Next review {prettyDate(next.on)} — {next.length.toLowerCase()}, {next.marker} in.
-          </p>
-        )}
       </div>
     </section>
+  );
+}
+
+function Line({
+  dot,
+  onClick,
+  children,
+}: {
+  dot: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <li>
+      <button
+        onClick={onClick}
+        className="group flex w-full items-start gap-2 rounded-lg px-2 py-1 text-left text-sm text-white/80 transition hover:bg-white/5"
+      >
+        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} />
+        <span className="min-w-0 flex-1">{children}</span>
+        <span className="shrink-0 text-white/30 transition group-hover:text-white/70" aria-hidden>
+          →
+        </span>
+      </button>
+    </li>
   );
 }
 
@@ -655,9 +855,7 @@ function Stat({ n, label, tone }: { n: number; label: string; tone?: "amber" | "
  *
  * Andrew: "give a few quicklinks to either the book, visual summary, key
  * chapters, etc." All three of those are files on the Books panel, which is
- * one in-portal click away and instant — where a direct Drive link would
- * mean a ~7s live read on the panel a church opens weekly. So: one card, the
- * real cover, and an honest list of what is behind the link.
+ * one in-portal click away and instant.
  */
 function Framework({ onGoTo }: { onGoTo: (panel: string) => void }) {
   return (

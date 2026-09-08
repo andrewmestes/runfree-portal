@@ -33,11 +33,26 @@ const KINDS: Record<
   handout: { api: (id) => `/api/library/file/${id}`, back: "/resources", backLabel: "Handouts" },
   book: { api: (id) => `/api/books/file/${id}`, back: "/books", backLabel: "Books" },
   guide: { api: (id) => `/api/guide/file/${id}`, back: "/guide", backLabel: "Facilitator's Guide" },
-  keynote: { api: (id) => `/api/keynotes/file/${id}`, back: "/keynotes", backLabel: "Keynotes" },
+  keynote: { api: (id) => `/api/keynotes/ticket/${id}`, back: "/keynotes", backLabel: "Keynotes" },
   video: { api: (id) => `/api/tool-videos/ticket/${id}`, back: "/videos", backLabel: "Training Videos" },
 };
 
 type Status = "checking" | "ready" | "missing" | "error";
+
+type DeckFile = {
+  id: string;
+  format: "keynote" | "powerpoint";
+  name: string;
+  mimeType: string;
+  sizeBytes: number | null;
+  url: string;
+};
+
+function prettySize(bytes: number | null) {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+}
 
 export default function OpenPage() {
   const params = useParams<{ kind: string; id: string }>();
@@ -56,6 +71,17 @@ export default function OpenPage() {
    */
   const [blob, setBlob] = useState<Blob | null>(null);
   const [video, setVideo] = useState<{ url: string; title: string; group: string } | null>(null);
+  /**
+   * A presentation is a .key or .pptx — nothing a browser can show. The
+   * page starts the download itself and offers both formats, so a guide
+   * icon still "just works" from the front of a room.
+   */
+  const [deck, setDeck] = useState<{
+    title: string;
+    requested: DeckFile | null;
+    keynote: DeckFile | null;
+    powerpoint: DeckFile | null;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +123,17 @@ export default function OpenPage() {
         const body = await res.json();
         setVideo({ url: body.url, title: body.label || body.title, group: body.group });
         setStatus("ready");
+        return;
+      }
+
+      if (kind === "keynote") {
+        const body = await res.json();
+        setDeck(body);
+        setStatus("ready");
+        // Start the download straight away; the ticketed URL carries an
+        // attachment disposition, so the page stays put and the browser
+        // shows its own progress.
+        if (body.requested?.url) window.location.assign(body.requested.url);
         return;
       }
 
@@ -158,6 +195,45 @@ export default function OpenPage() {
             className="mt-6 inline-block rounded-lg bg-runfree-grad px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
           >
             Go to {backLabel}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (kind === "keynote" && deck) {
+    const DownloadButton = ({ f, primary }: { f: DeckFile; primary: boolean }) => (
+      <a
+        href={f.url}
+        className={
+          primary
+            ? "inline-flex items-center justify-center rounded-lg bg-runfree-grad px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+            : "inline-flex items-center justify-center rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+        }
+      >
+        {f.format === "keynote" ? "Keynote (.key)" : "PowerPoint (.pptx)"}
+        {f.sizeBytes ? <span className="ml-2 font-normal text-white/60">{prettySize(f.sizeBytes)}</span> : null}
+      </a>
+    );
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-runfree-ink px-4 text-center text-white">
+        <div className="max-w-md">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/50">Keynote Presentation</p>
+          <h1 className="mt-2 font-display text-2xl font-extrabold">{deck.title}</h1>
+          <p className="mt-3 text-sm leading-relaxed text-white/70">
+            {deck.requested
+              ? `Your download of ${deck.requested.name} has started. If it did not, or you want the other format, use a button below.`
+              : "Choose a format to download."}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-white/50">
+            Presentations open in Keynote or PowerPoint on your computer, not in the browser.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            {deck.keynote && <DownloadButton f={deck.keynote} primary={deck.requested?.format !== "powerpoint"} />}
+            {deck.powerpoint && <DownloadButton f={deck.powerpoint} primary={deck.requested?.format === "powerpoint"} />}
+          </div>
+          <Link href={back} className="mt-6 inline-block text-sm font-medium text-white/60 transition hover:text-white">
+            All {backLabel}
           </Link>
         </div>
       </div>

@@ -1,4 +1,3 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { describeDriveFile, fileInsideFolder, listDriveFolder, type DriveListedFile } from "./drive";
 
 /**
@@ -109,42 +108,5 @@ export async function findToolVideo(id: string): Promise<ToolVideo | null> {
   };
 }
 
-/* ---------------------------------------------------------------- tickets */
-
-const TICKET_TTL_MS = 15 * 60_000;
-
-function secret(): string {
-  const s = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!s) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set");
-  return s;
-}
-
-function sign(fileId: string, userId: string, exp: number): string {
-  return createHmac("sha256", secret()).update(`${fileId}|${userId}|${exp}`).digest("base64url");
-}
-
-/** A ticket for one file, one person, fifteen minutes. */
-export function mintTicket(fileId: string, userId: string): { ticket: string; expiresAt: number } {
-  const exp = Date.now() + TICKET_TTL_MS;
-  const ticket = `${exp}.${Buffer.from(userId).toString("base64url")}.${sign(fileId, userId, exp)}`;
-  return { ticket, expiresAt: exp };
-}
-
-/** True when the ticket names this file, is unexpired, and was signed here. */
-export function verifyTicket(fileId: string, ticket: string | null): boolean {
-  if (!ticket) return false;
-  const [expRaw, userB64, sig] = ticket.split(".");
-  if (!expRaw || !userB64 || !sig) return false;
-  const exp = Number(expRaw);
-  if (!Number.isFinite(exp) || exp < Date.now()) return false;
-  let userId: string;
-  try {
-    userId = Buffer.from(userB64, "base64url").toString("utf8");
-  } catch {
-    return false;
-  }
-  const expected = sign(fileId, userId, exp);
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
+/* The ticket helpers live in file-ticket.ts (the keynote downloads use them too). */
+export { mintTicket, verifyTicket } from "./file-ticket";

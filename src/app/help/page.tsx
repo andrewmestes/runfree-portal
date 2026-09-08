@@ -395,7 +395,9 @@ export default function HelpPage() {
               then opens that one file straight away &mdash; no shelf, no search. If
               you are signed out it takes you to sign in and comes straight back to
               the file. The same link on a phone opens the same way, so it works from
-              the front of a room.
+              the front of a room. A keynote icon downloads the deck instead of
+              showing it &mdash; a .key or .pptx cannot open in a browser &mdash; and
+              offers the other format too.
             </Faq>
             <Faq q="The tool walkthrough videos">
               <strong>Training Videos</strong> now holds the Process Tools walkthroughs

@@ -1537,6 +1537,16 @@ does immediately. The open page therefore keeps the Blob and mints a fresh
 URL per ask; handing it one URL rendered a broken-document icon on every
 handout in dev.
 
+**A keynote link downloads, it does not preview.** The two decks are .key
+packages (with .pptx twins in a subfolder); the first `/open/keynote` build
+forced the blob to `application/pdf` and named the download ".pdf", and
+Andrew got a 47 MB file Acrobat called damaged. Now `/api/keynotes/ticket/{id}`
+mints tickets (`lib/file-ticket.ts`, shared with the tool videos) for both
+formats, the file route accepts a ticket or a bearer and passes Range and
+Content-Length through, and both `/open/keynote` and the Keynotes page hand
+the browser a ticketed URL so it downloads the file itself with the real
+name and its own progress bar — nothing is buffered as a blob in the page.
+
 After the guide is relinked, the per-file "anyone with the link" sharing on
 the tool videos comes off — that switch is the real gate. The relink sheet
 with the final URL per icon is in `DFG Link Audit/DFG relink sheet.csv`.

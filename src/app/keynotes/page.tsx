@@ -102,23 +102,22 @@ export default function KeynotesPage() {
       } = await supabase.auth.getSession();
       if (!session) return;
 
-      const res = await fetch(`/api/keynotes/file/${f.id}`, {
+      // A ticketed URL (lib/file-ticket.ts) lets the browser run the
+      // download itself — its own progress bar, no 47 MB blob held in the
+      // page, and Safari's "revoke too early" problem gone with it.
+      const res = await fetch(`/api/keynotes/ticket/${f.id}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) {
         setLoadError("That file could not be downloaded. Try again in a moment.");
         return;
       }
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = f.name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // Revoke on the next tick — revoking synchronously can cancel the
-      // download in Safari before it has read the blob.
-      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      const body = await res.json();
+      if (!body.requested?.url) {
+        setLoadError("That file could not be downloaded. Try again in a moment.");
+        return;
+      }
+      window.location.assign(body.requested.url);
     } catch (err) {
       console.error("Keynote download failed:", err);
       setLoadError("That file could not be downloaded. Try again in a moment.");

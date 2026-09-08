@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { takeNext } from "@/lib/auth";
 
 /**
  * Landing spot after Google sign-in and after an invite link. The Supabase
@@ -38,7 +39,9 @@ export default function AuthCallbackPage() {
         if (cancelled) return;
 
         if (session) {
-          router.replace("/");
+          // A guide link that sent someone through Google sign-in left its
+          // path here; otherwise this is "/".
+          router.replace(takeNext());
           return;
         }
 

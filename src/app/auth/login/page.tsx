@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loginWithEmail, signInWithGoogle } from "@/lib/auth";
+import { loginWithEmail, rememberNext, safeNext, signInWithGoogle } from "@/lib/auth";
 import AuthShell, {
   Field,
   FormError,
@@ -17,6 +17,17 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  /**
+   * Where to go after signing in. A guide link (`/open/handout/…`) sends a
+   * signed-out person here with `?next=` so they land on the handout they
+   * clicked, not the home page. Read from the URL after mount rather than
+   * through useSearchParams, which would force a Suspense boundary around
+   * the whole page for one string.
+   */
+  const [next, setNext] = useState("/");
+  useEffect(() => {
+    setNext(safeNext(new URLSearchParams(window.location.search).get("next")));
+  }, []);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -26,7 +37,7 @@ export default function LoginPage() {
 
     try {
       await loginWithEmail(email, password);
-      router.push("/");
+      router.push(next);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed";
       // Supabase's wording here is opaque to a normal person.
@@ -46,6 +57,9 @@ export default function LoginPage() {
     setError("");
     setGoogleLoading(true);
     try {
+      // Google's round trip loses the query string; the callback page reads
+      // this back and clears it.
+      rememberNext(next);
       await signInWithGoogle();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign-in failed");

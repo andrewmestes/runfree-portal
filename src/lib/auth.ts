@@ -132,6 +132,39 @@ export async function logout() {
 }
 
 /** Google sign-in vouches for the address, so an invited email can't be claimed by someone else. */
+/**
+ * Only a same-site path is a legal return address — never a full URL, never
+ * a protocol-relative "//evil.example". Anything else becomes the home page.
+ */
+export function safeNext(raw: string | null | undefined): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/") || raw.startsWith("//") || /[\r\n\\]/.test(raw)) return "/";
+  return raw;
+}
+
+const NEXT_KEY = "runfree.next";
+
+/** Stash a return path across the Google sign-in round trip. */
+export function rememberNext(path: string) {
+  try {
+    if (path && path !== "/") sessionStorage.setItem(NEXT_KEY, path);
+    else sessionStorage.removeItem(NEXT_KEY);
+  } catch {
+    /* private mode; sign-in still works, it just lands home */
+  }
+}
+
+/** Read the stashed return path once, clearing it. */
+export function takeNext(): string {
+  try {
+    const v = sessionStorage.getItem(NEXT_KEY);
+    sessionStorage.removeItem(NEXT_KEY);
+    return safeNext(v);
+  } catch {
+    return "/";
+  }
+}
+
 export async function signInWithGoogle() {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",

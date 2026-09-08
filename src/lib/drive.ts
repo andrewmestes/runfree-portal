@@ -126,6 +126,147 @@ export async function fetchDriveFile(fileId: string): Promise<DriveFile> {
   };
 }
 
+export type DriveRange = {
+  /** 200 for the whole file, 206 for a slice. */
+  status: 200 | 206;
+  body: ReadableStream;
+  mimeType: string;
+  filename: string;
+  contentLength: string | null;
+  contentRange: string | null;
+};
+
+/**
+ * Fetch a Drive file, honouring an HTTP Range header.
+ *
+ * A video tag does not download a file, it asks for slices — the first few
+ * hundred KB to start, then wherever the person drags the scrubber. Without
+ * passing the browser's Range through to Drive, seeking meant re-sending
+ * the whole file from byte zero, which on a 3.5 GB training video is not
+ * seeking at all. Drive answers a ranged request with 206 and the usual
+ * Content-Range, which is forwarded untouched.
+ */
+export async function fetchDriveFileRange(
+  fileId: string,
+  range: string | null
+): Promise<DriveRange> {
+  const drive = getDriveClient();
+
+  const meta = await drive.files.get({
+    fileId,
+    fields: "name,mimeType,size",
+    supportsAllDrives: true,
+  });
+
+  const res = await drive.files.get(
+    { fileId, alt: "media", supportsAllDrives: true },
+    { responseType: "stream", headers: range ? { Range: range } : undefined }
+  );
+  const status = res.status === 206 ? 206 : 200;
+
+  return {
+    status,
+    body: Readable.toWeb(res.data as Readable) as ReadableStream,
+    mimeType: meta.data.mimeType || headerOf(res.headers, "content-type") || "application/octet-stream",
+    filename: meta.data.name || "video",
+    // Drive answers a slice with its own Content-Length; a whole file's is
+    // the size on the metadata (the stream response has none).
+    contentLength:
+      headerOf(res.headers, "content-length") ?? (status === 200 ? meta.data.size ?? null : null),
+    contentRange: headerOf(res.headers, "content-range"),
+  };
+}
+
+/**
+ * gaxios has shipped response headers as a plain object and, more recently,
+ * as a fetch `Headers` instance. Read either; the first shape is what made
+ * Content-Range silently vanish from the video route.
+ */
+function headerOf(headers: unknown, name: string): string | null {
+  if (!headers) return null;
+  const h = headers as { get?: (n: string) => string | null } & Record<string, unknown>;
+  if (typeof h.get === "function") return h.get(name);
+  const v = h[name] ?? h[name.toLowerCase()];
+  return typeof v === "string" ? v : Array.isArray(v) ? String(v[0]) : null;
+}
+
+export type DriveFileInFolder = {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number | null;
+  modifiedTime: string | null;
+  /** Folder names from the file's own folder up to (not including) the root. */
+  folders: { id: string; name: string }[];
+};
+
+/**
+ * Is this file inside this folder (up to `maxDepth` levels down)? Returns
+ * its metadata if so, null if not.
+ *
+ * Walking UP from one file is three or four small requests, where listing
+ * the whole tree to look for one id is a dozen and, on a cold serverless
+ * instance, ten seconds. The guide's links are clicked from the front of a
+ * room, so the boundary check for one file goes this way. A file that is
+ * not inside the folder is exactly as invisible as before: the parent chain
+ * never reaches the root, and the answer is null.
+ */
+export async function fileInsideFolder(
+  fileId: string,
+  rootId: string,
+  maxDepth = 4
+): Promise<DriveFileInFolder | null> {
+  const drive = getDriveClient();
+  let meta;
+  try {
+    const res = await drive.files.get({
+      fileId,
+      fields: "id,name,mimeType,size,modifiedTime,parents,trashed",
+      supportsAllDrives: true,
+    });
+    meta = res.data;
+  } catch {
+    return null;
+  }
+  if (!meta.id || meta.trashed || meta.mimeType === FOLDER_MIME) return null;
+
+  const folders: { id: string; name: string }[] = [];
+  let parent = meta.parents?.[0];
+  for (let depth = 0; parent && depth < maxDepth; depth++) {
+    if (parent === rootId) {
+      return {
+        id: meta.id,
+        name: meta.name || "",
+        mimeType: meta.mimeType || "application/octet-stream",
+        sizeBytes: meta.size ? Number(meta.size) : null,
+        modifiedTime: meta.modifiedTime || null,
+        folders,
+      };
+    }
+    let folder;
+    try {
+      const res = await drive.files.get({
+        fileId: parent,
+        fields: "id,name,parents",
+        supportsAllDrives: true,
+      });
+      folder = res.data;
+    } catch {
+      return null;
+    }
+    folders.push({ id: folder.id || parent, name: folder.name || "" });
+    parent = folder.parents?.[0];
+  }
+  return null;
+}
+
+/** The same title / number split the folder listing uses, for one file. */
+export function describeDriveFile(name: string): { title: string; num: string | null; label: string } {
+  const title = toTitle(name);
+  const { num, rest } = splitNumber(title);
+  return { title, num, label: rest };
+}
+
 export { extractDriveId } from "./drive-id";
 
 export type DriveListedFile = {

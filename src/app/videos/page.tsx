@@ -23,6 +23,11 @@ type Framer = {
 type Video = {
   id: string;
   title: string;
+  /**
+   * A Loom/YouTube/Vimeo link for the training videos in the database, or
+   * `drive:<fileId>` for a Process Tools video streamed from Drive through
+   * /api/tool-videos — see lib/tool-videos.ts.
+   */
   url: string;
   description: string | null;
   module: string | null;
@@ -46,6 +51,41 @@ function leadingNumber(name: string): number {
   return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
 }
 
+const DRIVE_PREFIX = "drive:";
+const isDriveVideo = (v: Video) => v.url.startsWith(DRIVE_PREFIX);
+const driveId = (v: Video) => v.url.slice(DRIVE_PREFIX.length);
+
+type ToolVideoGroup = {
+  id: string;
+  name: string;
+  order: number;
+  videos: { id: string; title: string; num: string | null; label: string; sizeBytes: number | null }[];
+};
+
+/**
+ * The Process Tools Videos folder as Video rows. They fall in behind the
+ * database videos of the same module (sort_order past anything the admin
+ * screen assigns), so a module heading holds both and the walkthrough order
+ * is the folder's own.
+ */
+function toolVideosAsVideos(groups: ToolVideoGroup[]): Video[] {
+  const out: Video[] = [];
+  for (const g of groups) {
+    g.videos.forEach((v, i) => {
+      out.push({
+        id: `drive-${v.id}`,
+        title: v.num ? `${v.num} ${v.label}` : v.label,
+        url: `${DRIVE_PREFIX}${v.id}`,
+        description: null,
+        module: g.name,
+        sort_order: 100_000 + g.order * 1000 + i,
+        thumbnailUrl: null,
+      });
+    });
+  }
+  return out;
+}
+
 export default function VideosPage() {
   const [framer, setFramer] = useState<Framer | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
@@ -54,6 +94,9 @@ export default function VideosPage() {
   >("checking");
   const [loadError, setLoadError] = useState("");
   const [playing, setPlaying] = useState<Video | null>(null);
+  /** The ticketed stream address for a Drive video while it plays. */
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const router = useRouter();
@@ -84,15 +127,23 @@ export default function VideosPage() {
       } = await supabase.auth.getSession();
 
       if (session) {
-        const res = await fetch("/api/videos", {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
+        const headers = { Authorization: `Bearer ${session.access_token}` };
+        // Two shelves, one page: the training videos in the database and
+        // the Process Tools walkthroughs read live from Drive.
+        const [res, toolRes] = await Promise.all([
+          fetch("/api/videos", { headers }),
+          fetch("/api/tool-videos", { headers }).catch(() => null),
+        ]);
         const body = await res.json();
         if (!res.ok) {
           setLoadError(body.error || "Could not load the videos.");
-        } else {
-          setVideos(body.videos || []);
         }
+        let tools: Video[] = [];
+        if (toolRes && toolRes.ok) {
+          const toolBody = await toolRes.json();
+          tools = toolVideosAsVideos(toolBody.groups || []);
+        }
+        setVideos([...(res.ok ? body.videos || [] : []), ...tools]);
       }
 
       setStatus("ready");
@@ -116,8 +167,44 @@ export default function VideosPage() {
     if (status === "denied") router.replace("/");
   }, [status, router]);
 
-  const closePlayer = useCallback(() => setPlaying(null), []);
+  const closePlayer = useCallback(() => {
+    setPlaying(null);
+    setStreamUrl(null);
+  }, []);
   useFocusTrap(playerRef, closePlayer, Boolean(playing));
+
+  /**
+   * A Drive video needs a ticket before the video tag can ask for bytes —
+   * the tag cannot send the session header, so the page trades the session
+   * for a short-lived address first. See lib/tool-videos.ts.
+   */
+  const play = useCallback(async (v: Video) => {
+    if (!isDriveVideo(v)) {
+      const parsed = parseVideoUrl(v.url);
+      if (parsed.embedUrl) setPlaying(v);
+      else window.open(parsed.watchUrl, "_blank");
+      return;
+    }
+    setOpening(v.id);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`/api/tool-videos/ticket/${driveId(v)}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        setLoadError("That video could not be opened. Try again in a moment.");
+        return;
+      }
+      const body = await res.json();
+      setStreamUrl(body.url);
+      setPlaying(v);
+    } finally {
+      setOpening(null);
+    }
+  }, []);
 
   async function handleSignOut() {
     await logout();
@@ -160,8 +247,21 @@ export default function VideosPage() {
       group.videos.push(v);
     }
 
+    // Numbered modules sit in their number order. An unnumbered group that
+    // holds database videos (Orientation) keeps its sort_order place ahead
+    // of them; an unnumbered group that holds only Drive videos (Video
+    // Clips) goes last. Before the Drive walkthroughs joined, sort_order
+    // alone could do this, since every group had one; a Drive-only module
+    // like Kingdom Platform has none and was landing after Horizon
+    // Storyline.
+    const position = (g: Group) =>
+      g.order !== Number.MAX_SAFE_INTEGER
+        ? 100_000 + g.order * 1000
+        : g.rank < 100_000
+          ? g.rank
+          : Number.MAX_SAFE_INTEGER;
     return [...byKey.values()].sort(
-      (a, b) => a.rank - b.rank || a.label.localeCompare(b.label)
+      (a, b) => position(a) - position(b) || a.rank - b.rank || a.label.localeCompare(b.label)
     );
   }, [videos, needle]);
 
@@ -277,11 +377,8 @@ export default function VideosPage() {
                       video={v}
                       moduleOrder={group.order}
                       index={i}
-                      onPlay={() => {
-                        const parsed = parseVideoUrl(v.url);
-                        if (parsed.embedUrl) setPlaying(v);
-                        else window.open(parsed.watchUrl, "_blank");
-                      }}
+                      busy={opening === v.id}
+                      onPlay={() => void play(v)}
                     />
                   ))}
                 </div>
@@ -296,7 +393,7 @@ export default function VideosPage() {
       {playing && (
         <div
           className="animate-fade fixed inset-0 z-50 flex items-center justify-center bg-runfree-ink/85 p-4"
-          onClick={() => setPlaying(null)}
+          onClick={closePlayer}
         >
           <div
             ref={playerRef}
@@ -316,16 +413,27 @@ export default function VideosPage() {
                 {playing.title}
               </h3>
               <div className="flex shrink-0 items-center gap-3">
-                <a
-                  href={parseVideoUrl(playing.url).watchUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-medium text-gray-500 transition hover:text-runfree-magentaDeep"
-                >
-                  Open original
-                </a>
+                {isDriveVideo(playing) ? (
+                  <a
+                    href={`/open/video/${driveId(playing)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-gray-500 transition hover:text-runfree-magentaDeep"
+                  >
+                    Open full screen
+                  </a>
+                ) : (
+                  <a
+                    href={parseVideoUrl(playing.url).watchUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-gray-500 transition hover:text-runfree-magentaDeep"
+                  >
+                    Open original
+                  </a>
+                )}
                 <button
-                  onClick={() => setPlaying(null)}
+                  onClick={closePlayer}
                   className="rounded-lg px-3 py-1 text-sm font-medium text-gray-500 transition hover:text-runfree-magentaDeep"
                 >
                   Close
@@ -333,13 +441,25 @@ export default function VideosPage() {
               </div>
             </div>
             <div className="aspect-video w-full">
-              <iframe
-                src={parseVideoUrl(playing.url).embedUrl || ""}
-                className="h-full w-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                allowFullScreen
-                title={playing.title}
-              />
+              {isDriveVideo(playing) ? (
+                <video
+                  key={streamUrl || playing.id}
+                  src={streamUrl || undefined}
+                  controls
+                  autoPlay
+                  playsInline
+                  preload="metadata"
+                  className="h-full w-full bg-black"
+                />
+              ) : (
+                <iframe
+                  src={parseVideoUrl(playing.url).embedUrl || ""}
+                  className="h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                  allowFullScreen
+                  title={playing.title}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -352,11 +472,13 @@ function VideoCard({
   video,
   moduleOrder,
   index,
+  busy = false,
   onPlay,
 }: {
   video: Video;
   moduleOrder: number;
   index: number;
+  busy?: boolean;
   onPlay: () => void;
 }) {
   const [failed, setFailed] = useState(false);
@@ -366,6 +488,7 @@ function VideoCard({
   return (
     <button
       onClick={onPlay}
+      aria-busy={busy}
       style={{ "--delay": `${Math.min(index, 8) * 45}ms` } as React.CSSProperties}
       className="animate-rise group flex flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-gray-200 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:ring-runfree-magenta/30"
     >
@@ -413,6 +536,11 @@ function VideoCard({
         {duration && (
           <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-semibold text-white">
             {duration}
+          </span>
+        )}
+        {busy && (
+          <span className="absolute bottom-2 left-2 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+            Opening…
           </span>
         )}
       </div>

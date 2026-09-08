@@ -3,7 +3,7 @@ import { requireCertificationAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import {
   fetchDriveFile,
-  listPortalLibrary,
+  fileInsideFolder,
   isDriveConfigured,
 } from "@/lib/drive";
 
@@ -40,16 +40,27 @@ export async function GET(
       );
     }
 
-    // Only serve files that belong to the shared library. The service account
-    // can't see anything else anyway, but this keeps the boundary explicit.
-    const modules = await listPortalLibrary();
-    const known = modules.some((m) => m.files.some((f) => f.id === driveId));
+    // Only serve files that belong to the shared library — the service
+    // account reads several folders, and a handout link must not become a
+    // way to read the others. Checked by walking up from the file rather
+    // than listing the whole library: this route is what a Digital
+    // Facilitator's Guide link opens, from the front of a room, and the
+    // full listing took several seconds on a cold instance.
+    //
+    // The walk and the fetch start together — each is a second or so of
+    // sequential Google calls, and nothing is sent until the walk says yes.
+    // A file the walk rejects has its stream cancelled unread.
+    const [known, fetched] = await Promise.all([
+      fileInsideFolder(driveId, process.env.GOOGLE_DRIVE_FOLDER_ID!),
+      fetchDriveFile(driveId).catch(() => null),
+    ]);
 
-    if (!known) {
+    if (!known || !fetched) {
+      if (fetched) void fetched.body.cancel().catch(() => {});
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const file = await fetchDriveFile(driveId);
+    const file = fetched;
 
     return new NextResponse(file.body, {
       status: 200,

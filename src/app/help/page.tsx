@@ -389,6 +389,22 @@ export default function HelpPage() {
               stale a little later, reload the page — and if it is still wrong, tell
               Andrew, who can force a fresh read from Drive.
             </Faq>
+            <Faq q="Links in the Digital Facilitator&rsquo;s Guide">
+              The handout and video icons in the guide point at the portal, not at
+              Google Drive. Clicking one checks that you are signed in and certified,
+              then opens that one file straight away &mdash; no shelf, no search. If
+              you are signed out it takes you to sign in and comes straight back to
+              the file. The same link on a phone opens the same way, so it works from
+              the front of a room.
+            </Faq>
+            <Faq q="The tool walkthrough videos">
+              <strong>Training Videos</strong> now holds the Process Tools walkthroughs
+              as well as the teaching videos, under the same six module headings. They
+              are streamed from RunFree&rsquo;s Drive through the portal, so they play
+              without a Google account, and a video replaced in Drive is replaced here
+              the same day. <em>Open full screen</em> in the player gives you a page
+              with only the video on it, which is what the guide links to.
+            </Faq>
             <Faq q="What is the difference between this and a church project?">
               The certification library is <em>your</em> material as a facilitator — how
               to run the process. A project is one church&rsquo;s engagement: their dates,

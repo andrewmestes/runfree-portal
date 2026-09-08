@@ -25,12 +25,12 @@ export async function GET(
     }
 
     const decks = await listPresentations();
-    const deck = decks.find((d) => d.keynote?.id === id || d.powerpoint?.id === id);
+    const deck = decks.find((d) => d.keynote?.id === id || d.powerpoint?.id === id || d.pdf?.id === id);
     if (!deck) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const describe = (
       f: { id: string; name: string; mimeType: string; sizeBytes: number | null } | null,
-      format: "keynote" | "powerpoint"
+      format: "keynote" | "powerpoint" | "pdf"
     ) =>
       f
         ? {
@@ -47,9 +47,10 @@ export async function GET(
 
     const keynote = describe(deck.keynote, "keynote");
     const powerpoint = describe(deck.powerpoint, "powerpoint");
-    const requested = keynote?.id === id ? keynote : powerpoint;
+    const pdf = describe(deck.pdf, "pdf");
+    const requested = [keynote, powerpoint, pdf].find((f) => f?.id === id) ?? null;
 
-    return NextResponse.json({ title: deck.title, requested, keynote, powerpoint });
+    return NextResponse.json({ title: deck.title, requested, keynote, powerpoint, pdf });
   } catch (error) {
     console.error("Keynote ticket failed:", error);
     return NextResponse.json({ error: "Could not open that presentation" }, { status: 500 });

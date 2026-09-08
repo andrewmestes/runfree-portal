@@ -13,11 +13,18 @@ import { google } from "googleapis";
  *   Keynote Presentations/
  *     God Dreams Ted Talk.key
  *     12 Vision Templates.key
+ *     God Dreams Ted Talk.pdf        ← optional: the slides exported to PDF
  *     PowerPoint/
  *       God Dreams Ted Talk.pptx
  *       12 Vision Templates.pptx
  *
- * So a **presentation** is a name, and it carries up to two files. Pairing is
+ * So a **presentation** is a name, and it carries up to three files. The
+ * PDF is what the portal can actually SHOW: a .key or .pptx only downloads,
+ * so `/open/keynote` previews the PDF when one exists (Keynote: File →
+ * Export To → PDF, dropped beside the .key) and keeps the Keynote and
+ * PowerPoint downloads a button away. Andrew, 8 Sept 2026: "they're seeing
+ * the PDF presented to them in the portal, but they have the option to
+ * download the actual presentation." Pairing is
  * by base name rather than by position or a stored mapping, which means
  * adding a third deck is dropping two files into Drive and nothing else —
  * the same live-mirror philosophy as the books shelf and the facilitator's
@@ -50,6 +57,8 @@ export type Presentation = {
   slug: string;
   keynote: KeynoteFormat | null;
   powerpoint: KeynoteFormat | null;
+  /** The slides as a PDF, if one has been exported beside the deck. */
+  pdf: KeynoteFormat | null;
 };
 
 export function isDriveConfigured(): boolean {
@@ -180,7 +189,7 @@ export async function listPresentations(): Promise<Presentation[]> {
 
   const put = (
     f: (typeof top)[number],
-    slot: "keynote" | "powerpoint"
+    slot: "keynote" | "powerpoint" | "pdf"
   ) => {
     if (f.mimeType === FOLDER_MIME || !f.id || !f.name) return;
     const key = joinKey(f.name);
@@ -204,11 +213,14 @@ export async function listPresentations(): Promise<Presentation[]> {
       slug: key.replace(/ /g, "-"),
       keynote: slot === "keynote" ? toFormat(f) : null,
       powerpoint: slot === "powerpoint" ? toFormat(f) : null,
+      pdf: slot === "pdf" ? toFormat(f) : null,
     });
   };
 
-  for (const f of top) put(f, "keynote");
-  for (const f of ppts) put(f, "powerpoint");
+  const isPdf = (f: (typeof top)[number]) =>
+    f.mimeType === "application/pdf" || /\.pdf$/i.test(f.name || "");
+  for (const f of top) put(f, isPdf(f) ? "pdf" : "keynote");
+  for (const f of ppts) put(f, isPdf(f) ? "pdf" : "powerpoint");
 
   return [...decks.values()].sort((a, b) => a.title.localeCompare(b.title));
 }
@@ -227,6 +239,7 @@ export async function listPresentationFileIds(): Promise<Set<string>> {
   for (const d of decks) {
     if (d.keynote) ids.add(d.keynote.id);
     if (d.powerpoint) ids.add(d.powerpoint.id);
+    if (d.pdf) ids.add(d.pdf.id);
   }
   return ids;
 }

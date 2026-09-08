@@ -58,11 +58,14 @@ export default function FilePreview({
   file,
   fetchUrl,
   onClose,
+  actions,
 }: {
   file: PreviewFile;
   /** Returns an authorised blob URL for the file, or null on failure. */
   fetchUrl: (id: string) => Promise<string | null>;
   onClose: () => void;
+  /** Extra controls in the header, before Download — the deck downloads on a presentation preview. */
+  actions?: React.ReactNode;
 }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -151,6 +154,8 @@ export default function FilePreview({
               {file.label}
             </h2>
           </div>
+
+          {actions}
 
           <a
             href={blobUrl || undefined}

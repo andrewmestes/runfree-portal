@@ -41,7 +41,7 @@ type Status = "checking" | "ready" | "missing" | "error";
 
 type DeckFile = {
   id: string;
-  format: "keynote" | "powerpoint";
+  format: "keynote" | "powerpoint" | "pdf";
   name: string;
   mimeType: string;
   sizeBytes: number | null;
@@ -81,6 +81,7 @@ export default function OpenPage() {
     requested: DeckFile | null;
     keynote: DeckFile | null;
     powerpoint: DeckFile | null;
+    pdf: DeckFile | null;
   } | null>(null);
 
   useEffect(() => {
@@ -129,11 +130,24 @@ export default function OpenPage() {
       if (kind === "keynote") {
         const body = await res.json();
         setDeck(body);
+        // With a PDF of the slides beside the deck, show that — the deck
+        // itself is a download away in the viewer's header. Without one,
+        // start the download straight away; the ticketed URL carries an
+        // attachment disposition, so the page stays put.
+        if (body.pdf?.url) {
+          const pdfRes = await fetch(body.pdf.url);
+          if (cancelled) return;
+          if (pdfRes.ok) {
+            const raw = await pdfRes.blob();
+            if (cancelled) return;
+            setFile({ id: body.pdf.id, title: body.title, num: null, label: body.title, sizeBytes: raw.size });
+            setBlob(raw.type === "application/pdf" ? raw : new Blob([raw], { type: "application/pdf" }));
+            setStatus("ready");
+            return;
+          }
+        }
         setStatus("ready");
-        // Start the download straight away; the ticketed URL carries an
-        // attachment disposition, so the page stays put and the browser
-        // shows its own progress.
-        if (body.requested?.url) window.location.assign(body.requested.url);
+        if (body.requested?.url && body.requested.format !== "pdf") window.location.assign(body.requested.url);
         return;
       }
 
@@ -197,6 +211,29 @@ export default function OpenPage() {
             Go to {backLabel}
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  if (kind === "keynote" && deck && file && blob) {
+    // The slides, with the real deck a click away.
+    const deckLinks = (
+      <>
+        {deck.keynote && (
+          <a href={deck.keynote.url} className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-runfree-ink transition hover:border-runfree-magenta sm:text-sm">
+            Keynote
+          </a>
+        )}
+        {deck.powerpoint && (
+          <a href={deck.powerpoint.url} className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-runfree-ink transition hover:border-runfree-magenta sm:text-sm">
+            PowerPoint
+          </a>
+        )}
+      </>
+    );
+    return (
+      <div className="min-h-screen bg-runfree-ink">
+        <FilePreview file={file} fetchUrl={fetchUrl} onClose={() => router.push(back)} actions={deckLinks} />
       </div>
     );
   }

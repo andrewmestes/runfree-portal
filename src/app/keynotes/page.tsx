@@ -24,6 +24,7 @@ type Presentation = {
   slug: string;
   keynote: Format | null;
   powerpoint: Format | null;
+  pdf: Format | null;
 };
 
 function prettySize(bytes: number | null) {
@@ -182,6 +183,15 @@ export default function KeynotesPage() {
                   </h2>
 
                   <div className="mt-4 flex flex-1 flex-col justify-end gap-2">
+                    {d.pdf && (
+                      <a
+                        href={`/open/keynote/${d.pdf.id}`}
+                        className="flex items-center justify-between rounded-lg bg-runfree-grad px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                      >
+                        <span>View the slides</span>
+                        <span className="text-xs font-normal text-white/80">PDF · {prettySize(d.pdf.sizeBytes)}</span>
+                      </a>
+                    )}
                     <FormatButton
                       label="Keynote"
                       hint=".key · Mac"

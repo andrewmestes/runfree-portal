@@ -194,8 +194,20 @@ async function main() {
       errs.length = 0;
       await send("Page.navigate", { url: u });
       await sleep(settle);
-      await ev(`[...document.images].forEach((i) => { i.loading = "eager"; }); "ok"`);
-      await sleep(1500);
+      // Force images eager and wait until the visible ones have settled,
+      // re-checking as late ones mount (video stills arrive after an API
+      // round trip; signed thumbnails after the shelf loads). A fixed wait
+      // reported those as "broken img" on cold nights — the script, not the
+      // page. Ten seconds at most.
+      for (const started = Date.now(); ; ) {
+        const pending = (await ev(`(() => {
+          const imgs = [...document.images];
+          imgs.forEach((i) => { if (i.loading !== "eager") i.loading = "eager"; });
+          return imgs.filter((i) => i.getClientRects().length && !i.complete).length;
+        })()`)) as number;
+        if (pending === 0 || Date.now() - started > 10_000) { await sleep(400); break; }
+        await sleep(500);
+      }
       const a = await ev(AUDIT) as { url: string; hScroll: boolean; spills: unknown[]; tinyTargets: number; tinyList: { tag: string; text: string; cls: string; h: number; w: number }[]; badImgs: string[]; chars: number; h: number };
       const noise = [...new Set(errs)].filter((m) => !/GoTrueClient|React DevTools/i.test(m));
       const flags: string[] = [];

@@ -69,6 +69,28 @@ const AUDIT = `(() => {
   };
 })()`;
 
+/**
+ * Force every image eager and wait until the visible ones have loaded (or
+ * failed), re-checking as new ones mount. Returns once they are all
+ * settled, or after ten seconds — whichever is first.
+ */
+export async function settleImages(ev: (expr: string) => Promise<unknown>, maxMs = 10_000) {
+  const started = Date.now();
+  for (;;) {
+    const pending = (await ev(`(() => {
+      const imgs = [...document.images];
+      imgs.forEach((i) => { if (i.loading !== "eager") i.loading = "eager"; });
+      return imgs.filter((i) => i.getClientRects().length && !i.complete).length;
+    })()`)) as number;
+    if (pending === 0 || Date.now() - started > maxMs) {
+      // One more beat so a just-completed image has its naturalWidth.
+      await sleep(400);
+      return;
+    }
+    await sleep(500);
+  }
+}
+
 async function findUser() {
   const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
   return data.users.find((u) => u.email === EMAIL) ?? null;
@@ -180,8 +202,14 @@ async function main() {
     // is false and it looks broken. That is exactly what happened when the
     // Help page gained an FAQ and Preparation gained the reading shelf — two
     // "broken" images that both returned 200 when fetched directly.
-    await ev(`[...document.images].forEach((i) => { i.loading = "eager"; }); "ok"`);
-    await sleep(2500);
+    //
+    // And keep forcing them, because some images MOUNT after the first pass —
+    // the highlight shelf's video stills arrive once /api/loom-thumbnails
+    // answers, which on a cold server is after the old fixed 2.5s wait. A
+    // still that mounted lazy below the fold never loaded, and three nights
+    // of "broken img" on the Dashboard were this script, not the page.
+    // Poll until every visible image is complete, up to ten seconds.
+    await settleImages(ev);
     const a = await ev(AUDIT) as {
       hScroll: boolean; scrollW: number; vw: number; chars: number;
       spills: { tag: string; cls: string; left: number; right: number; text: string }[]; badImgs: string[];

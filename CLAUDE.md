@@ -1481,3 +1481,62 @@ when it is skipped. Will's Action Step List already asks for it on paper —
   positioned div now — a stretched SVG drew every dot as an ellipse.
 - `BackgroundDetail` hides the Title field from readers: the shell already
   prints it.
+
+## Guide deep links: /open/{kind}/{id}, and videos streamed from Drive (8 Sept 2026)
+
+Andrew, on the Digital Facilitators' Guide in Canva: "the link on the digital
+facilitator's guide checks portal access, then displays the handout without
+going to the actual portal … as quick as possible, so that if someone is
+facilitating live in the room and they click on the link, it quickly
+recognizes them and displays the handout they want."
+
+Every handout icon in the guide pointed at a Drive id that no longer exists,
+and every video icon at a public "anyone with the link" Drive file. Now a
+guide link is `/open/handout/{id}`, `/open/video/{id}` (also `book`,
+`guide`, `keynote`): a page with no chrome that checks the session, opens
+that one file in `FilePreview`, and whose Close goes to the file's shelf.
+Signed out → `/auth/login?next=…`, and the login page honours `next` for
+email and for Google (stashed in sessionStorage across the OAuth round trip;
+`safeNext` allows only a same-site path). The Canva relinking itself has to
+be done by hand — the Canva connector refuses to edit a 174-page design.
+
+**The Process Tools videos stay in Drive and stream through the portal.**
+`GOOGLE_TOOL_VIDEOS_FOLDER_ID` ("Pivvot Vision Framing > Training (Videos &
+Docs) > Process Tools Videos") is shared with the service account and read
+live, like the handouts. `lib/tool-videos.ts` explains the two things that
+differ from a handout:
+
+- **A video tag cannot send a session header**, so `/api/tool-videos/ticket/{id}`
+  (bearer-gated, checks the folder) mints a fifteen-minute HMAC ticket for
+  one file and one person, and `/api/tool-videos/file/{id}?t=…` checks only
+  the ticket. Reusing a ticket on another file, or altering one, is a 401.
+- **The file route passes the browser's Range header through** to Drive
+  (`fetchDriveFileRange`) and forwards 206 / Content-Range / Content-Length.
+  Without that, seeking a 3.5 GB video re-sent it from byte zero. gaxios
+  hands back headers as a `Headers` instance now, not a plain object —
+  `headerOf()` reads both; the plain-object read silently dropped
+  Content-Range.
+
+The `/videos` page fetches `/api/tool-videos` alongside `/api/videos` and
+merges the Drive walkthroughs into the same module groups (their `url` is
+`drive:{id}`; the player renders a `<video>` for those). Group order is by
+module number, with an unnumbered group that has database videos
+(Orientation) first and one with only Drive videos (Video Clips) last —
+sort_order alone cannot place a Drive-only module.
+
+**Boundary checks walk up, they do not list.** `fileInsideFolder(id, root)`
+follows the file's parents to the root (three or four small calls) instead
+of listing the whole tree (a dozen calls, ten seconds cold). The handout
+file route and the video ticket use it; books and keynotes still list. The
+handout route starts the walk and the fetch together and cancels the stream
+if the walk says no.
+
+**`FilePreview` owns the object URL it is handed.** It revokes it on unmount
+and asks `fetchUrl` again on the next mount — which React's dev double-mount
+does immediately. The open page therefore keeps the Blob and mints a fresh
+URL per ask; handing it one URL rendered a broken-document icon on every
+handout in dev.
+
+After the guide is relinked, the per-file "anyone with the link" sharing on
+the tool videos comes off — that switch is the real gate. The relink sheet
+with the final URL per icon is in `DFG Link Audit/DFG relink sheet.csv`.

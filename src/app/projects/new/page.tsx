@@ -90,7 +90,7 @@ export default function NewProjectPage() {
       const defaults = templates.find((t) => t.id === templateId)?.ui.default_highlights ?? [];
       if (defaults.length > 0) {
         try {
-          await seedDefaultHighlights(accessToken, id, defaults);
+          await seedDefaultHighlights(accessToken, id, defaults, templateId || null);
         } catch (err) {
           console.warn("Default highlights were not added:", err);
         }

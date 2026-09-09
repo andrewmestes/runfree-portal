@@ -353,30 +353,73 @@ export async function reorderHighlights(accessToken: string, ids: string[]): Pro
 /**
  * Highlight a template's defaults on a brand-new project (075). Titles from
  * `templates.ui.default_highlights` are matched, case-insensitively, against
- * the Drive handout library the project just inherited — "Preparation
- * Checklist" on a Pivvot engagement. Best effort: a Drive hiccup at creation
- * costs the default, not the project.
+ * two libraries: the Drive handouts the project just inherited ("Preparation
+ * Checklist" on a Pivvot engagement) and the template's own stored resources.
+ *
+ * The second half is why a Drive-less template could not have defaults at
+ * all. Younique's worksheets and the coaching books are template FILES (063),
+ * not Drive handouts; 071 made them highlightable by hand, and this makes
+ * them seedable, so every template can open with a shelf instead of only the
+ * one whose material happens to live in Drive.
+ *
+ * Best effort throughout: a Drive hiccup at creation costs the default, not
+ * the project. A Drive handout wins a tie, because that is the copy a
+ * facilitator's guide link opens.
  */
 export async function seedDefaultHighlights(
   accessToken: string,
   projectId: string,
-  titles: string[]
+  titles: string[],
+  templateId?: string | null
 ): Promise<number> {
   if (titles.length === 0) return 0;
-  const res = await fetch(`/api/projects/${projectId}/handouts`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) return 0;
-  const lib = (await res.json()) as {
-    byModule?: Record<string, { combined: HandoutRef | null; sheets: HandoutRef[] }>;
-    extras?: { name: string; files: HandoutRef[] }[];
-    notebooks?: HandoutRef[];
+
+  let files: HandoutRef[] = [];
+  try {
+    const res = await fetch(`/api/projects/${projectId}/handouts`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const lib = (await res.json()) as {
+        byModule?: Record<string, { combined: HandoutRef | null; sheets: HandoutRef[] }>;
+        extras?: { name: string; files: HandoutRef[] }[];
+        notebooks?: HandoutRef[];
+      };
+      files = [
+        ...Object.values(lib.byModule ?? {}).flatMap((m) => [
+          ...(m.combined ? [m.combined] : []),
+          ...m.sheets,
+        ]),
+        ...(lib.extras ?? []).flatMap((g) => g.files),
+        ...(lib.notebooks ?? []),
+      ];
+    }
+  } catch {
+    /* no Drive folder on this template, or Drive is down — the stored rows below still work */
+  }
+
+  type TemplateRow = {
+    id: string;
+    title: string;
+    section: string | null;
+    kind: string | null;
+    external_url: string | null;
+    file_path: string | null;
+    file_name: string | null;
+    file_size: number | null;
+    thumb_path: string | null;
   };
-  const files: HandoutRef[] = [
-    ...Object.values(lib.byModule ?? {}).flatMap((m) => [...(m.combined ? [m.combined] : []), ...m.sheets]),
-    ...(lib.extras ?? []).flatMap((g) => g.files),
-    ...(lib.notebooks ?? []),
-  ];
+  let stored: TemplateRow[] = [];
+  if (templateId) {
+    const { data } = await createUserClient(accessToken)
+      .from("template_resources")
+      .select("id,title,section,kind,external_url,file_path,file_name,file_size,thumb_path")
+      .eq("template_id", templateId);
+    // A row with neither a link nor a file is a label — highlighting one puts
+    // a card on the dashboard that does nothing when tapped.
+    stored = ((data ?? []) as TemplateRow[]).filter((r) => r.external_url || r.file_path);
+  }
+
   const entries: CatalogueEntry[] = [];
   for (const wanted of titles) {
     const needle = wanted.toLowerCase();
@@ -385,20 +428,44 @@ export async function seedDefaultHighlights(
     const hit = files
       .filter((f) => f.title.toLowerCase().includes(needle))
       .sort((a, b) => a.title.length - b.title.length)[0];
-    if (!hit || entries.some((e) => e.source_id === hit.id)) continue;
+    if (hit) {
+      if (entries.some((e) => e.source_id === hit.id)) continue;
+      entries.push({
+        key: `handout:${hit.id}`,
+        source_kind: "handout",
+        source_id: hit.id,
+        title: hit.title,
+        media_kind: "pdf",
+        context: null,
+        external_url: null,
+        file_path: null,
+        file_name: hit.title,
+        file_mime: "application/pdf",
+        file_size: hit.sizeBytes,
+        thumb_path: null,
+        thumb_url: null,
+      });
+      continue;
+    }
+
+    const row = stored
+      .filter((r) => r.title.toLowerCase().includes(needle))
+      .sort((a, b) => a.title.length - b.title.length)[0];
+    if (!row || entries.some((e) => e.source_id === row.id)) continue;
+    const isImage = !!row.file_path && /\.(png|jpe?g|webp|gif)$/i.test(row.file_path);
     entries.push({
-      key: `handout:${hit.id}`,
-      source_kind: "handout",
-      source_id: hit.id,
-      title: hit.title,
-      media_kind: "pdf",
-      context: null,
-      external_url: null,
-      file_path: null,
-      file_name: hit.title,
-      file_mime: "application/pdf",
-      file_size: hit.sizeBytes,
-      thumb_path: null,
+      key: `template_resource:${row.id}`,
+      source_kind: "template_resource",
+      source_id: row.id,
+      title: row.title,
+      media_kind: row.external_url ? (row.kind === "video" ? "video" : "link") : isImage ? "image" : "pdf",
+      context: row.section,
+      external_url: row.external_url,
+      file_path: row.file_path,
+      file_name: row.file_name,
+      file_mime: row.file_path ? (isImage ? "image/*" : "application/pdf") : null,
+      file_size: row.file_size,
+      thumb_path: row.thumb_path,
       thumb_url: null,
     });
   }

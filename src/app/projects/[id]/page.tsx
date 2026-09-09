@@ -106,6 +106,7 @@ import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
 import AccessError from "@/components/AccessError";
 import BooksShelf from "@/components/BooksShelf";
+import PdfThumbnail from "@/components/PdfThumbnail";
 import ExecutionPanel from "@/components/ExecutionPanel";
 import AssignedSteps from "@/components/AssignedSteps";
 import { useMyActionSteps } from "@/lib/my-steps";
@@ -131,6 +132,7 @@ type Profile = {
 const PREP_HANDOUT = /prep(aration)?\s*checklist/i;
 /** Stored images render as cards; everything else opens as a document. */
 const IMAGE_FILE = /\.(png|jpe?g|webp|gif)$/i;
+const PDF_FILE = /\.pdf$/i;
 
 /**
  * A section's resources as a shelf of covers — the coaching template's books
@@ -154,6 +156,33 @@ function ResourceShelf({
       {rows.map((r, i) => {
         const url = r.file_path ? fileUrls[r.file_path] : undefined;
         const cover = r.thumb_path ? fileUrls[r.thumb_path] : undefined;
+        // A worksheet with no hand-made cover draws its own first page, the
+        // same trick the Read & Watch shelf learned in 075. Before this, a
+        // section of real documents (Younique's Life-Making Cycle set) fell
+        // back to a grey page icon repeated six times, which tells a reader
+        // nothing about which sheet is which.
+        const ownFirstPage =
+          !cover && url && r.file_path && PDF_FILE.test(r.file_path) ? (
+            <PdfThumbnail
+              fileId={r.file_path}
+              fetchBytes={async () => {
+                try {
+                  const res = await fetch(url);
+                  return res.ok ? await res.arrayBuffer() : null;
+                } catch {
+                  return null;
+                }
+              }}
+              width={220}
+              sizeBytes={r.file_size}
+              className="absolute inset-0 h-full w-full object-contain p-2"
+              fallback={
+                <span className="absolute inset-0 grid place-items-center text-runfree-navy/40">
+                  <DocIcon />
+                </span>
+              }
+            />
+          ) : null;
         const href = r.external_url ? safeExternalUrl(r.external_url) : null;
         const pill = url
           ? r.kind === "handout"
@@ -174,6 +203,8 @@ function ResourceShelf({
                   alt=""
                   className="absolute inset-0 h-full w-full object-contain p-2 transition group-hover:scale-[1.03]"
                 />
+              ) : ownFirstPage ? (
+                ownFirstPage
               ) : (
                 <span className="absolute inset-0 grid place-items-center text-runfree-navy/40">
                   <DocIcon />
@@ -5630,7 +5661,14 @@ function ModulePanel({
   // Covers (071) turn the numbered list into a shelf. Andrew: "can we make
   // the resources in the coaching template a little more visual … book
   // images/thumbnails/etc.?"
-  const hasCovers = walkthrough.some((r) => !!r.thumb_path);
+  // ...and so is a section whose rows are ALL documents we hold the bytes
+  // for: those draw their own first pages, so the shelf is a row of real
+  // sheets rather than a numbered list of filenames. A day of STEPS (a row
+  // with no file is an instruction, not a document) stays a numbered list —
+  // that distinction is the whole reason both renderings exist.
+  const allDocuments =
+    walkthrough.length > 0 && walkthrough.every((r) => r.kind === "handout" && !!r.file_path);
+  const hasCovers = walkthrough.some((r) => !!r.thumb_path) || allDocuments;
 
   // Every chart for this module, including the ones a coach uploaded while
   // logging a session.

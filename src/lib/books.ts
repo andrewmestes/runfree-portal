@@ -36,6 +36,14 @@ const BOOK_DEFS = [
     key: "younique",
     amazonQuery: "Younique Will Mancini",
   },
+  // The fifth shelf. Its folder had always been there and was never read:
+  // BOOK_DEFS is what turns a top-level folder into a shelf, so the Clarity
+  // Spiral book was in Drive and nowhere in the portal.
+  {
+    name: "Clarity Spiral",
+    key: "clarityspiral",
+    amazonQuery: "Clarity Spiral Will Mancini",
+  },
 ] as const;
 
 /**
@@ -180,7 +188,11 @@ function isChapterFile(name: string, parentFolderName: string | null): boolean {
  * correct outcome — rather than silently picking the wrong candidate.
  */
 function isFullBookCandidate(name: string, bookKey: string): boolean {
-  const withoutBook = normalize(stripExt(name)).replace(/book/g, "");
+  // A year in the filename is an edition note, not part of the title —
+  // "Clarity Spiral Book (2023).pdf" is the book. Without this it fell past
+  // its own shelf's headline slot and listed as an extra document beneath it.
+  const withoutBook = normalize(stripExt(name).replace(/\(?\b(19|20)\d{2}\b\)?/g, ""))
+    .replace(/book/g, "");
   return withoutBook === bookKey;
 }
 
@@ -367,7 +379,32 @@ export async function listBooksLibrary(): Promise<BooksLibrary> {
       [b.fullBook, ...b.other].filter(Boolean).map((f) => f!.id)
     )
   );
-  const unclaimed = childrenOf(rootId).filter(
+  // ...plus the files in any top-level FOLDER that no shelf claimed. Before
+  // this, such a folder was silently dropped: "Other : Lead Magnets" held
+  // four PDFs — among them the Problem Statement Deck the Digital
+  // Facilitators' Guide links to — and the portal both hid them from the
+  // Books shelf and refused /open/book/{id} for them, because that route's
+  // allowlist is built from this same library. A folder in the library is in
+  // the library.
+  //
+  // Visual Summaries is the one exception: its files are consumed above as
+  // each book's summary, and the ones that did not match are older versions
+  // of the ones that did, so listing them again reads as duplicates.
+  const consumedFolderIds = new Set(
+    [
+      summariesFolder?.id,
+      oldBrandingFolder?.id,
+      ...BOOK_DEFS.map((def) => topFolders.find((f) => normalize(f.name) === def.key)?.id),
+      ...folders
+        .filter((f) => BOOK_DEFS.some((def) => topFolders.find((t) => normalize(t.name) === def.key)?.id && (f.parents || []).includes(topFolders.find((t) => normalize(t.name) === def.key)!.id)))
+        .map((f) => f.id),
+    ].filter((x): x is string => !!x)
+  );
+  const looseFolderFiles = topFolders
+    .filter((f) => !consumedFolderIds.has(f.id))
+    .flatMap((f) => childrenOf(f.id));
+
+  const unclaimed = [...childrenOf(rootId), ...looseFolderFiles].filter(
     (f) =>
       !claimedIds.has(f.id) &&
       !BOOK_DEFS.some((def) => isFullBookCandidate(f.name, def.key))

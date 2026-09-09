@@ -1550,3 +1550,87 @@ name and its own progress bar — nothing is buffered as a blob in the page.
 After the guide is relinked, the per-file "anyone with the link" sharing on
 the tool videos comes off — that switch is the real gate. The relink sheet
 with the final URL per icon is in `DFG Link Audit/DFG relink sheet.csv`.
+
+## The template parity pass (078, 079, 9 Sept 2026)
+
+Andrew: "do another pass on the portal, look for any additional improvements
+you can make. update all projects and templates to be the best version so
+far." So this round is not a feature — it is every template measured against
+the best one, and the differences closed.
+
+**What the inventory showed.** Six templates, and the good ideas were each
+living on one or two of them: covers on the coaching pair only, a default
+Read & Watch shelf on Pivvot only, `frame_elements = '{}'` (070's "no Vision
+Frame sheet") on the coaching pair only, RunFree staff seeded on four of six.
+
+- **A crashed RLS run had left `rls-test-template-…` in the table.**
+  `tests/rls.test.ts` does clean up after itself, so this was litter from an
+  interrupted run — and litter that shows in the New Project picker as a
+  template someone could stamp a real church from. 078 deletes it and its
+  rows. If you see one again, an earlier run died; the suite is fine.
+- **Younique was showing a church Vision Frame.** `frame_elements` was null,
+  and null means all seven. A one-person life plan opened its Deliverables
+  panel with Mission / Values / Strategy / Measures for a church the client
+  does not have. Now `'{}'`, the same as the coaching templates, and `voice`
+  is `organization` rather than `church`.
+- **Two templates seeded no coach.** Executive Team Coaching had only Brooke
+  and Younique had nobody, so a new project of either kind started with no
+  RunFree person on it. Will is on both now (he runs the team work and
+  Younique is his instrument; Brooke does not use the Younique tools).
+
+**`seedDefaultHighlights` can reach template files now.** 075 matched
+`ui.default_highlights` against the Drive handout library only, so a template
+whose material lives in template storage (Younique's worksheets, the coaching
+books) could not have a default shelf **at all** — the feature was
+accidentally Pivvot-only. It now also matches `template_resources` rows that
+carry a link or a file, with a Drive handout still winning a tie, because that
+is the copy a facilitator's-guide link opens. Younique opens on the LDG
+worksheet and the Life-Making Cycle 1-Pager.
+
+**A section of documents is a shelf without anyone making covers.** 071 turned
+a walkthrough into `ResourceShelf` only when some row had a `thumb_path`, and
+`ResourceShelf` drew a grey page icon when a row had none — so Younique's six
+Life-Making Cycle PDFs listed as six identical icons. A row whose file is a
+PDF now draws its own first page through `PdfThumbnail`, the same trick the
+Read & Watch shelf learned in 075, and a section whose rows are ALL
+documents-with-files renders as a shelf on that basis alone. **A day of STEPS
+still renders as the numbered list** — a row with no file is an instruction,
+not a document, and that distinction is the whole reason both renderings
+exist. Younique's day sections are unchanged.
+
+**One dead pointer on a live project (079).** Validating every
+`project_highlights` row that names a Drive file against the folders the
+portal actually serves — the check that had just found six dead handout links
+in the Digital Facilitators' Guide — turned up Athena's "Preparation
+Checklist" card pointing at an id that is no longer in the library folder
+(the sheet was re-uploaded and got a new one). Every book pointer was fine.
+Christ Chapel, created before 075, never got Pivvot's default at all; it is
+appended to their shelf rather than put first, because their own reading is
+where the engagement is.
+
+**Worth repeating: a Drive id is not a promise.** Both this and the guide
+audit came down to the same thing — a file re-uploaded in Drive keeps its
+name and loses its id, and every pointer we stored goes dead silently. When
+something "just stopped opening", check the id against the folder before
+looking anywhere else.
+
+## The Books shelf reads the whole folder now
+
+Two top-level folders in "Books : Content" had never appeared in the portal,
+because `BOOK_DEFS` is what turns a folder into a shelf and `unclaimed` only
+looked at root-level FILES:
+
+- **Clarity Spiral** is a fifth shelf. `isFullBookCandidate` also strips a
+  four-digit year now, so "Clarity Spiral Book (2023) .pdf" is the shelf's
+  headline rather than an extra document beneath it.
+- **"Other : Lead Magnets"** — four PDFs, among them the Problem Statement
+  Deck the Digital Facilitators' Guide links to on 1.13 — lists under Other
+  Resources. This also fixes that guide link: `/api/books/file`'s allowlist is
+  built from this same library, so a folder the library skipped was a 404 on
+  tap ("That file isn't in the library"). **A folder in the library is in the
+  library** — that is the rule now, with one exception: Visual Summaries,
+  whose files are consumed above as each book's summary and whose leftovers
+  are older versions of the ones that matched.
+
+Verified against live Drive, not reasoned about: five shelves, Innovating
+Discipleship still standalone, four extras, and the deck servable.

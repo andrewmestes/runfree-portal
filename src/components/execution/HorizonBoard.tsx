@@ -7,10 +7,14 @@ import {
   daysBetween,
   daysSinceUpdate,
   effectiveStatus,
+  initiativePace,
   isStale,
+  reviewDue,
+  trendFor,
   type ExecutionData,
   type Initiative,
   type InitiativeStep,
+  type InitiativeUpdate,
 } from "@/lib/execution";
 import { HORIZON_DEFINITIONS, TEMPLATE_GROUPS, initiativeKind, templateByKey, templateIcon } from "@/lib/god-dreams";
 import { richTextIsEmpty } from "@/lib/rich-text";
@@ -319,6 +323,9 @@ export default function HorizonBoard({
                         status={effectiveStatus(i, data.updates)}
                         sinceUpdate={daysSinceUpdate(i, data.updates, today)}
                         stale={isStale(i, data.updates, today)}
+                        trend={trendFor(data.updates, i.id)}
+                        overdueReview={reviewDue(i, data.updates, today)}
+                        pace={initiativePace(i, data.steps, today)}
                         daysLeft={i.start_date ? 90 - daysBetween(i.start_date, today) : null}
                         selected={sameSelection(selected, { band: "foreground", id: i.id })}
                         onClick={() => onSelect({ band: "foreground", id: i.id })}
@@ -478,6 +485,9 @@ function InitiativeBox({
   status,
   sinceUpdate,
   stale,
+  trend,
+  overdueReview,
+  pace,
   daysLeft,
   selected,
   onClick,
@@ -488,6 +498,11 @@ function InitiativeBox({
   status: Initiative["status"];
   sinceUpdate: number | null;
   stale: boolean;
+  /** The recent check-ins, oldest first — the light's history, not its value. */
+  trend: InitiativeUpdate[];
+  /** The team's own Next Review date has passed. */
+  overdueReview: boolean;
+  pace: { elapsed: number; done: number; behind: boolean } | null;
   daysLeft: number | null;
   selected: boolean;
   onClick: () => void;
@@ -505,15 +520,22 @@ function InitiativeBox({
       {selected && <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-runfree-grad" />}
       <span className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-300">Initiative {n}</span>
-        {daysLeft != null && (
-          <span
-            className={`text-[10px] font-bold uppercase tracking-wide ${
-              daysLeft < 0 ? "text-rose-600" : daysLeft <= 14 ? "text-amber-600" : "text-gray-400"
-            }`}
-          >
-            {daysLeft < 0 ? `${Math.abs(daysLeft)}d over` : `${daysLeft}d left`}
-          </span>
-        )}
+        <span className="flex items-center gap-2">
+          {overdueReview && (
+            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+              Review due
+            </span>
+          )}
+          {daysLeft != null && (
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wide ${
+                daysLeft < 0 ? "text-rose-600" : daysLeft <= 14 ? "text-amber-600" : "text-gray-400"
+              }`}
+            >
+              {daysLeft < 0 ? `${Math.abs(daysLeft)}d over` : `${daysLeft}d left`}
+            </span>
+          )}
+        </span>
       </span>
       <span className="mt-1 flex items-start gap-2">
         <span
@@ -523,9 +545,18 @@ function InitiativeBox({
         <span className="sr-only">{RAG_LABEL[status]}. </span>
         <span className="block min-w-0 flex-1 text-sm font-semibold leading-snug text-runfree-ink">{i.name}</span>
       </span>
-      <span className="mt-1 block text-[11px] leading-snug text-gray-500">
-        {i.leader ? i.leader : "No owner yet"} · {kind.label}
+      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-gray-500">
+        <span>
+          {i.leader ? i.leader : "No owner yet"} · {kind.label}
+        </span>
+        <TrendStrip updates={trend} />
       </span>
+      {pace?.behind && (
+        <span className="mt-1 block text-[11px] font-semibold leading-snug text-amber-600">
+          Behind pace — {Math.round(pace.elapsed * 100)}% of the time, {Math.round(pace.done * 100)}% of the
+          steps
+        </span>
+      )}
       <span className="mt-auto block w-full pt-3">
         <StepStrip steps={steps} />
         <span className="mt-1.5 flex items-baseline justify-between gap-2 text-[11px]">
@@ -542,6 +573,37 @@ function InitiativeBox({
         </span>
       </span>
     </button>
+  );
+}
+
+/**
+ * The light’s history: one dot per check-in, oldest to newest.
+ *
+ * The board already showed the CURRENT light and how long since anyone spoke
+ * to it. Neither says whether this went amber on Tuesday or has been amber
+ * since August, and those are completely different conversations — the first
+ * is news, the second is a decision nobody is making. Rhythm Systems and
+ * Ninety both lead with this strip for that reason.
+ *
+ * Small and quiet on purpose: it sits beside the owner’s name, not above the
+ * initiative’s. Nothing to read when there is one check-in or none.
+ */
+export function TrendStrip({ updates }: { updates: InitiativeUpdate[] }) {
+  if (updates.length < 2) return null;
+  const label = updates.map((u) => RAG_LABEL[u.status]).join(", ");
+  return (
+    <span className="flex items-center gap-[3px]" title={`Check-ins, oldest first: ${label}`}>
+      <span className="sr-only">Check-in history, oldest first: {label}.</span>
+      {updates.map((u, idx) => (
+        <span
+          key={u.id}
+          aria-hidden
+          className={`block rounded-full ${RAG_DOT[u.status]} ${
+            idx === updates.length - 1 ? "h-2 w-2" : "h-1.5 w-1.5 opacity-60"
+          }`}
+        />
+      ))}
+    </span>
   );
 }
 

@@ -1634,3 +1634,62 @@ looked at root-level FILES:
 
 Verified against live Drive, not reasoned about: five shelves, Innovating
 Discipleship still standalone, four extras, and the deck servable.
+
+## Execution, second pass: the light's history, a review that is due, pace (10 Sept 2026)
+
+Andrew: "review the portal and make it better. consider improvements to the
+execute tab." 077 had given the tab a weekly check-in and made silence
+visible. This round is about what the meeting is told once check-ins exist —
+three signals, all from data already stored, plus the first test file for the
+tab's date arithmetic.
+
+**`tests/execution.test.ts`.** 21 checks over `reviewDue`, `initiativePace`
+and `trendFor`. These are date arithmetic on states that cannot be clicked
+into existence on a Tuesday — an initiative two-thirds through its quarter
+with a quarter of its steps closed — so they are tested rather than found
+wrong in a standup. Run it the same way as the RLS suite (and with
+`--env-file` for the same reason: importing the lib builds the Supabase
+client, which wants a URL at module load even though nothing here goes near
+the network).
+
+```bash
+./node_modules/.bin/tsx --env-file=.env.local tests/execution.test.ts
+```
+
+- **`trendFor` → `TrendStrip`.** One dot per check-in, oldest to newest, on
+  the initiative box and beside the chips in the detail. The board already
+  showed the current light and how long since anyone spoke to it; neither
+  says whether this went amber on Tuesday or has been amber since August, and
+  those are different conversations — the first is news, the second is a
+  decision nobody is making. Hidden below two check-ins: one dot is not a
+  trend. `updates` arrives NEWEST first (`latestUpdate` depends on that), so
+  the helper reverses; a strip that reads right-to-left is a bug nobody spots.
+- **`reviewDue` reads `next_review_on` back.** That column is the sheet's own
+  "Next Review", editable in `InitiativeDetail` since the beginning and read
+  by nothing — you could set a date and the portal would never mention it
+  again. Now a passed date is a reason in This Week, a chip on the box and a
+  line in the detail. **A check-in on or after that date clears it**, because
+  a mark that stays up after the meeting it asks for is how a signal teaches
+  people to ignore it. It takes precedence over the generic two-week
+  staleness rule rather than doubling it: a date the team chose beats a
+  default, and saying both is saying one thing twice.
+- **`initiativePace`.** The same test the Measures Dashboard already applies
+  to a measure — time gone against work closed — applied to an initiative,
+  over the ninety days the Foreground Horizon IS (or a dated `timeline` when
+  one is set; that column is free text, so it only counts when it parses as a
+  date). Deliberately hard to trigger: three steps minimum, a third of the
+  time gone, and a 25-point gap. A dashboard that cries wolf in week one is a
+  dashboard nobody opens in week ten.
+- **This Week groups by person.** The agenda is built once as data and
+  rendered flat or under owner headings; the toggle only appears when there
+  is more than one owner, because a list of four lines belonging to one person
+  is not a grouping. "By initiative" answers what is wrong, "by person"
+  answers whose turn it is, which is how fifteen minutes round a room goes.
+  The clipboard digest carries the same new flags — a copy that disagrees
+  with the screen is worse than no copy.
+
+**Worth knowing before the next round:** across both live churches there is
+exactly one initiative, no steps and no check-ins. The tab is built and
+unused. None of the above shows up on an empty project, which is correct, but
+it also means none of it has been seen against real data — the helpers are
+covered by tests, the rendering is not.

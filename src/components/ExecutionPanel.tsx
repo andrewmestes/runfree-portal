@@ -11,7 +11,9 @@ import {
   daysSinceUpdate,
   effectiveStatus,
   getExecutionData,
+  initiativePace,
   isStale,
+  reviewDue,
   updateInitiative,
   measureProgress,
   nextRenewalStop,
@@ -602,6 +604,9 @@ function AddInitiative({
   );
 }
 
+/** The bucket for agenda lines nobody owns. */
+const UNOWNED = "No owner yet";
+
 /**
  * The weekly standup, assembled.
  *
@@ -626,6 +631,7 @@ function ThisWeek({
 }) {
   const today = todayIso();
   const [copied, setCopied] = useState(false);
+  const [groupBy, setGroupBy] = useState<"initiative" | "person">("initiative");
 
   // The sheet's free-text "Accountable" first; failing that, the portal
   // member the step is assigned to.
@@ -648,10 +654,14 @@ function ThisWeek({
     .map((i) => {
       const reasons: string[] = [];
       if (statusOf(i) !== "green") reasons.push(RAG_LABEL[statusOf(i)].toLowerCase());
-      if (isStale(i, data.updates, today)) {
+      // A date the team chose beats the generic two-week rule, and saying
+      // both would be saying the same thing twice.
+      if (reviewDue(i, data.updates, today)) reasons.push(`review due ${prettyDate(i.next_review_on)}`);
+      else if (isStale(i, data.updates, today)) {
         const d = daysSinceUpdate(i, data.updates, today);
         reasons.push(d != null && d > 365 ? "never checked in" : `no check-in for ${d} days`);
       }
+      if (initiativePace(i, data.steps, today)?.behind) reasons.push("behind pace");
       return { i, reasons };
     })
     .filter((f) => f.reasons.length > 0);
@@ -687,9 +697,20 @@ function ThisWeek({
   const lines: string[] = [`Where we are — ${prettyDate(today)}`, ""];
   for (const i of live) {
     const since = daysSinceUpdate(i, data.updates, today);
+    // The clipboard copy is what Andrew wants the weekly email to be, so it
+    // says exactly what the card above it says — a digest that disagrees
+    // with the screen is worse than no digest.
+    const flags = [
+      reviewDue(i, data.updates, today)
+        ? `review due ${prettyDate(i.next_review_on)}`
+        : since != null && since >= STALE_AFTER_DAYS
+          ? `no check-in for ${since} days`
+          : null,
+      initiativePace(i, data.steps, today)?.behind ? "behind pace" : null,
+    ].filter(Boolean);
     lines.push(
       `${i.name} — ${RAG_LABEL[statusOf(i)]}${i.leader ? ` (${i.leader})` : ""}${
-        since != null && since >= STALE_AFTER_DAYS ? ` — no check-in for ${since} days` : ""
+        flags.length ? ` — ${flags.join(", ")}` : ""
       }`
     );
     for (const s of data.steps.filter((s) => s.initiative_id === i.id && s.status !== "green")) {
@@ -711,6 +732,63 @@ function ThisWeek({
   const digest = lines.join("\n").trim();
 
   const initiativeOf = (id: string) => live.find((i) => i.id === id);
+
+  /**
+   * The agenda as data, so it can be ordered two ways without the lines
+   * being written twice. `owner` is who would speak to it: an initiative's
+   * leader, a step's accountable person, nobody for a measure.
+   */
+  const agenda: {
+    key: string;
+    dot: string;
+    owner: string | null;
+    node: React.ReactNode;
+    go: () => void;
+  }[] = [
+    ...flagged.map(({ i, reasons }) => ({
+      key: `a-${i.id}`,
+      dot: statusOf(i) === "green" ? "bg-amber-300/70" : RAG_DOT[statusOf(i)],
+      owner: i.leader,
+      go: () => onOpen({ band: "foreground", id: i.id }),
+      node: (
+        <>
+          <span className="font-semibold text-white">{i.name}</span> — {reasons.join(" · ")}
+          {i.leader ? <span className="text-white/50"> · {i.leader}</span> : null}
+        </>
+      ),
+    })),
+    ...due.map((s) => ({
+      key: `d-${s.id}`,
+      dot: "bg-rose-400",
+      owner: owner(s),
+      go: () => onOpen({ band: "foreground", id: s.initiative_id }),
+      node: (
+        <>
+          {s.description}
+          {owner(s) ? ` · ${owner(s)}` : ""} — due {prettyDate(s.by_when)}
+          {initiativeOf(s.initiative_id) ? (
+            <span className="text-white/50"> · {initiativeOf(s.initiative_id)!.name}</span>
+          ) : null}
+        </>
+      ),
+    })),
+    ...behind.map((m) => ({
+      key: `m-${m.id}`,
+      dot: "bg-amber-300/70",
+      owner: null,
+      go: () => onOpen({ band: "midground" }),
+      node: (
+        <>
+          <span className="font-semibold text-white">{m.label}</span> — behind the year&rsquo;s pace
+        </>
+      ),
+    })),
+  ];
+  // Named people first, in the order they appear; the unowned pile last,
+  // because "nobody" is a finding, not a person to go to next.
+  const owners = [...new Set(agenda.map((a) => a.owner ?? UNOWNED))].sort((a, b) =>
+    a === UNOWNED ? 1 : b === UNOWNED ? -1 : 0
+  );
 
   return (
     <section className="mt-8">
@@ -774,36 +852,60 @@ function ThisWeek({
         </dl>
 
         {talk > 0 && (
-          <ul className="mt-4 space-y-1 border-t border-white/10 pt-4">
-            {flagged.map(({ i, reasons }) => (
-              <Line
-                key={`a-${i.id}`}
-                dot={statusOf(i) === "green" ? "bg-amber-300/70" : RAG_DOT[statusOf(i)]}
-                onClick={() => onOpen({ band: "foreground", id: i.id })}
-              >
-                <span className="font-semibold text-white">{i.name}</span> — {reasons.join(" · ")}
-                {i.leader ? <span className="text-white/50"> · {i.leader}</span> : null}
-              </Line>
-            ))}
-            {due.map((s) => (
-              <Line
-                key={`d-${s.id}`}
-                dot="bg-rose-400"
-                onClick={() => onOpen({ band: "foreground", id: s.initiative_id })}
-              >
-                {s.description}
-                {owner(s) ? ` · ${owner(s)}` : ""} — due {prettyDate(s.by_when)}
-                {initiativeOf(s.initiative_id) ? (
-                  <span className="text-white/50"> · {initiativeOf(s.initiative_id)!.name}</span>
-                ) : null}
-              </Line>
-            ))}
-            {behind.map((m) => (
-              <Line key={`m-${m.id}`} dot="bg-amber-300/70" onClick={() => onOpen({ band: "midground" })}>
-                <span className="font-semibold text-white">{m.label}</span> — behind the year&rsquo;s pace
-              </Line>
-            ))}
-          </ul>
+          <>
+            {/* Two ways through the same agenda. "By initiative" is the
+                board's own order and answers "what is wrong"; "by person"
+                answers "whose turn is it", which is how a fifteen-minute
+                standup actually goes round the room. Only offered when it
+                would group into more than one name — a list of four lines
+                all owned by the same person is not a grouping. */}
+            {owners.length > 1 && (
+              <div className="mt-4 flex justify-end">
+                <div className="inline-flex rounded-lg bg-white/10 p-0.5" role="group" aria-label="Group the agenda">
+                  {(["initiative", "person"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setGroupBy(m)}
+                      aria-pressed={groupBy === m}
+                      className={`rounded-[6px] px-2.5 py-1 text-[11px] font-semibold transition ${
+                        groupBy === m ? "bg-white text-runfree-navyDeep" : "text-white/60 hover:text-white"
+                      }`}
+                    >
+                      By {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {groupBy === "person" && owners.length > 1 ? (
+              <div className="mt-3 space-y-4 border-t border-white/10 pt-4">
+                {owners.map((name) => (
+                  <div key={name}>
+                    <p className="px-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">
+                      {name}
+                    </p>
+                    <ul className="mt-1 space-y-1">
+                      {agenda
+                        .filter((a) => (a.owner ?? UNOWNED) === name)
+                        .map((a) => (
+                          <Line key={a.key} dot={a.dot} onClick={a.go}>
+                            {a.node}
+                          </Line>
+                        ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ul className="mt-3 space-y-1 border-t border-white/10 pt-4">
+                {agenda.map((a) => (
+                  <Line key={a.key} dot={a.dot} onClick={a.go}>
+                    {a.node}
+                  </Line>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
     </section>

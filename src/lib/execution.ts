@@ -396,6 +396,80 @@ export function isStale(i: Initiative, updates: InitiativeUpdate[], todayIso: st
   return d != null && d >= STALE_AFTER_DAYS;
 }
 
+/**
+ * The check-ins on one initiative, OLDEST first.
+ *
+ * `updates` arrives newest first, which is right for "what is the light now"
+ * and wrong for a trend: a strip of lights has to read left to right like a
+ * sentence. Capped, because the point is the recent shape — a year of green
+ * dots shrunk to fit tells you less than the last eight.
+ */
+export function trendFor(
+  updates: InitiativeUpdate[],
+  initiativeId: string,
+  limit = 8
+): InitiativeUpdate[] {
+  return updates
+    .filter((u) => u.initiative_id === initiativeId)
+    .slice(0, limit)
+    .reverse();
+}
+
+/**
+ * A review the team put in the diary and let pass.
+ *
+ * `next_review_on` is the sheet's own "Next Review" column and the portal has
+ * been collecting it since the beginning without ever reading it back — you
+ * could set a date and nothing on earth would mention it again. A date that
+ * has passed is a promise the team made to itself, which is a stronger
+ * signal than the generic two-week staleness rule, so it is checked first
+ * and staleness is what covers an initiative with no date at all.
+ */
+export function reviewDue(
+  i: Initiative,
+  updates: InitiativeUpdate[],
+  todayIso: string
+): boolean {
+  if (!i.next_review_on || !/^\d{4}-\d{2}-\d{2}$/.test(i.next_review_on)) return false;
+  if (i.is_complete) return false;
+  if (i.next_review_on > todayIso) return false;
+  // A check-in on or after that date IS the review. Without this the mark
+  // would stay up after the meeting it is asking for, which is how a signal
+  // teaches people to ignore it.
+  const last = latestUpdate(updates, i.id);
+  return !last || last.on_date < i.next_review_on;
+}
+
+/**
+ * Is this initiative behind its own clock?
+ *
+ * The same test the Measures Dashboard already applies to a measure: compare
+ * how much of the time has gone against how much of the work has closed. The
+ * Foreground Horizon IS ninety days (`HORIZON_DEFINITIONS`), so that is the
+ * denominator unless the initiative names its own end.
+ *
+ * Deliberately hard to trigger. An initiative with two steps, or one three
+ * weeks old, says nothing useful — it is a week-six conversation, and a
+ * dashboard that cries wolf in week one is a dashboard nobody opens in week
+ * ten. Hence: a real number of steps, a third of the time gone, and a gap
+ * wide enough that nobody would argue with it.
+ */
+export function initiativePace(
+  i: Initiative,
+  steps: InitiativeStep[],
+  todayIso: string
+): { elapsed: number; done: number; behind: boolean } | null {
+  if (!i.start_date || i.is_complete) return null;
+  const mine = steps.filter((s) => s.initiative_id === i.id);
+  if (mine.length < 3) return null;
+  const span = i.timeline && /^\d{4}-\d{2}-\d{2}$/.test(i.timeline)
+    ? Math.max(1, daysBetween(i.start_date, i.timeline))
+    : 90;
+  const elapsed = Math.min(1, Math.max(0, daysBetween(i.start_date, todayIso) / span));
+  const done = mine.filter((s) => s.status === "green").length / mine.length;
+  return { elapsed, done, behind: elapsed >= 0.3 && done + 0.25 < elapsed };
+}
+
 /* --------------------------------------------------------------- writing */
 
 export async function createInitiative(

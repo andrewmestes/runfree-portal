@@ -21,6 +21,8 @@ import {
   isStale,
   latestUpdate,
   postUpdate,
+  reviewDue,
+  trendFor,
   updateInitiative,
   updateStep,
   type ExecutionData,
@@ -29,7 +31,7 @@ import {
   type InitiativeUpdate,
   type RagStatus,
 } from "@/lib/execution";
-import { StepStrip } from "./HorizonBoard";
+import { StepStrip, TrendStrip } from "./HorizonBoard";
 import { Cell, Chip, DateCell, EditorActions, Field, MiniField, RagPicker, isDateish, prettyDate, todayIso } from "./ui";
 
 /**
@@ -82,6 +84,8 @@ export default function InitiativeDetail({
   const last = latestUpdate(data.updates, i.id);
   const since = daysSinceUpdate(i, data.updates, today);
   const stale = isStale(i, data.updates, today);
+  const trend = trendFor(data.updates, i.id);
+  const dueReview = reviewDue(i, data.updates, today);
 
   const written = PLAN_FIELDS.filter((f) => !richTextIsEmpty(i[f.key])).length;
   // Open by default only when there is nothing written and someone can write it.
@@ -109,6 +113,7 @@ export default function InitiativeDetail({
             </span>
             <Chip tone="navy">{kind.label}</Chip>
             {i.is_complete && <Chip tone="accent">Finished</Chip>}
+            <TrendStrip updates={trend} />
           </div>
           <p className={`mt-1.5 text-xs ${stale ? "font-semibold text-amber-700" : "text-gray-500"}`}>
             {last
@@ -120,6 +125,14 @@ export default function InitiativeDetail({
                 : "No check-in yet"}
             {stale && ` · the weekly rhythm slipped (${STALE_AFTER_DAYS}+ days)`}
           </p>
+          {/* The date the team put in the diary, read back to them. Before
+              this, Next Review was a field you could fill in and nothing
+              anywhere would ever mention again. */}
+          {dueReview && (
+            <p className="mt-1 text-xs font-semibold text-amber-700">
+              The review this team set for {prettyDate(i.next_review_on)} is still open.
+            </p>
+          )}
         </div>
         {canManageSteps && !i.is_complete && (
           <CheckIn

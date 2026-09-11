@@ -97,6 +97,53 @@ export type HandoutSource = {
   notebooks: HandoutRef[];
 } | null;
 
+/**
+ * One book file as a catalogue entry.
+ *
+ * Extracted so the picker and `seedDefaultHighlights` cannot drift: a book
+ * highlighted by hand and the same book seeded from a template have to be
+ * the same row, jacket and all.
+ */
+function bookEntry(
+  shelfName: string,
+  shelfCover: string | null,
+  f: BookShelf["chapters"][number],
+  wearsJacket: boolean
+): CatalogueEntry {
+  // The parsed label, not the raw filename. `title` is what the Drive file is
+  // called ("Ch15_Measures"); `label`/`num` are what parseChapterNumLabel made
+  // of it, and what the books shelf shows. Caching the raw name here put
+  // "Ch15_Measures" on a church's dashboard.
+  const label = f.num
+    ? /^part\s/i.test(f.label)
+      ? f.label
+      : `Chapter ${f.num} — ${f.label}`
+    : f.label || f.title;
+  // ...and the book's name, unless the label already carries it. On the books
+  // shelf a chapter sits under its jacket, so "Chapter 15 — Measures" is
+  // complete. A highlight keeps only its TITLE — `context` is dropped when the
+  // row is stored — so the same string on a dashboard is a chapter of nothing.
+  const flat = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const title = flat(label).includes(flat(shelfName)) ? label : `${shelfName} — ${label}`;
+  return {
+    key: `book:${f.id}`,
+    source_kind: "book",
+    source_id: f.id,
+    title,
+    media_kind: "book",
+    context: shelfName,
+    external_url: null,
+    file_path: null,
+    file_name: f.name,
+    file_mime: f.mimeType,
+    file_size: f.sizeBytes,
+    thumb_path: null,
+    // The shelf jacket if this file IS the book; otherwise its own cover if
+    // we have one, and a glyph if we do not.
+    thumb_url: wearsJacket ? shelfCover : coverForFile(f.title),
+  };
+}
+
 export function buildCatalogue(
   detail: ProjectDetail,
   books: BooksLibrary | null,
@@ -206,30 +253,7 @@ export function buildCatalogue(
         .filter((f): f is NonNullable<typeof f> => !!f);
       const files = [...isTheBook, ...shelf.other];
       const wearsJacket = new Set(isTheBook.map((f) => f.id));
-      for (const f of files) {
-        out.push({
-          key: `book:${f.id}`,
-          source_kind: "book",
-          source_id: f.id,
-          // The parsed label, not the raw filename. `title` is what the Drive
-          // file is called ("Ch15_Measures"); `label`/`num` are what
-          // parseChapterNumLabel made of it, and what the books shelf shows.
-          // Caching the raw name here put "Ch15_Measures" on a church's
-          // dashboard.
-          title: f.num ? `Chapter ${f.num} — ${f.label}` : f.label || f.title,
-          media_kind: "book",
-          context: shelf.name,
-          external_url: null,
-          file_path: null,
-          file_name: f.name,
-          file_mime: f.mimeType,
-          file_size: f.sizeBytes,
-          thumb_path: null,
-          // The shelf jacket if this file IS the book; otherwise its own
-          // cover if we have one, and a glyph if we do not.
-          thumb_url: wearsJacket.has(f.id) ? cover : coverForFile(f.title),
-        });
-      }
+      for (const f of files) out.push(bookEntry(shelf.name, cover, f, wearsJacket.has(f.id)));
     }
   }
 
@@ -420,6 +444,34 @@ export async function seedDefaultHighlights(
     stored = ((data ?? []) as TemplateRow[]).filter((r) => r.external_url || r.file_path);
   }
 
+  // The books, too. Athena's shelf — the best-curated one in the portal — is
+  // three parts of Future Church, four orientation videos and the checklist,
+  // which is three different libraries; a seeder that could only reach one of
+  // them could never reproduce it, and a template that cannot reproduce the
+  // good shelf is not the template of the good shelf.
+  let bookRows: { title: string; entry: CatalogueEntry }[] = [];
+  try {
+    const res = await fetch(`/api/books`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (res.ok) {
+      const lib = (await res.json()) as BooksLibrary;
+      for (const shelf of [...(lib.books ?? []), ...(lib.standalone ?? [])]) {
+        const cover = coverFor(shelf.name);
+        const isTheBook = [shelf.fullBook, shelf.visualSummary, ...shelf.chapters].filter(
+          (f): f is NonNullable<typeof f> => !!f
+        );
+        const jackets = new Set(isTheBook.map((f) => f.id));
+        for (const f of [...isTheBook, ...shelf.other]) {
+          const entry = bookEntry(shelf.name, cover, f, jackets.has(f.id));
+          // Matched on the Drive filename as well as the shown title, because
+          // "Future Church Part 1" is the file and "Part 1" is the label.
+          bookRows.push({ title: `${entry.title} ${f.name}`, entry });
+        }
+      }
+    }
+  } catch {
+    /* books are a live Drive read; without them the other two still seed */
+  }
+
   const entries: CatalogueEntry[] = [];
   for (const wanted of titles) {
     const needle = wanted.toLowerCase();
@@ -451,7 +503,16 @@ export async function seedDefaultHighlights(
     const row = stored
       .filter((r) => r.title.toLowerCase().includes(needle))
       .sort((a, b) => a.title.length - b.title.length)[0];
-    if (!row || entries.some((e) => e.source_id === row.id)) continue;
+    if (!row) {
+      const book = bookRows
+        .filter((b) => b.title.toLowerCase().includes(needle))
+        .sort((a, b) => a.title.length - b.title.length)[0];
+      if (book && !entries.some((e) => e.source_id === book.entry.source_id)) {
+        entries.push(book.entry);
+      }
+      continue;
+    }
+    if (entries.some((e) => e.source_id === row.id)) continue;
     const isImage = !!row.file_path && /\.(png|jpe?g|webp|gif)$/i.test(row.file_path);
     entries.push({
       key: `template_resource:${row.id}`,

@@ -1693,3 +1693,39 @@ exactly one initiative, no steps and no check-ins. The tab is built and
 unused. None of the above shows up on an empty project, which is correct, but
 it also means none of it has been seen against real data — the helpers are
 covered by tests, the rendering is not.
+
+## Athena goes live — the default shelf is the one Andrew built (080)
+
+Andrew, 10 Sept: "I start with Athena CC tomorrow… Any changes made should be
+to both projects and the template for pivvot."
+
+**A highlight keeps only its title.** `addHighlights` stores title, not
+`context`, so a book chapter that reads "Chapter 15 — Measures" under its
+jacket on the Books shelf lands on a dashboard as a chapter of nothing.
+`bookEntry` (extracted from `buildCatalogue`, so the picker and the seeder
+cannot drift) now prefixes the book's name unless the label already carries
+it — compared on alphanumerics only, so "Innovating-Discipleship-complete"
+under the "Innovating Discipleship" shelf is left alone. A "Part N" label
+keeps its own wording rather than becoming "Chapter 1 — Part 1".
+
+**`seedDefaultHighlights` reaches all three libraries now.** Drive handouts
+(075), template resources (078) and books. Athena's shelf is three parts of
+Future Church, four orientation videos and the Preparation Checklist — one
+from each library — so a seeder that could reach only one of them could never
+reproduce the good shelf, and a template that cannot reproduce the good shelf
+is not the template of that shelf. Order is handout → template resource →
+book, shortest title wins; each of Pivvot's eight strings was resolved against
+live Drive and the template's own rows before being written, which is how the
+curly-quoted "Ted Talk" was caught.
+
+**All three now agree:** Athena's eight, the same eight on Christ Chapel, and
+`ui.default_highlights` on the template so the next church opens on them.
+
+**State of Athena for its first day** (checked, not assumed): 13 members with
+12 viewers, 22 preparation items with real content, the handout library
+resolving, 8 highlights. Its 39 deliverables are all drafts — 24 Vision Stack
+plates and 15 session-image placeholders stamped from the template, none with
+content — which is correct (the Stack has a deliberate Draft/Live toggle) but
+means a viewer's Deliverables panel is the Vision Frame sheet and nothing
+else until the first session. **The "2-Day Launch Retreat" Key Date is
+empty**, which is the first thing a church looks for.

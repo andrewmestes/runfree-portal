@@ -44,6 +44,22 @@ type Row = Profile & {
 };
 
 /**
+ * "Athena Christian Church - Pivvot Vision Framing" → "Athena Christian Church".
+ *
+ * Project names follow church-dash-program, and on a chip the program half
+ * is noise: every project on this portal is a RunFree engagement, and the
+ * church is the part that says who this person is. The full name is on the
+ * chip's tooltip for the one time the program matters.
+ */
+function shortProjectName(name: string): string {
+  const cut = name.split(/\s+[-–—]\s+/)[0]?.trim();
+  return cut && cut.length < name.length ? cut : name;
+}
+
+/** How many project chips a row shows before folding the rest into "+N". */
+const PROJECT_CHIPS = 2;
+
+/**
  * What someone is across the whole portal.
  *
  * `client` is labelled "Project Member" rather than split into editor and
@@ -235,8 +251,11 @@ export default function AdminPage() {
     const filtered = rows.filter((r) => {
       if (filter !== "all" && r.account_role !== filter) return false;
       if (!q) return true;
+      // Project names too, so "athena" lists a whole church team at once.
       return (
-        r.email.toLowerCase().includes(q) || (r.full_name ?? "").toLowerCase().includes(q)
+        r.email.toLowerCase().includes(q) ||
+        (r.full_name ?? "").toLowerCase().includes(q) ||
+        r.projectNames.some((n) => n.toLowerCase().includes(q))
       );
     });
 
@@ -346,7 +365,7 @@ export default function AdminPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name or email"
+            placeholder="Search name, email or church"
             className="min-h-[44px] flex-1 rounded-xl border border-gray-300 px-3.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta sm:max-w-xs"
           />
           <div className="flex flex-wrap gap-1.5">
@@ -423,19 +442,22 @@ export default function AdminPage() {
                     <span className="block truncate px-1.5 text-xs text-gray-500">{r.email}</span>
                   </span>
 
-                  {/* Two standing facts about a person, and only those.
-                      Certified in blue, Subscribed in green, both showing at
-                      once for someone who is both — Andrew: "I like the blue
-                      'certified' next to people's name. I want to make sure...
-                      that a green 'subscribed' is also added. so someone with
-                      both will have both show up there visually."
+                  {/* Standing facts about a person. Certified in blue,
+                      Subscribed in green, both showing at once for someone
+                      who is both — Andrew: "I like the blue 'certified' next
+                      to people's name. I want to make sure... that a green
+                      'subscribed' is also added."
 
-                      The per-project chips ("viewer on 2", "no projects") are
-                      gone. They answered a different question from the one
-                      this row asks, changed every time anyone joined a
-                      project, and crowded out the two badges that matter.
-                      Which projects someone is on is a property of the
-                      project, and lives in Manage access there. */}
+                      Then the church(es) they belong to, in grey. An earlier
+                      version had per-project ROLE chips here ("viewer on 2",
+                      "no projects") and they came out: they answered a
+                      question this list doesn't ask, and changed every time
+                      anyone joined anything. This is a different fact.
+                      Andrew, looking at a list of forty names: "when we're
+                      looking at the list much later, we have context for why
+                      they're in the portal." A church name is that context;
+                      a role count never was. Two chips, then +N, full names
+                      on hover — a coach on many projects stays one line. */}
                   <span className="flex flex-wrap items-center gap-1.5">
                     {r.isFramer && (
                       <span className="rounded-full bg-runfree-indigo px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-runfree-navy">
@@ -445,6 +467,23 @@ export default function AdminPage() {
                     {r.account_role === "framer_subscribed" && (
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
                         Subscribed
+                      </span>
+                    )}
+                    {r.projectNames.slice(0, PROJECT_CHIPS).map((name) => (
+                      <span
+                        key={name}
+                        title={name}
+                        className="max-w-[14rem] truncate rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600"
+                      >
+                        {shortProjectName(name)}
+                      </span>
+                    ))}
+                    {r.projectNames.length > PROJECT_CHIPS && (
+                      <span
+                        title={r.projectNames.slice(PROJECT_CHIPS).join("\n")}
+                        className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-gray-500"
+                      >
+                        +{r.projectNames.length - PROJECT_CHIPS}
                       </span>
                     )}
                   </span>

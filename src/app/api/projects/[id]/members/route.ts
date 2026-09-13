@@ -118,3 +118,171 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   return NextResponse.json({ profileId, invited });
 }
+
+/**
+ * PATCH — correct the email address on a person who was added with the wrong one.
+ *
+ * Andrew, on the Athena roster: "the email I had for this dude ended in
+ * @gmail, but it's incorrect. It's supposed to be @hotmail. Is there an easy
+ * way to update people's email?" Today the only route is Remove and re-add,
+ * which leaves a dead login and a dead invite behind, and still sends the
+ * second invite to whatever was typed the second time.
+ *
+ * An email here is a LOGIN, not a contact detail — changing it changes who
+ * can get into the account — so this is deliberately narrower than the rest
+ * of member management:
+ *
+ *   - project admin only, same gate as adding someone; AND
+ *   - only for someone who has NEVER SIGNED IN, unless the caller is the
+ *     portal owner.
+ *
+ * That second rule is the one doing the security work. Without it, a project
+ * admin could point a colleague's account at an address they control and
+ * then "reset the password" into it. Restricted to accounts that have never
+ * been used, there is nothing to take over — which is exactly and only the
+ * typo case this exists for. Someone who has actually signed in changes
+ * their own address, or asks the owner.
+ *
+ * Both halves of the identity move together: auth.users (the login) and
+ * profiles.email (what the portal reads). Updating one without the other is
+ * how you get a person who can sign in and then cannot see themselves.
+ */
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: projectId } = await params;
+
+  const access = await requireProjectAccess(request, projectId);
+  if (!access.ok) return access.response;
+
+  if (!access.isAdmin) {
+    return NextResponse.json(
+      { error: "Only a project admin can change someone's email" },
+      { status: 403 }
+    );
+  }
+
+  let body: { profileId?: string; email?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const profileId = body.profileId?.trim();
+  const email = body.email?.trim().toLowerCase();
+
+  if (!profileId) return NextResponse.json({ error: "profileId is required" }, { status: 400 });
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return NextResponse.json({ error: "A valid email is required" }, { status: 400 });
+  }
+
+  // Scoped to THIS project. A project admin may correct a typo on someone in
+  // the room with them, not on any account in the portal that they happen to
+  // know the id of.
+  const { data: membership, error: memberErr } = await supabaseAdmin
+    .from("project_members")
+    .select("profile_id")
+    .eq("project_id", projectId)
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (memberErr) return NextResponse.json({ error: memberErr.message }, { status: 500 });
+  if (!membership) {
+    return NextResponse.json({ error: "That person is not on this project" }, { status: 404 });
+  }
+
+  const { data: target, error: targetErr } = await supabaseAdmin
+    .from("profiles")
+    .select("id, email, full_name, last_seen_at, is_owner")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (targetErr) return NextResponse.json({ error: targetErr.message }, { status: 500 });
+  if (!target) return NextResponse.json({ error: "No such person" }, { status: 404 });
+
+  if (email === target.email?.toLowerCase()) {
+    return NextResponse.json({ error: "That is already their email" }, { status: 400 });
+  }
+
+  // Two independent signals for "has this account ever been used". last_seen_at
+  // is ours and only set by a page load; last_sign_in_at is GoTrue's and is set
+  // the moment they authenticate. Either one means hands off.
+  const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(profileId);
+  const hasBeenUsed = Boolean(target.last_seen_at) || Boolean(authUser?.user?.last_sign_in_at);
+
+  const { data: caller } = await supabaseAdmin
+    .from("profiles")
+    .select("is_owner")
+    .eq("id", access.userId)
+    .maybeSingle();
+  const callerIsOwner = Boolean(caller?.is_owner);
+
+  if (hasBeenUsed && !callerIsOwner) {
+    return NextResponse.json(
+      {
+        error:
+          "They have already signed in, so only they can change their own email — ask them to update it, or ask the portal owner.",
+      },
+      { status: 403 }
+    );
+  }
+
+  // Someone else already owns this address. profiles.email is unique, so the
+  // write would fail anyway; saying which collision it is beats a raw 23505.
+  const { data: clash } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+  if (clash && clash.id !== profileId) {
+    return NextResponse.json(
+      { error: "Someone else in the portal already uses that email" },
+      { status: 409 }
+    );
+  }
+
+  // The login first. `email_confirm` skips GoTrue's confirm-the-change mail,
+  // which would go to an address the person has never seen and cannot act on;
+  // an admin fixing a typo on an unused invite is the confirmation.
+  const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(profileId, {
+    email,
+    email_confirm: true,
+  });
+  if (authErr) return NextResponse.json({ error: authErr.message }, { status: 500 });
+
+  const { error: profileErr } = await supabaseAdmin
+    .from("profiles")
+    .update({ email })
+    .eq("id", profileId);
+  if (profileErr) {
+    // The login moved and the profile did not. Say so plainly rather than
+    // reporting a clean success over a half-applied identity change.
+    return NextResponse.json(
+      {
+        error: `The login moved to ${email} but their profile did not update: ${profileErr.message}. Tell Andrew before they try to sign in.`,
+      },
+      { status: 500 }
+    );
+  }
+
+  /**
+   * Get them a way in at the NEW address.
+   *
+   * Not inviteUserByEmail — GoTrue refuses to invite an account that already
+   * exists, and this one does. A password link is what actually sends, and it
+   * works for someone setting a first password as well as someone resetting
+   * one. This is the same conclusion the framers route wrote up at length
+   * after a "successful" resend delivered nothing.
+   */
+  const origin = new URL(request.url).origin;
+  const { error: linkErr } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/reset-password`,
+  });
+
+  return NextResponse.json({
+    ok: true,
+    email,
+    previousEmail: target.email,
+    emailed: !linkErr,
+    // Not an error: the address is corrected either way, and the admin can
+    // send another link from the same row. Only the mail step failed.
+    emailError: linkErr?.message ?? null,
+  });
+}

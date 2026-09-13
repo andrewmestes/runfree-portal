@@ -100,6 +100,15 @@ export type Database = {
           created_at?: string;
         };
         Update: {
+          /**
+           * Writable ONLY by the service role, and only alongside the matching
+           * auth.users change — profiles.email mirrors the login, it does not
+           * own it. The one caller is PATCH /api/projects/[id]/members, which
+           * corrects a typo on an account that has never been signed into.
+           * Anything that updates this without moving auth.users too leaves a
+           * person who can sign in and then cannot see themselves.
+           */
+          email?: string;
           full_name?: string | null;
           is_staff?: boolean;
           is_owner?: boolean;

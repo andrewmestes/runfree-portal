@@ -47,6 +47,33 @@ export async function getCurrentSession() {
 }
 
 /**
+ * The access token as it is RIGHT NOW, refreshed if it had expired.
+ *
+ * Pages used to snapshot `session.access_token` into React state once on
+ * load and then send that same string with every write for the rest of the
+ * visit. A Supabase access token lives an hour. Leave a project tab open
+ * through a working session — exactly what a coach running a workshop does —
+ * and every write starts failing with "Invalid or expired session", while
+ * supabase-js is quietly holding a perfectly good refreshed token the page
+ * never asks for again.
+ *
+ * `getSession()` returns that live token and refreshes it when it has
+ * expired, so calling this immediately before a mutating request is the
+ * difference between a stale snapshot and the truth. Pages should still keep
+ * their state in sync via onAuthStateChange for everything else; this is the
+ * belt to that braces, for the writes where failing is most expensive.
+ *
+ * Returns null only when there is genuinely no session left to refresh — the
+ * caller should send the person back to sign in rather than retrying.
+ */
+export async function freshAccessToken(): Promise<string | null> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}
+
+/**
  * Thrown when we genuinely could not find out whether someone has a profile,
  * as opposed to finding out that they don't.
  *

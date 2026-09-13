@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { getCurrentProfile, listMyProjects, logout } from "@/lib/auth";
+import { freshAccessToken, getCurrentProfile, listMyProjects, logout } from "@/lib/auth";
 import {
   createDeliverable,
   updateDeliverable,
@@ -1421,6 +1421,25 @@ export default function ProjectDetailPage() {
     load();
   }, [load]);
 
+  /**
+   * Keep `accessToken` pointed at the session supabase-js actually holds.
+   *
+   * `load()` reads the token once and stores it. Tokens last an hour; a
+   * coach keeps this page open far longer than that, and every write after
+   * the hour was coming back "Invalid or expired session" — including
+   * granting someone access, which is the write you least want to fail in
+   * front of a client. supabase-js refreshes in the background and announces
+   * it here, so this is the announcement the page was missing rather than
+   * any new work. `freshAccessToken()` covers the gap for the writes that
+   * matter most; this covers everything else at the cost of six lines.
+   */
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) setAccessToken(session.access_token);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
   // Only once the panel is actually opened. A live Drive read on every
   // project page load would undo the work that got "Checking access" down
   // from eleven round-trips to two.
@@ -2418,6 +2437,43 @@ function ChurchTeamInfo({
   const [email, setEmail] = useState("");
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
+  /**
+   * The roster row being edited, held as a draft rather than saved per
+   * keystroke. Andrew: "I don't see a way of being able to edit people in the
+   * team tab, I'd like to be able to do that." Add and Remove were the only
+   * two verbs, so fixing a typo meant deleting the person and retyping all
+   * three fields.
+   *
+   * Nothing here is a login — the roster is names and contact details, which
+   * is exactly why this can be a plain inline edit while the same correction
+   * over in Project access has to go through the server and send mail.
+   */
+  const [editing, setEditing] = useState<ChurchContact | null>(null);
+  const [draft, setDraft] = useState({ full_name: "", email: "", title: "" });
+
+  function startEdit(c: ChurchContact) {
+    setEditing(c);
+    setDraft({ full_name: c.full_name, email: c.email ?? "", title: c.title ?? "" });
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing || !draft.full_name.trim()) return;
+    setBusy(true);
+    try {
+      const token = (await freshAccessToken()) ?? accessToken;
+      if (!token) return;
+      await updateContact(token, editing.id, {
+        full_name: draft.full_name.trim(),
+        email: draft.email.trim() || null,
+        title: draft.title.trim() || null,
+      });
+      setEditing(null);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -2540,7 +2596,54 @@ function ChurchTeamInfo({
                 would truncate all three. */}
             {contacts.length > 0 && (
               <ul className="divide-y divide-gray-100">
-                {contacts.map((c) => (
+                {contacts.map((c) =>
+                  editing?.id === c.id ? (
+                    /* The edit row keeps the same three columns as the read
+                       row, so nothing below it jumps while you are typing. */
+                    <li key={c.id} className="py-2.5">
+                      <form
+                        onSubmit={saveEdit}
+                        className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto] sm:items-center"
+                      >
+                        <input
+                          autoFocus
+                          value={draft.full_name}
+                          onChange={(e) => setDraft({ ...draft, full_name: e.target.value })}
+                          placeholder="Full name"
+                          className="min-h-[38px] rounded-md border border-gray-300 px-2 text-sm outline-none focus:border-runfree-magenta"
+                        />
+                        <input
+                          value={draft.title}
+                          onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                          placeholder="Title"
+                          className="min-h-[38px] rounded-md border border-gray-300 px-2 text-xs outline-none focus:border-runfree-magenta"
+                        />
+                        <input
+                          type="email"
+                          value={draft.email}
+                          onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+                          placeholder="Email"
+                          className="min-h-[38px] rounded-md border border-gray-300 px-2 text-xs outline-none focus:border-runfree-magenta"
+                        />
+                        <span className="flex gap-1 sm:justify-self-end">
+                          <button
+                            type="submit"
+                            disabled={busy || !draft.full_name.trim()}
+                            className="min-h-[38px] rounded-md bg-runfree-grad px-3 text-[11px] font-semibold text-white disabled:opacity-50"
+                          >
+                            {busy ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditing(null)}
+                            className="min-h-[38px] px-2 text-[11px] font-medium text-gray-500 hover:text-runfree-ink"
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      </form>
+                    </li>
+                  ) : (
                   <li
                     key={c.id}
                     className="grid grid-cols-1 items-center gap-x-4 gap-y-0.5 py-2.5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto]"
@@ -2560,17 +2663,26 @@ function ChurchTeamInfo({
                       <span className="text-xs text-gray-300">—</span>
                     )}
                     {canEdit ? (
-                      <button
-                        onClick={() => remove(c)}
-                        className="justify-self-start rounded-md px-2 py-1.5 text-[11px] font-medium text-gray-400 transition hover:bg-red-50 hover:text-red-600 sm:justify-self-end"
-                      >
-                        Remove
-                      </button>
+                      <span className="flex gap-0.5 justify-self-start sm:justify-self-end">
+                        <button
+                          onClick={() => startEdit(c)}
+                          className="rounded-md px-2 py-1.5 text-[11px] font-medium text-gray-400 transition hover:bg-runfree-pink hover:text-runfree-magentaDeep"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => remove(c)}
+                          className="rounded-md px-2 py-1.5 text-[11px] font-medium text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                        >
+                          Remove
+                        </button>
+                      </span>
                     ) : (
                       <span />
                     )}
                   </li>
-                ))}
+                  )
+                )}
               </ul>
             )}
 
@@ -4022,6 +4134,28 @@ function ProjectAccess({
   const [role, setRole] = useState<ProjectRole>("viewer");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  /** profileId whose email is being corrected, and the address being typed. */
+  const [fixingEmail, setFixingEmail] = useState<string | null>(null);
+  const [newEmail, setNewEmail] = useState("");
+
+  /**
+   * The live token, or a message explaining the one thing the person can do.
+   *
+   * Every write here used to send the token captured when the page loaded.
+   * An hour into a workshop that token is dead, the server answers "Invalid
+   * or expired session", and the admin is left staring at a form that will
+   * never work no matter how many times they press the button. This asks
+   * supabase-js for the current one — which it refreshes if it has to — and
+   * only gives up when there is genuinely no session left.
+   */
+  async function tokenOrExplain(): Promise<string | null> {
+    const token = await freshAccessToken();
+    if (!token) {
+      setMessage("Your session has expired — reload the page and sign in again.");
+      return null;
+    }
+    return token;
+  }
 
   const members = [...detail.members].sort((a, b) =>
     a.isLead === b.isLead
@@ -4040,13 +4174,15 @@ function ProjectAccess({
 
   /** Grant a rostered person access as a viewer, using the email we hold. */
   async function grantFromRoster(c: ChurchContact) {
-    if (!accessToken || !c.email) return;
+    if (!c.email) return;
     setBusy(true);
     setMessage(null);
     try {
+      const token = await tokenOrExplain();
+      if (!token) return;
       const res = await fetch(`/api/projects/${projectId}/members`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ email: c.email.trim(), role: "viewer", orgRole: c.title }),
       });
       const body = await res.json();
@@ -4064,15 +4200,61 @@ function ProjectAccess({
     }
   }
 
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    if (!accessToken || !email.trim()) return;
+  /**
+   * Correct a typo in someone's login email.
+   *
+   * The server decides whether this is allowed (project admin, and the
+   * account has never been signed into) — this only collects the address and
+   * reports back. On success the person gets a fresh sign-in link at the new
+   * address, because the invite that went to the wrong one is now unreachable
+   * by anyone who should have it.
+   */
+  async function saveEmail(profileId: string, previous: string) {
+    const next = newEmail.trim().toLowerCase();
+    if (!next || next === previous.trim().toLowerCase()) {
+      setFixingEmail(null);
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
+      const token = await tokenOrExplain();
+      if (!token) return;
+      const res = await fetch(`/api/projects/${projectId}/members`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ profileId, email: next }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setMessage(body.error || "Couldn't change that email");
+        return;
+      }
+      setMessage(
+        body.emailed
+          ? `Changed to ${next} — a sign-in link has been sent there.`
+          : `Changed to ${next}, but the sign-in link didn't send (${body.emailError}). Use Resend from the admin page.`
+      );
+      setFixingEmail(null);
+      setNewEmail("");
+      onChanged();
+    } catch {
+      setMessage("Couldn't reach the server — try again");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const token = await tokenOrExplain();
+      if (!token) return;
       const res = await fetch(`/api/projects/${projectId}/members`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ email: email.trim(), role, orgRole: orgRole.trim() || null }),
       });
       const body = await res.json();
@@ -4144,7 +4326,63 @@ function ProjectAccess({
                         </span>
                       )}
                     </span>
-                    <span className="block truncate text-xs text-gray-500">{m.email}</span>
+                    {/* The address is a LOGIN, so correcting it is a real
+                        action with an email attached, not an inline text
+                        edit that saves on blur. Andrew had someone typed in
+                        as @gmail who is actually @hotmail, and the only way
+                        out was Remove and re-add. */}
+                    {fixingEmail === m.profileId ? (
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <input
+                          autoFocus
+                          type="email"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              saveEmail(m.profileId, m.email);
+                            }
+                            if (e.key === "Escape") setFixingEmail(null);
+                          }}
+                          placeholder="Corrected email"
+                          className="min-h-[34px] min-w-0 flex-1 rounded-md border border-gray-300 px-2 text-xs outline-none focus:border-runfree-magenta"
+                        />
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => saveEmail(m.profileId, m.email)}
+                          className="min-h-[34px] shrink-0 rounded-md bg-runfree-grad px-2.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                        >
+                          {busy ? "Saving…" : "Save & resend"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFixingEmail(null)}
+                          className="min-h-[34px] shrink-0 px-1.5 text-[11px] font-medium text-gray-500 hover:text-runfree-ink"
+                        >
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-xs text-gray-500">{m.email}</span>
+                        {!m.lastSeenAt && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFixingEmail(m.profileId);
+                              setNewEmail(m.email);
+                              setMessage(null);
+                            }}
+                            title="Correct this address and send them a new sign-in link"
+                            className="shrink-0 rounded px-1 text-[11px] font-medium text-gray-400 transition hover:text-runfree-magentaDeep"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </span>
+                    )}
                     {/* The single most useful fact here is the absence of a
                         date: someone invited who never got in. Andrew asked
                         for "some kind of indicator that the project admin

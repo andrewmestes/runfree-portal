@@ -483,6 +483,12 @@ export default function HelpPage() {
                 <li><strong>Editor</strong> — can add and edit content. For a client leading their own process.</li>
                 <li><strong>Admin</strong> — everything an editor can do, plus adding and removing people.</li>
               </ul>
+              <br />
+              <strong>Fixing a typo.</strong> On the roster, <em>Edit</em> beside a name
+              changes their name, title or email in place. In Access, <em>Edit</em> beside
+              an address corrects it and sends a fresh sign-in link to the new one — it
+              only appears for people who have never signed in, because after that the
+              address is their login and only they (or the portal owner) can change it.
             </Faq>
             <Faq q="After a session">
               Sessions &rarr; <strong>+ Add a session</strong>, or open the existing one.

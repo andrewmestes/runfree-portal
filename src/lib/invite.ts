@@ -42,7 +42,16 @@ export async function invitePerson(
    * name. Without it every invited person showed up as their own email
    * twice — the name was known at invite time and simply never passed on.
    */
-  fullName?: string | null
+  fullName?: string | null,
+  /**
+   * What they were invited TO — "Athena Christian Church - Pivvot Vision
+   * Framing". Lands in user_metadata as `invited_to`, where the Supabase
+   * email template can read it as {{ .Data.invited_to }}. The one template
+   * serves both this portal and the certified framers one, and a church
+   * elder should not open a welcome addressed to "Vision Framers". With a
+   * project name the email can say what it actually is.
+   */
+  invitedTo?: string | null
 ): Promise<InviteResult> {
   const cleanEmail = email.trim().toLowerCase();
 
@@ -68,10 +77,11 @@ export async function invitePerson(
       redirectTo: `${origin}/auth/callback`,
       // A name equal to the email is no name; let the roster fallback in
       // handle_new_user have its turn instead.
-      data:
-        cleanName && cleanName.toLowerCase() !== cleanEmail
-          ? { full_name: cleanName }
-          : undefined,
+      data: {
+        ...(cleanName && cleanName.toLowerCase() !== cleanEmail ? { full_name: cleanName } : {}),
+        ...(invitedTo?.trim() ? { invited_to: invitedTo.trim() } : {}),
+        portal: "runfree",
+      },
     });
 
     if (error) return { outcome: "failed", error: error.message };
@@ -144,4 +154,45 @@ export async function syncCertificationRole(
       .update({ account_role: "client" })
       .eq("id", profile.id);
   }
+}
+
+/**
+ * Email someone who already has an account a way to get in.
+ *
+ * Andrew: "one guy from ACC said he didn't receive it." Until now the only
+ * answer was the admin page, which most people adding a church team never
+ * see. Two situations, one honest answer each:
+ *
+ *   never accepted the invite — GoTrue lets an UNconfirmed user be invited
+ *     again, and that re-sends the same welcome email they missed. This is
+ *     the case for almost everyone a coach adds to a project.
+ *   confirmed but never signed in — inviteUserByEmail refuses a confirmed
+ *     account, so a password link is what actually sends. Same lesson the
+ *     framers route wrote up after a "successful" resend delivered nothing.
+ *
+ * The caller decides whether this person may be re-sent anything; this only
+ * picks the mechanism and reports which one went out.
+ */
+export async function resendWayIn(
+  email: string,
+  origin: string
+): Promise<{ sent: "invite" | "login_link" | null; error: string | null }> {
+  const cleanEmail = email.trim().toLowerCase();
+
+  const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(cleanEmail, {
+    redirectTo: `${origin}/auth/callback`,
+  });
+  if (!inviteErr) return { sent: "invite", error: null };
+
+  // Anything other than "already registered" is a real failure — a mail
+  // outage must not be papered over by silently trying the second path.
+  if (!/already|registered|exists/i.test(inviteErr.message)) {
+    return { sent: null, error: inviteErr.message };
+  }
+
+  const { error: linkErr } = await supabaseAdmin.auth.resetPasswordForEmail(cleanEmail, {
+    redirectTo: `${origin}/auth/reset-password`,
+  });
+  if (linkErr) return { sent: null, error: linkErr.message };
+  return { sent: "login_link", error: null };
 }

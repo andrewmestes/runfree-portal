@@ -489,6 +489,11 @@ export default function HelpPage() {
               an address corrects it and sends a fresh sign-in link to the new one — it
               only appears for people who have never signed in, because after that the
               address is their login and only they (or the portal owner) can change it.
+              <br />
+              <br />
+              <strong>&ldquo;I never got the email.&rdquo;</strong> <em>Resend invite</em> sits on
+              the same row for anyone who has not signed in yet, and sends their welcome
+              email again. Ask them to check spam for a message from the RunFree Portal.
             </Faq>
             <Faq q="After a session">
               Sessions &rarr; <strong>+ Add a session</strong>, or open the existing one.

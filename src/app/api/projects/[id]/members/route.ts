@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { requireProjectAccess } from "@/lib/api-auth";
-import { invitePerson } from "@/lib/invite";
+import { invitePerson, resendWayIn } from "@/lib/invite";
 
 const VALID_ROLES = new Set(["viewer", "editor", "admin"]);
 
@@ -78,7 +78,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // get a certification-flavored email until that's replaced with
     // generateLink() + a portal-specific send.
     const origin = new URL(request.url).origin;
-    const result = await invitePerson(email, origin);
+    // The project's name rides along so the welcome email can say what it is
+    // for. Read through the service role: the caller has already been
+    // confirmed to see this project by requireProjectAccess.
+    const { data: proj } = await supabaseAdmin
+      .from("projects")
+      .select("name")
+      .eq("id", projectId)
+      .maybeSingle();
+    const result = await invitePerson(email, origin, null, proj?.name ?? null);
     if (result.outcome === "failed") {
       return NextResponse.json({ error: result.error ?? "Invite failed" }, { status: 500 });
     }
@@ -238,12 +246,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     );
   }
 
-  // The login first. `email_confirm` skips GoTrue's confirm-the-change mail,
-  // which would go to an address the person has never seen and cannot act on;
-  // an admin fixing a typo on an unused invite is the confirmation.
+  // The login first. Deliberately NOT `email_confirm: true`: an invited
+  // account is unconfirmed until the person accepts, and leaving it that way
+  // is what lets GoTrue send them a fresh invite at the corrected address
+  // below. Confirming it here would force the fallback — a "reset your
+  // password" email to someone who has never had a password.
   const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(profileId, {
     email,
-    email_confirm: true,
   });
   if (authErr) return NextResponse.json({ error: authErr.message }, { status: 500 });
 
@@ -262,27 +271,85 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     );
   }
 
-  /**
-   * Get them a way in at the NEW address.
-   *
-   * Not inviteUserByEmail — GoTrue refuses to invite an account that already
-   * exists, and this one does. A password link is what actually sends, and it
-   * works for someone setting a first password as well as someone resetting
-   * one. This is the same conclusion the framers route wrote up at length
-   * after a "successful" resend delivered nothing.
-   */
+  // Get them a way in at the NEW address — a fresh invite for the usual
+  // never-accepted case, a password link if the account somehow got confirmed.
   const origin = new URL(request.url).origin;
-  const { error: linkErr } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/reset-password`,
-  });
+  const mail = await resendWayIn(email, origin);
 
   return NextResponse.json({
     ok: true,
     email,
     previousEmail: target.email,
-    emailed: !linkErr,
+    emailed: mail.sent !== null,
+    sent: mail.sent,
     // Not an error: the address is corrected either way, and the admin can
-    // send another link from the same row. Only the mail step failed.
-    emailError: linkErr?.message ?? null,
+    // resend from the same row. Only the mail step failed.
+    emailError: mail.error,
   });
+}
+
+/**
+ * PUT — send someone their welcome email again.
+ *
+ * Andrew: "I need an ability to resend a welcome/invitation email from within
+ * a project to a participant/team member. one guy from ACC said he didn't
+ * receive it." The admin page could do this for certified framers; a church
+ * team member added through a project had no path at all.
+ *
+ * Same gate as adding someone (project admin) and scoped to members of THIS
+ * project. Only for a person who has never signed in — once they have, there
+ * is nothing to welcome them to, and a stray "you're invited" from a project
+ * admin would only confuse. See resendWayIn for which email actually goes.
+ */
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id: projectId } = await params;
+
+  const access = await requireProjectAccess(request, projectId);
+  if (!access.ok) return access.response;
+  if (!access.isAdmin) {
+    return NextResponse.json(
+      { error: "Only a project admin can resend an invitation" },
+      { status: 403 }
+    );
+  }
+
+  let body: { profileId?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const profileId = body.profileId?.trim();
+  if (!profileId) return NextResponse.json({ error: "profileId is required" }, { status: 400 });
+
+  const { data: membership } = await supabaseAdmin
+    .from("project_members")
+    .select("profile_id")
+    .eq("project_id", projectId)
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (!membership) {
+    return NextResponse.json({ error: "That person is not on this project" }, { status: 404 });
+  }
+
+  const { data: target } = await supabaseAdmin
+    .from("profiles")
+    .select("email, last_seen_at")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (!target?.email) return NextResponse.json({ error: "No such person" }, { status: 404 });
+
+  const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(profileId);
+  if (target.last_seen_at || authUser?.user?.last_sign_in_at) {
+    return NextResponse.json(
+      { error: "They have already signed in — there is nothing to resend. If they are locked out, Forgot password on the sign-in page sends a reset." },
+      { status: 400 }
+    );
+  }
+
+  const origin = new URL(request.url).origin;
+  const mail = await resendWayIn(target.email, origin);
+  if (mail.error) return NextResponse.json({ error: mail.error }, { status: 500 });
+
+  return NextResponse.json({ ok: true, email: target.email, sent: mail.sent });
 }

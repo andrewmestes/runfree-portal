@@ -4244,6 +4244,33 @@ function ProjectAccess({
       setBusy(false);
     }
   }
+  /** Send a never-signed-in member their welcome email again. */
+  async function resendInvite(m: { profileId: string; fullName: string | null; email: string }) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const token = await tokenOrExplain();
+      if (!token) return;
+      const res = await fetch(`/api/projects/${projectId}/members`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ profileId: m.profileId }),
+      });
+      const body = await res.json();
+      if (!res.ok) setMessage(body.error || "Couldn't resend that invitation");
+      else
+        setMessage(
+          body.sent === "login_link"
+            ? `Sent ${m.fullName || m.email} a sign-in link at ${body.email}.`
+            : `Sent ${m.fullName || m.email} a fresh invitation at ${body.email}.`
+        );
+    } catch {
+      setMessage("Couldn't reach the server — try again");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
@@ -4368,18 +4395,32 @@ function ProjectAccess({
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="truncate text-xs text-gray-500">{m.email}</span>
                         {!m.lastSeenAt && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFixingEmail(m.profileId);
-                              setNewEmail(m.email);
-                              setMessage(null);
-                            }}
-                            title="Correct this address and send them a new sign-in link"
-                            className="shrink-0 rounded px-1 text-[11px] font-medium text-gray-400 transition hover:text-runfree-magentaDeep"
-                          >
-                            Edit
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFixingEmail(m.profileId);
+                                setNewEmail(m.email);
+                                setMessage(null);
+                              }}
+                              title="Correct this address and send them a new invitation"
+                              className="shrink-0 rounded px-1 text-[11px] font-medium text-gray-400 transition hover:text-runfree-magentaDeep"
+                            >
+                              Edit
+                            </button>
+                            {/* The email people most often say they never got.
+                                Beside the address it belongs to, on the row
+                                that already says "Hasn't signed in yet". */}
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => resendInvite(m)}
+                              title="Send their welcome email again"
+                              className="shrink-0 rounded px-1 text-[11px] font-medium text-gray-400 transition hover:text-runfree-magentaDeep disabled:opacity-50"
+                            >
+                              Resend invite
+                            </button>
+                          </>
                         )}
                       </span>
                     )}

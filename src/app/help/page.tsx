@@ -175,7 +175,7 @@ export default function HelpPage() {
               <li><strong>Sessions</strong> — every session we have held: its recording, the write-up, the charts from the room, and what came out of it.</li>
               <li><strong>Deliverables</strong> — the finished work, in the Vision Stack.</li>
               <li><strong>Execution</strong> &mdash; what happens after the six months: your foreground initiatives, the numbers you watch, and the review rhythm.</li>
-              <li><strong>Books</strong> — visual summaries, chapters and full downloads of the books behind the process.</li>
+              <li><strong>Books</strong> — visual summaries, chapters and full downloads of the books behind the process, with an <strong>Other Resources</strong> list underneath for the guides and decks that belong to no one book.</li>
             </ul>
             They are grouped by a faint line: where you land, then who and when, then the
             work as it happens, then what it produced. A project only shows the sections it
@@ -434,7 +434,8 @@ export default function HelpPage() {
             <Faq q="Highlighting resources between sessions">
               On any project&rsquo;s Dashboard, <strong>Highlight resources</strong>
               opens a search across everything that project has — every teaching
-              video, every one of Will&rsquo;s books and chapters, the church&rsquo;s
+              video, every one of Will&rsquo;s books and chapters (and the guides
+              and decks under Other Resources on the Books shelf), the church&rsquo;s
               own files and decks, and every session you have recorded with them.
               Filter, tick as many as you want, add them in one go.
               <br />

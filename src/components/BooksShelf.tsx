@@ -301,6 +301,47 @@ export default function BooksShelf({
           )}
         </div>
       )}
+
+      {/* Other Resources: the library's loose PDFs — lead magnets, reading
+          guides — in top-level folders no shelf claims. This block lived on
+          the /books page only, so a project's Books panel silently dropped
+          them even though its API sent them. Here so both callers show them,
+          as the type on `extras` promises: "shown, not dropped". Rendered
+          whichever cover is selected, Calling included, because these belong
+          to none of them. */}
+      {library.extras.length > 0 && (
+        <section className="mt-12 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
+          <header className="border-b border-gray-100 px-5 py-4">
+            <h2 className="font-display text-lg font-bold text-runfree-ink">
+              Other Resources
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Files in the Books folder that aren&rsquo;t tied to one of the
+              books above.
+            </p>
+          </header>
+          <ul className="divide-y divide-gray-100">
+            {library.extras.map((f) => (
+              <li key={f.id}>
+                <button
+                  onClick={() => onOpen(f)}
+                  className="group flex w-full items-center gap-4 px-5 py-3 text-left transition hover:bg-runfree-pink/40"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-runfree-ink">
+                    {f.title}
+                  </span>
+                  <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">
+                    {prettySize(f.sizeBytes)}
+                  </span>
+                  <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep opacity-0 ring-1 ring-runfree-magenta/30 transition group-hover:opacity-100">
+                    Preview
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   );
 }

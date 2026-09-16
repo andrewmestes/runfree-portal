@@ -103,9 +103,16 @@ export type HandoutSource = {
  * Extracted so the picker and `seedDefaultHighlights` cannot drift: a book
  * highlighted by hand and the same book seeded from a template have to be
  * the same row, jacket and all.
+ *
+ * `shelfName` is null for a file that belongs to no book — the lead magnets
+ * and other loose PDFs the shelf lists under Other Resources. Those are
+ * offered under the name that list shows for them, with no chapter parsing
+ * and nothing prefixed: "The 6 Word Sprint" is not chapter six of anything,
+ * and "Other Resources — Problem Statement Deck" on a dashboard would read as
+ * a chapter of a book called Other Resources.
  */
 function bookEntry(
-  shelfName: string,
+  shelfName: string | null,
   shelfCover: string | null,
   f: BookShelf["chapters"][number],
   wearsJacket: boolean
@@ -124,14 +131,19 @@ function bookEntry(
   // complete. A highlight keeps only its TITLE — `context` is dropped when the
   // row is stored — so the same string on a dashboard is a chapter of nothing.
   const flat = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const title = flat(label).includes(flat(shelfName)) ? label : `${shelfName} — ${label}`;
+  const title =
+    shelfName === null
+      ? f.title
+      : flat(label).includes(flat(shelfName))
+        ? label
+        : `${shelfName} — ${label}`;
   return {
     key: `book:${f.id}`,
     source_kind: "book",
     source_id: f.id,
     title,
     media_kind: "book",
-    context: shelfName,
+    context: shelfName ?? "Other Resources",
     external_url: null,
     file_path: null,
     file_name: f.name,
@@ -255,6 +267,12 @@ export function buildCatalogue(
       const wearsJacket = new Set(isTheBook.map((f) => f.id));
       for (const f of files) out.push(bookEntry(shelf.name, cover, f, wearsJacket.has(f.id)));
     }
+    // The loose PDFs the shelf lists under Other Resources — lead magnets,
+    // reading guides — are library files too, so they are offered exactly
+    // like a chapter or a whole book. Andrew: "i added a problem statement
+    // setup pdf to the books/content > other / lead magnets folder on google
+    // drive. please add that to accessible resources i can add to the portal."
+    for (const f of books.extras ?? []) out.push(bookEntry(null, null, f, false));
   }
 
   if (handouts) {
@@ -466,6 +484,11 @@ export async function seedDefaultHighlights(
           // "Future Church Part 1" is the file and "Part 1" is the label.
           bookRows.push({ title: `${entry.title} ${f.name}`, entry });
         }
+      }
+      // Other Resources too, so a template default can name a lead magnet.
+      for (const f of lib.extras ?? []) {
+        const entry = bookEntry(null, null, f, false);
+        bookRows.push({ title: `${entry.title} ${f.name}`, entry });
       }
     }
   } catch {

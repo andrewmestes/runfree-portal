@@ -45,12 +45,6 @@ type BooksLibrary = {
   standalone: BookShelf[];
 };
 
-function prettySize(bytes: number | null) {
-  if (!bytes) return "";
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 export default function BooksPage() {
   const [framer, setFramer] = useState<Framer | null>(null);
   const [library, setLibrary] = useState<BooksLibrary>({
@@ -229,40 +223,6 @@ export default function BooksPage() {
           onRefresh={handleRefresh}
           refreshing={refreshing}
         />
-
-        {library.extras.length > 0 && (
-          <section className="mt-12 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
-            <header className="border-b border-gray-100 px-5 py-4">
-              <h2 className="font-display text-lg font-bold text-runfree-ink">
-                Other Resources
-              </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Files in the Books folder that aren&rsquo;t tied to one of the
-                four books above.
-              </p>
-            </header>
-            <ul className="divide-y divide-gray-100">
-              {library.extras.map((f) => (
-                <li key={f.id}>
-                  <button
-                    onClick={() => setPreview(f)}
-                    className="group flex w-full items-center gap-4 px-5 py-3 text-left transition hover:bg-runfree-pink/40"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-runfree-ink">
-                      {f.title}
-                    </span>
-                    <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">
-                      {prettySize(f.sizeBytes)}
-                    </span>
-                    <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep opacity-0 ring-1 ring-runfree-magenta/30 transition group-hover:opacity-100">
-                      Preview
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </main>
 
       <PortalFooter />

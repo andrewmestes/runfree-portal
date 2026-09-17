@@ -777,6 +777,8 @@ const OVERVIEW_SECTION = "PROCESS OVERVIEW";
  * Preparation tab, which was left holding the checklist PDF alone.
  */
 const PAGE_SECTIONS = new Set([PREP_SECTION, "PREPARATION", "TEAM", "DELIVERABLES", "WHITEBOARD"]);
+/** The page's own sections that are NOT Preparation. */
+const NOT_PREPARATION = new Set(["TEAM", "DELIVERABLES", "WHITEBOARD"]);
 
 /** The template's declared sections that are part of the process, not the page's own. */
 function declaredProcessSections(structure: unknown): string[] {
@@ -1518,6 +1520,10 @@ export default function ProjectDetailPage() {
     detail.resources.forEach((r) => note(r.section));
     detail.deliverables.forEach((d) => note(d.section));
     detail.sessions.forEach((s) => note(s.section));
+    // A module whose only content is a group to fill in still has a panel.
+    // The certification template's Kingdom Platform is a checklist of the
+    // tools covered and nothing else, and without this it fell off the rail.
+    detail.prepGroups.forEach((g) => note(g.section));
 
     return [...counts.entries()]
       .map(([section, count]) => ({ section, order: moduleOrder(section)!, count }))
@@ -1755,6 +1761,11 @@ export default function ProjectDetailPage() {
     ...prepSections,
     OVERVIEW_SECTION,
   ]);
+  const declaredList = [...declaredSections];
+  const declaredRank = (s: string) => {
+    const i = declaredList.indexOf(s);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
   const orphanSections = [
     ...new Set([
       // team_bio rows are rendered by TeamSection whatever section they're in.
@@ -1765,7 +1776,13 @@ export default function ProjectDetailPage() {
         .filter((s): s is string => !!s),
       ...detail.sessions.map((s) => s.section).filter((s): s is string => !!s),
     ]),
-  ].filter((s) => !claimed.has(s));
+  ]
+    .filter((s) => !claimed.has(s))
+    // In the template's declared order, then first appearance (sort is
+    // stable). Resource positions interleave across sections, so "first
+    // appearance" alone put the certification cohort's Pilot Experiences
+    // above its Certification Resources.
+    .sort((a, b) => declaredRank(a) - declaredRank(b));
 
   /**
    * The panels, in the order Andrew asked for them: orientation first, then
@@ -4991,9 +5008,24 @@ function PrioritiesBanner({
    *
    * Only `checklist` groups: a reading shelf deliberately has no tick boxes
    * (044/045), and a key date is not a thing you finish.
+   *
+   * And only the ones Preparation shows. A certification cohort's
+   * "Tools covered in session" lists sit inside the modules, and counting
+   * them made a brand-new cohort read "101 things to do before we begin".
    */
+  const declaredHere = new Set(declaredProcessSections(detail.template?.structure));
+  const hiddenHere = new Set(detail.hiddenGroups);
   const checklistGroups = new Set(
-    detail.prepGroups.filter((g) => g.kind === "checklist").map((g) => g.id)
+    detail.prepGroups
+      .filter(
+        (g) =>
+          g.kind === "checklist" &&
+          moduleOrder(g.section) === null &&
+          !NOT_PREPARATION.has(g.section) &&
+          !declaredHere.has(g.section) &&
+          !hiddenHere.has(g.key)
+      )
+      .map((g) => g.id)
   );
   const openPrep = detail.prepItems.filter(
     (i) => checklistGroups.has(i.group_id) && !i.is_done
@@ -6239,18 +6271,23 @@ function ModulePanel({
             hand; what the team themselves produced is the next most
             interesting thing on the page; the teaching videos are reference,
             and reference belongs underneath. */}
-        <Block title="From our sessions">
-          <SessionCards
-            items={images}
-            imageUrls={imageUrls}
-            cardFiles={cardFiles}
-            canEdit={canEdit}
-            accessToken={accessToken}
-            projectId={detail.id}
-            section={section}
-            onChanged={onChanged}
-          />
-        </Block>
+        {/* A library section (a cohort's Master Teaching Videos) is not
+            where a session leaves charts, so a reader is not shown an empty
+            box there. A module keeps it: that is where the charts go. */}
+        {(moduleNo !== null || images.length > 0 || canEdit) && (
+          <Block title="From our sessions">
+            <SessionCards
+              items={images}
+              imageUrls={imageUrls}
+              cardFiles={cardFiles}
+              canEdit={canEdit}
+              accessToken={accessToken}
+              projectId={detail.id}
+              section={section}
+              onChanged={onChanged}
+            />
+          </Block>
+        )}
 
         {sectionSessions.length > 0 && (
           <Block title="Sessions on this">
@@ -6299,7 +6336,14 @@ function ModulePanel({
         )}
 
         {videos.length > 0 && (
-          <Block title={`${moduleLabel(section)} training videos`}>
+          <Block
+            title={
+              // "Master Teaching Videos training videos" said it twice.
+              /videos?$/i.test(moduleLabel(section).trim())
+                ? `${videos.length} video${videos.length === 1 ? "" : "s"}`
+                : `${moduleLabel(section)} training videos`
+            }
+          >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {videos.map((v) => (
                 <VideoCard

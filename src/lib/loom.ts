@@ -74,8 +74,16 @@ function thumbnailSessionId(thumbnailUrl: string): string | null {
  * so the card renders blank.
  *
  * Only swapped in when the JPEG actually exists; not every path has one.
+ *
+ * Returns null for a still that is a black frame. A long Zoom recording often
+ * opens on black, and Loom picks that frame: both Kairos certification
+ * sessions came back as 1262×720 JPEGs of pure black, about 5.6 KB each,
+ * where every real still checked was 15 KB or more. A card with no picture
+ * says "Recording"; a black box says the video is broken.
  */
-async function preferStill(gifUrl: string): Promise<string> {
+const BLANK_STILL_BYTES = 8_000;
+
+async function preferStill(gifUrl: string): Promise<string | null> {
   if (!gifUrl.endsWith(".gif")) return gifUrl;
   const jpg = `${gifUrl.slice(0, -4)}.jpg`;
 
@@ -85,6 +93,8 @@ async function preferStill(gifUrl: string): Promise<string> {
       signal: AbortSignal.timeout(6000),
     });
     if (res.ok && (res.headers.get("content-type") || "").includes("image")) {
+      const bytes = Number(res.headers.get("content-length") ?? "");
+      if (Number.isFinite(bytes) && bytes > 0 && bytes < BLANK_STILL_BYTES) return null;
       return jpg;
     }
   } catch {

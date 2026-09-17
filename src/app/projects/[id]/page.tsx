@@ -9606,8 +9606,13 @@ function SessionRow({
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Andrew: "I want to see what they see first when opening a session card,
+  // then have the ability to click an edit button and see it better." Open
+  // shows the row the way the team sees it; Edit swaps the form in — the
+  // same open/editing split a module card already has.
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
+  const seedForm = () => ({
     title: session.title,
     held_on: session.held_on ?? "",
     section: session.section ?? "",
@@ -9617,23 +9622,26 @@ function SessionRow({
     transcript: session.transcript ?? "",
     published: !!session.published_at,
   });
-  // Re-seed each time the row opens. Seeded once at mount, Save wrote back
-  // whatever this tab had loaded over a colleague's newer recap.
+  const [form, setForm] = useState(seedForm);
+  // Re-seed while editing whenever the session's fields change under it.
+  // Seeded once at mount, Save wrote back whatever this tab had loaded over
+  // a colleague's newer recap. The Edit click itself seeds synchronously in
+  // startEdit(): RichText fills its box once per mount, so the form's first
+  // render has to already carry the current recap — an effect runs after
+  // that mount and would leave a cancelled edit on screen.
   useEffect(() => {
-    if (!open) return;
-    setForm({
-      title: session.title,
-      held_on: session.held_on ?? "",
-      section: session.section ?? "",
-      recording_url: session.recording_url ?? "",
-      takeaways: session.takeaways ?? "",
-      recap: session.recap ?? "",
-      transcript: session.transcript ?? "",
-      published: !!session.published_at,
-    });
+    if (!editing) return;
+    setForm(seedForm());
     // The session's own fields are what should re-seed it, not the object identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, session.id, session.title, session.held_on, session.section, session.recording_url, session.takeaways, session.recap, session.transcript, session.published_at]);
+  }, [editing, session.id, session.title, session.held_on, session.section, session.recording_url, session.takeaways, session.recap, session.transcript, session.published_at]);
+
+  function startEdit() {
+    // Both updates batch in this handler, so the form branch mounts with
+    // fresh values rather than whatever the last Cancel abandoned.
+    setForm(seedForm());
+    setEditing(true);
+  }
 
   async function save() {
     if (!accessToken) return;
@@ -9651,7 +9659,9 @@ function SessionRow({
         published_at: form.published ? (session.published_at ?? new Date().toISOString()) : null,
       });
       onChanged();
-      setOpen(false);
+      // Back to the view rather than closed: the row stays open, showing
+      // what was just saved once onChanged brings it back.
+      setEditing(false);
     } finally {
       setSaving(false);
     }
@@ -9696,7 +9706,13 @@ function SessionRow({
   return (
     <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => !v);
+          // Collapsing abandons an edit. Left alone, the row reopened
+          // straight into the form with whatever was half-typed, and the
+          // re-seed above never fired because `editing` never changed.
+          setEditing(false);
+        }}
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
       >
@@ -9757,7 +9773,7 @@ function SessionRow({
 
       {open && (
         <div className="animate-fade space-y-4 border-t border-gray-100 px-5 py-5">
-          {canEdit ? (
+          {canEdit && editing ? (
             <>
               <div className="flex flex-wrap gap-3">
                 <div className="flex-1 min-w-[150px]">
@@ -9917,13 +9933,27 @@ function SessionRow({
                 {voice === "organization" ? "Visible to the client team" : "Visible to the church team"}
               </label>
               <div className="flex items-center justify-between gap-3 pt-1">
-                <button
-                  onClick={save}
-                  disabled={saving}
-                  className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                >
-                  {saving ? "Saving…" : "Save"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={save}
+                    disabled={saving}
+                    className="rounded-lg bg-runfree-grad px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                  >
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                  {/* Beside Save and well away from Delete on the far side —
+                      the row had no way out before except the chevron. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm(seedForm());
+                      setEditing(false);
+                    }}
+                    className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:text-runfree-ink"
+                  >
+                    Cancel
+                  </button>
+                </div>
                 <button
                   onClick={async () => {
                     if (!accessToken) return;
@@ -9939,7 +9969,41 @@ function SessionRow({
             </>
           ) : (
             <>
-              {prepQuestions.length > 0 && isUpcoming && (
+              {/* Editors land here too, and see the row exactly as the team
+                  does. Edit sits in the corner so it does not compete with
+                  the content; the Draft note is the one thing a viewer never
+                  sees, because a draft never reaches them. It lives here and
+                  not in the header, which is already a button. */}
+              {canEdit && (
+                <div className="flex items-center justify-end gap-3">
+                  {!session.published_at && (
+                    <span className="text-[11px] text-gray-400">
+                      Draft — not visible to the {voice === "organization" ? "client" : "church"} team
+                    </span>
+                  )}
+                  <button
+                    onClick={startEdit}
+                    className="text-xs font-medium text-runfree-magentaDeep outline-none hover:underline focus-visible:ring-2 focus-visible:ring-runfree-magenta"
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
+              {/* The prep and feedback forms below are the CLIENT's — their
+                  questions, written under their own uid. An editor is not
+                  asked them; they read the answers instead, here, without
+                  having to open Edit. */}
+              {canEdit && (prepQuestions.length > 0 || feedbackQuestions.length > 0) && (
+                <SessionAnswersPanel
+                  prepQuestions={prepQuestions}
+                  feedbackQuestions={feedbackQuestions}
+                  prepMap={prepMap}
+                  feedbackMap={feedbackMap}
+                  nameOf={nameOf}
+                  isUpcoming={isUpcoming}
+                />
+              )}
+              {prepQuestions.length > 0 && isUpcoming && !canEdit && (
                 <SessionPrepForm
                   questions={prepQuestions}
                   note={ui?.session_prep_note}
@@ -10000,7 +10064,7 @@ function SessionRow({
                   underneath it. */}
               {session.recap && <SessionRecap recap={session.recap} />}
 
-              {feedbackQuestions.length > 0 && isHeld && (
+              {feedbackQuestions.length > 0 && isHeld && !canEdit && (
                 <SessionFeedbackForm
                   questions={feedbackQuestions}
                   ratingLabel={ui?.feedback_rating}

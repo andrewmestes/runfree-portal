@@ -446,7 +446,8 @@ export default function HelpPage() {
               a next step instead so it gets a date and a tick-box.
             </Faq>
             <Faq q="Writing up a session">
-              Paste the full write-up into <strong>Session summary</strong> on the session.
+              Open the session, click <strong>Edit</strong>, and paste the full write-up
+              into <strong>Session summary</strong>.
               Headings, bullets and <strong>bold</strong> are formatted, so a summary
               written in Google Docs can go straight in.
               <br />
@@ -498,7 +499,10 @@ export default function HelpPage() {
             </Faq>
             <Faq q="After a session">
               Sessions &rarr; <strong>+ Add a session</strong>, or open the existing one.
-              Set the date, tag which module it covered, paste the Loom or Zoom link,
+              It opens the way the church sees it, with any prep answers or
+              feedback the team has sent in shown underneath; <strong>Edit</strong>,
+              top right, switches to the form. Set the date, tag which module it covered, paste
+              the Loom or Zoom link,
               then write the takeaways and the next steps. Flipcharts, screen work,
               handouts the team filled in — those go on the module as cards, under{" "}
               <em>From our sessions</em>: one card can carry the photo, the PDF and your

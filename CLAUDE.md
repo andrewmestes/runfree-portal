@@ -1190,7 +1190,13 @@ the files were pulled first.
    "Fill this in" block) and stays off Preparation; `nonModuleSections` no
    longer treats such a section as prep. Undeclared sections
    (`PREPARATION`, `CHURCH PREPARATION`, `TEAM`, `DELIVERABLES`) route as
-   before. Dates groups go to Key Dates wherever they sit. Side effect,
+   before, **and so do those sections when a template does declare them**
+   (`PAGE_SECTIONS`, 17 Sept). Pivvot's outline lists `CHURCH PREPARATION`,
+   and for two weeks this rule took Before the First Visit, Room and
+   Environment Setup, Reading & Pre-Work and Previous Vision Equity off every
+   Pivvot church's Preparation tab, which showed the checklist PDF alone.
+   Nobody noticed because the panel still rendered. Dates groups go to Key
+   Dates wherever they sit. Side effect,
    intended: Younique's "Recommended Prework" is now a chip on The Process
    holding its LDG worksheet, the three videos and its groups — those four
    resources had lost their home when Preparation stopped rendering template

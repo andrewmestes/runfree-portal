@@ -766,6 +766,24 @@ const PREP_SECTION = "CHURCH PREPARATION";
 const OVERVIEW_SECTION = "PROCESS OVERVIEW";
 
 /**
+ * Sections the page itself owns. A group filed under one of these renders on
+ * its own panel (Preparation, Team, Deliverables, the sketch wall), even when
+ * the template happens to list it in `structure.sections`.
+ *
+ * Pivvot lists CHURCH PREPARATION there, an outline inherited from the Asana
+ * board. When declared sections started keeping their own groups (069), that
+ * one line quietly took Before the First Visit, Room and Environment Setup,
+ * Reading & Pre-Work and Previous Vision Equity off every Pivvot church's
+ * Preparation tab, which was left holding the checklist PDF alone.
+ */
+const PAGE_SECTIONS = new Set([PREP_SECTION, "PREPARATION", "TEAM", "DELIVERABLES", "WHITEBOARD"]);
+
+/** The template's declared sections that are part of the process, not the page's own. */
+function declaredProcessSections(structure: unknown): string[] {
+  return sectionOrderFromStructure(structure).filter((s) => !PAGE_SECTIONS.has(s));
+}
+
+/**
  * A phone photo of a flipchart is a few MB; anything past this is a video
  * someone mis-picked or a RAW file, and pushing it through the browser to
  * Storage would stall the upload with no feedback.
@@ -866,17 +884,14 @@ function signablePaths(detail: ProjectDetail): string[] {
  * order, limited to sections that hold something.
  */
 function nonModuleSections(detail: ProjectDetail, includeEmptyDeclared = false): string[] {
-  const declared = sectionOrderFromStructure(detail.template?.structure);
+  const declared = declaredProcessSections(detail.template?.structure);
   // A group's section is a prepare/team/deliverables pseudo-section unless
   // the template declares it as a real section of the process — then the
   // group renders inside that section's panel (see ModulePanel), and the
   // section stays on the rail. Executive Coaching's "Optional Life Planning"
   // is chapters and videos AND the fill-in tools that go with them.
   const prep = new Set<string>([
-    PREP_SECTION,
-    "TEAM",
-    "DELIVERABLES",
-    "WHITEBOARD",
+    ...PAGE_SECTIONS,
     ...detail.prepGroups.map((g) => g.section).filter((x) => !declared.includes(x)),
   ]);
   const inUse = new Set<string>(
@@ -1643,8 +1658,9 @@ export default function ProjectDetailPage() {
   const ui: TemplateUi = detail.template?.ui ?? {};
   const moduleSections = new Set(modules.map((m) => m.section));
   // Declared process sections keep their own groups (ModulePanel renders
-  // them); see nonModuleSections.
-  const declaredSections = new Set(sectionOrderFromStructure(detail.template?.structure));
+  // them); see nonModuleSections. The page's own sections never count as
+  // declared, or Pivvot's preparation cards vanish (PAGE_SECTIONS).
+  const declaredSections = new Set(declaredProcessSections(detail.template?.structure));
   const prepSections = new Set<string>([
     PREP_SECTION,
     ...detail.prepGroups

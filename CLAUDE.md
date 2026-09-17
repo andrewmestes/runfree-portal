@@ -1821,3 +1821,94 @@ cost height. Judged worth it; say so if it is not.
 A `\d` inside a TypeScript template literal that is shipped to the browser as
 a string arrives as a bare `d`. The first run of the driver "failed" on the
 Renewal year chips for exactly that reason. Write `\\d` there.
+
+## Certification cohorts: the pivvot-certification template and the Kairos import (081, 17 Sept 2026)
+
+Andrew: "we have a group 'kairos' that is getting certified currently … create
+and import a project for 'kairos' check out all the content i have for them in
+Asana. For the new certification group coming to north carolina next week,
+lets go ahead and create a project for that. make sure when importing kairos,
+that all task notes (especially in the session recordings) get transferred
+properly."
+
+**A cohort is not a church**, so it has its own template rather than a Pivvot
+project with things switched off. `pivvot-certification` keeps the six
+"Mod #N" sections spelled exactly as Pivvot's (so ModuleNav, the Drive handout
+library and "Sessions on this" work unchanged) and drops the church parts:
+`frame_elements '{}'`, no Stack, `voice 'organization'`, `ui.nav.execution
+null`. Tabs read Preparation / Cohort / The Toolbox. Each module has a "Tools
+covered in session" checklist, numbered as in the August 2026 guide; the
+Deliverables tab is the Five Core Drawings and the Application Toolbox. Three
+declared non-module sections — Certification Resources, Pilot Experiences,
+Master Teaching Videos — render as Further materials under The Toolbox. Will
+is an EDITOR here (he co-teaches and posts session notes), not a viewer as on
+every other template. The migration header maps every Asana column.
+
+**What the page learned for it:**
+
+- `PAGE_SECTIONS` (see the 069 paragraph above): the fix that brought Pivvot's
+  own Preparation cards back was found while checking this template.
+- The module rail counts prep groups. Kingdom Platform's only content is its
+  checklist, and it fell off the rail.
+- "N things to do before we begin" counts only the checklists Preparation
+  shows — not module or DELIVERABLES checklists, not hidden groups. A new
+  cohort read "101 things to do before we begin".
+- Further materials follow the template's declared order, not resource
+  positions, which interleave across sections.
+- A library section (no module number) does not show a reader an empty "From
+  our sessions" box, and a section already named "…Videos" titles its video
+  block "9 videos" instead of "Master Teaching Videos training videos".
+- `Using the Materials` is a `notes` group, not a checklist: rules are not
+  tasks, and a checklist counted them as things to do.
+
+**Loom's black frames.** Both Kairos recordings are five-hour Zoom captures
+whose Loom thumbnail is pure black (1262×720 JPEGs of ~5.6 KB). Every real
+still checked was 15 KB or more, so `preferStill()` now treats a still under
+8 KB as no still: the row says "Recording" instead of showing a black box.
+Andrew's Asana covers for those two sessions were not pinned — one is a page of
+the private guide, and `public/` is readable by anyone with the path.
+
+**Asana notes are pre-wrap.** A newline in `html_notes` is a line break, and
+headings, lists and tables sit between lines; the portal's `.rich-text` is
+normal HTML, where a newline is a space. Stored as-is, a 25,000-character
+session summary would render as a few enormous paragraphs.
+`scripts/convert-asana-notes.py <dir> <gid>…` turns each line into a `<p>`,
+lifts the leading Loom link and embed into `recording_url`, and refuses to
+write unless the words, the line sequence against Asana's own plain text, and
+every table/row/cell/list item/heading/bold/italic/underline/link match. The
+imported summaries were then read back off the rendered Sessions panel as a
+viewer: 21,949 and 20,647 characters and 264 and 228 lines, identical to
+Asana's. The proof is in `Kairos Certification/verify/README.md`.
+
+**Creating a real project from a script.** `scripts/create-project.ts
+<template-slug> "<name>" <owner-email> [--go]` (logic in
+`scripts/lib/stamp-project.ts`) runs the New Project page's own code with a
+throwaway staff account, seeds the default highlights through the dev server
+(the seeding fetches relative `/api` paths), and hands the project to its
+owner as creator, admin and lead. Then run `seed-prep-reading.ts`. Traps hit on
+the way:
+
+- `one_lead_per_project`: the stamp is the lead, so its row must go before the
+  owner's lead row arrives. The first Kairos run stopped here and left a
+  project with no lead; the owner check now runs on every run.
+- `projects.created_by` has no cascade. The stamp account is only deleted
+  once nothing names it as creator.
+
+**The Kairos import** (`scripts/import-kairos.ts <kairos-dir> [--go]`, a
+one-off, idempotent) brought two sessions with full summaries, takeaways and
+recordings; Sessions 3 and 4 as dated rows so the pre-session questions reach
+the cohort; the four session dates; the Module 1 cards (each tool's example
+chart from the guide, which Andrew put on the cohort's own board; 1.9 also
+carries the 2022 Two Motivators sheet); the "Churches you will practice with"
+card; Module 1's checklist ticked (Session 2 walked 1.1 to 1.13); Session 2's
+assignments as tasks, cohort and RunFree; and Neil Reynolds as a viewer (an
+existing account, so no email). Everything is read from files pulled while
+the Asana links were live.
+
+**Left out on purpose, pending Andrew:** the other seven cohort members
+(adding them sends invitations); the eight Future Church bonus chapter PDFs
+(the complete book is kept out of storage as publisher content, and these may
+be the same; the Drive Books folder is their natural home); the guide's Drive
+folder link and its draft PDF (the guide is private and served at `/guide`);
+Session 1's action items (re-issued in Session 2 or done). The North Carolina
+cohort is a clean stamp; its dates, host and roster come from Andrew.

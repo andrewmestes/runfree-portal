@@ -414,6 +414,15 @@ export default function HelpPage() {
               will have both, and <em>Your projects</em> under the logo moves between
               them.
             </Faq>
+            <Faq q="My certification cohort">
+              A cohort being certified has its own project under <em>Your projects</em>.{" "}
+              <strong>Sessions</strong> holds each recording with the full session
+              summary; <strong>The Toolbox</strong> has the six modules, with the tools
+              covered so far ticked and each tool&rsquo;s example chart; the Dashboard
+              lists your practice assignments and what your trainers owe the group; and{" "}
+              <strong>Key Dates</strong> has the session calendar. Before a session, the
+              session itself asks a few questions about what you have practised.
+            </Faq>
           </Section>
         )}
 
@@ -459,8 +468,12 @@ export default function HelpPage() {
             </Faq>
             <Faq q="Starting a new engagement">
               <strong>+ New project</strong> from your projects page. Pick the template
-              — Pivvot Vision Framing or Younique — and the project is created with that
+              — Pivvot Vision Framing for a church, Pivvot Vision Framing Certification
+              for a cohort of facilitators, Younique, the coaching templates or the
+              nonprofit Vision Frame — and the project is created with that
               process&rsquo;s handouts, videos and deliverable slots already in place.
+              A certification cohort needs its dates added under Key Dates and its
+              people added through Access; nobody is invited until you add them.
               Choose <em>Private</em> unless you specifically want every RunFree staff
               member to see it. You become its admin and its lead navigator; both can be
               changed afterwards.

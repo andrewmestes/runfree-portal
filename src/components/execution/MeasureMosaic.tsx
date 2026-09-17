@@ -39,13 +39,15 @@ export function MeasureMosaic({
   const pct = measureProgress(measure, current);
   const filled = pct == null ? 0 : Math.round(pct * tiles);
   const unit = measure.unit ?? "";
-  const num = (v: number | null | undefined) => (v == null ? "—" : `${v}${unit}`);
+  // "44%" but "5 coaches" — a unit that is a word needs its space.
+  const num = (v: number | null | undefined) =>
+    v == null ? "—" : `${v}${/^[A-Za-z]/.test(unit) ? ` ${unit}` : unit}`;
 
   return (
     <div className="min-w-0">
       <div className="flex items-baseline justify-between gap-3">
         <span
-          className={`min-w-0 truncate font-semibold text-runfree-ink ${compact ? "text-[11px]" : "text-sm"}`}
+          className={`min-w-0 truncate font-semibold text-runfree-ink ${compact ? "text-xs" : "text-sm"}`}
         >
           {measure.label}
         </span>
@@ -87,7 +89,7 @@ export function MeasureMosaic({
         })}
       </div>
       {!compact && (
-        <div className="mt-1.5 flex items-baseline justify-between text-[11px] text-gray-400">
+        <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 text-[11px] text-gray-500">
           <span>Baseline {num(measure.baseline)}</span>
           {pct != null ? (
             <span className="font-semibold text-runfree-magentaDeep">

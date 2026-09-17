@@ -7,9 +7,7 @@ import { INITIATIVE_KINDS, initiativeKind } from "@/lib/god-dreams";
 import type { ProjectMember } from "@/lib/projects";
 import {
   PLAN_FIELDS,
-  RAG_DOT,
   RAG_LABEL,
-  RAG_RING,
   STALE_AFTER_DAYS,
   createStep,
   daysBetween,
@@ -18,6 +16,7 @@ import {
   deleteStep,
   deleteUpdate,
   effectiveStatus,
+  initiativePace,
   isStale,
   latestUpdate,
   postUpdate,
@@ -32,7 +31,24 @@ import {
   type RagStatus,
 } from "@/lib/execution";
 import { StepStrip, TrendStrip } from "./HorizonBoard";
-import { Cell, Chip, DateCell, EditorActions, Field, MiniField, RagPicker, isDateish, prettyDate, todayIso } from "./ui";
+import {
+  Cell,
+  Chip,
+  DateCell,
+  EditorActions,
+  Icon,
+  Label,
+  PINK_BUTTON,
+  RagPicker,
+  Select,
+  StatusMark,
+  StatusWord,
+  SubHeading,
+  isDateish,
+  prettyDate,
+  todayIso,
+  type IconName,
+} from "./ui";
 
 /**
  * One Foreground Initiative, opened under the board.
@@ -53,6 +69,12 @@ import { Cell, Chip, DateCell, EditorActions, Field, MiniField, RagPicker, isDat
  * Systems' rule — you may change the colour, but you say why — is the one
  * that keeps a dashboard honest past the first quarter. Still no
  * percent-complete anywhere; the strip is the sheet's own lights end to end.
+ *
+ * 17 Sept 2026: one nesting level fewer. The header fields are a line of
+ * facts under the light rather than a card of inputs, the plan is a flat
+ * list, the steps lose their strikethrough (done is a green tile and grey
+ * text — a crossed-out line is hard to read back in a review), and dates
+ * read as dates until clicked.
  */
 export default function InitiativeDetail({
   initiative: i,
@@ -86,6 +108,7 @@ export default function InitiativeDetail({
   const stale = isStale(i, data.updates, today);
   const trend = trendFor(data.updates, i.id);
   const dueReview = reviewDue(i, data.updates, today);
+  const pace = initiativePace(i, data.steps, today);
 
   const written = PLAN_FIELDS.filter((f) => !richTextIsEmpty(i[f.key])).length;
   // Open by default only when there is nothing written and someone can write it.
@@ -103,100 +126,143 @@ export default function InitiativeDetail({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* ---------------------------------------------- how is it going */}
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ring-1 ${RAG_RING[status]}`}>
-              {RAG_LABEL[status]}
-            </span>
-            <Chip tone="navy">{kind.label}</Chip>
-            {i.is_complete && <Chip tone="accent">Finished</Chip>}
-            <TrendStrip updates={trend} />
-          </div>
-          <p className={`mt-1.5 text-xs ${stale ? "font-semibold text-amber-700" : "text-gray-500"}`}>
-            {last
-              ? `Last check-in ${since === 0 ? "today" : `${since} day${since === 1 ? "" : "s"} ago`}${
-                  who(last.author_profile_id) ? ` by ${who(last.author_profile_id)}` : ""
-                }`
-              : since != null
-                ? `No check-in yet — started ${since} day${since === 1 ? "" : "s"} ago`
-                : "No check-in yet"}
-            {stale && ` · the weekly rhythm slipped (${STALE_AFTER_DAYS}+ days)`}
-          </p>
-          {/* The date the team put in the diary, read back to them. Before
-              this, Next Review was a field you could fill in and nothing
-              anywhere would ever mention again. */}
-          {dueReview && (
-            <p className="mt-1 text-xs font-semibold text-amber-700">
-              The review this team set for {prettyDate(i.next_review_on)} is still open.
+      <div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusMark status={status} size="lg" labelHidden />
+              <StatusWord status={status} size="sm" />
+              <Chip tone="navy">{kind.label}</Chip>
+              {i.is_complete && <Chip tone="accent">Finished</Chip>}
+              <TrendStrip updates={trend} />
+            </div>
+            <p className={`text-sm ${stale ? "font-semibold text-amber-700" : "text-gray-600"}`}>
+              {last
+                ? `Last check-in ${since === 0 ? "today" : `${since} day${since === 1 ? "" : "s"} ago`}${
+                    who(last.author_profile_id) ? ` by ${who(last.author_profile_id)}` : ""
+                  }`
+                : since != null
+                  ? `No check-in yet — started ${since} day${since === 1 ? "" : "s"} ago`
+                  : "No check-in yet"}
+              {stale && ` · the weekly rhythm slipped (${STALE_AFTER_DAYS}+ days)`}
             </p>
+            {/* The date the team put in the diary, read back to them. Before
+                this, Next Review was a field you could fill in and nothing
+                anywhere would ever mention again. */}
+            {dueReview && (
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
+                <Icon name="calendar" className="h-3.5 w-3.5 shrink-0" />
+                The review this team set for {prettyDate(i.next_review_on)} is still open.
+              </p>
+            )}
+            {pace?.behind && (
+              <p className="text-sm font-semibold text-amber-700">
+                Behind pace — {Math.round(pace.elapsed * 100)}% of the time, {Math.round(pace.done * 100)}% of the
+                steps
+              </p>
+            )}
+          </div>
+          {canManageSteps && !i.is_complete && (
+            <CheckIn
+              initiative={i}
+              status={status}
+              projectId={projectId}
+              accessToken={accessToken}
+              onChanged={onChanged}
+              nudge={stale || !last}
+            />
           )}
         </div>
-        {canManageSteps && !i.is_complete && (
-          <CheckIn
-            initiative={i}
-            status={status}
-            projectId={projectId}
-            accessToken={accessToken}
-            onChanged={onChanged}
-            nudge={stale || !last}
-          />
-        )}
+
+        {/* The Action Step List's header, as a line of facts. */}
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-gray-200 pt-4 lg:grid-cols-4">
+          {(
+            [
+              [
+                "user",
+                "Owner",
+                <Cell
+                  key="owner"
+                  value={i.leader}
+                  onSave={(v) => void patch({ leader: v })}
+                  disabled={!canEdit}
+                  ariaLabel="Owner"
+                  placeholder="Who is in charge of this initiative"
+                />,
+              ],
+              [
+                "users",
+                "Team",
+                <Cell
+                  key="team"
+                  value={i.team}
+                  onSave={(v) => void patch({ team: v })}
+                  disabled={!canEdit}
+                  ariaLabel="Team"
+                  placeholder="Who is on it"
+                />,
+              ],
+              [
+                "calendar",
+                "Start date",
+                <DateCell
+                  key="start"
+                  label="Start date"
+                  value={i.start_date}
+                  onSave={(v) => void patch({ start_date: v })}
+                  disabled={!canEdit}
+                />,
+              ],
+              [
+                "calendar",
+                "Next review",
+                <DateCell
+                  key="review"
+                  label="Next review"
+                  value={i.next_review_on}
+                  onSave={(v) => void patch({ next_review_on: v })}
+                  disabled={!canEdit}
+                />,
+              ],
+            ] as [IconName, string, React.ReactNode][]
+          ).map(([icon, label, cell]) => (
+            <div key={label} className="min-w-0">
+              <dt className="flex items-center gap-1.5">
+                <Icon name={icon} className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                <Label>{label}</Label>
+              </dt>
+              <dd className="mt-0.5 min-w-0">{cell}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
       <Scoreboard initiative={i} steps={steps} today={today} />
 
-      {/* ------------------------------------------------- header fields */}
-      <div className="grid gap-x-5 gap-y-3 rounded-xl bg-white px-4 py-3.5 ring-1 ring-gray-200 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Owner">
-          <Cell
-            value={i.leader}
-            onSave={(v) => void patch({ leader: v })}
-            disabled={!canEdit}
-            placeholder="Who is in charge of this initiative"
-          />
-        </Field>
-        <Field label="Team">
-          <Cell
-            value={i.team}
-            onSave={(v) => void patch({ team: v })}
-            disabled={!canEdit}
-            placeholder="Who is on it"
-          />
-        </Field>
-        <Field label="Start date">
-          <DateCell value={i.start_date} onSave={(v) => void patch({ start_date: v })} disabled={!canEdit} />
-        </Field>
-        <Field label="Next review">
-          <DateCell
-            value={i.next_review_on}
-            onSave={(v) => void patch({ next_review_on: v })}
-            disabled={!canEdit}
-          />
-        </Field>
-      </div>
-
       {/* ----------------------------------------------- action step list */}
       <section>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-            Action steps
-          </h4>
-          {kind.stepRange && (
-            <span className="text-[11px] text-gray-400">
-              {kind.label} usually runs {kind.steps.toLowerCase()}
-            </span>
-          )}
-        </div>
+        <SubHeading
+          icon="check-square"
+          count={steps.length}
+          aside={
+            kind.stepRange ? (
+              <span className="text-[11px] text-gray-500">
+                {kind.label} usually runs {kind.steps.toLowerCase()}
+              </span>
+            ) : undefined
+          }
+        >
+          Action steps
+        </SubHeading>
 
         {steps.length === 0 ? (
-          <p className="mt-2 text-xs italic text-gray-400">
+          <p className="mt-3 text-sm text-gray-500">
             No steps yet. These are the specific moves, each with a person and a date.
           </p>
         ) : (
-          <ul className="mt-2.5 space-y-1.5">
+          <ol className="mt-3 space-y-2">
             {steps.map((s, n) => (
               <StepRow
                 key={s.id}
@@ -209,7 +275,7 @@ export default function InitiativeDetail({
                 onChanged={onChanged}
               />
             ))}
-          </ul>
+          </ol>
         )}
 
         {canManageSteps && (
@@ -221,18 +287,16 @@ export default function InitiativeDetail({
               setNewStep("");
               await onChanged();
             }}
-            className="mt-3 flex flex-wrap items-center gap-2"
+            className="mt-2 flex gap-2"
           >
             <input
               value={newStep}
               onChange={(e) => setNewStep(e.target.value)}
               placeholder="Add an action step"
-              className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+              aria-label="New action step"
+              className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
             />
-            <button
-              type="submit"
-              className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink"
-            >
+            <button type="submit" className={PINK_BUTTON}>
               Add
             </button>
           </form>
@@ -261,28 +325,34 @@ export default function InitiativeDetail({
       )}
 
       {/* ------------------------------------------------------- the plan */}
-      <section className="rounded-xl bg-white ring-1 ring-gray-200">
+      <section className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
         <button
+          type="button"
           onClick={() => setPlanOpen(!showPlan)}
           aria-expanded={showPlan}
-          className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left"
+          className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
         >
-          <span>
-            <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-              The plan
-            </span>
-            <span className="mt-0.5 block text-xs text-gray-500">
-              {written === 0
-                ? canEdit
-                  ? "The Foreground Initiative Plan — six blocks, written once at the start."
-                  : "Not written yet."
-                : `${written} of ${PLAN_FIELDS.length} blocks written — initiative, objective, deliverables, plan, timeline, costs`}
-            </span>
+          <SubHeading
+            as="span"
+            icon="book"
+            aside={
+              <span className="text-[11px] font-normal text-gray-500">
+                {written === 0
+                  ? canEdit
+                    ? "The Foreground Initiative Plan — six blocks, written once at the start."
+                    : "Not written yet."
+                  : `${written} of ${PLAN_FIELDS.length} blocks written`}
+              </span>
+            }
+          >
+            The plan
+          </SubHeading>
+          <span className="shrink-0 text-xs font-semibold text-runfree-magentaDeep">
+            {showPlan ? "Hide" : "Read the plan"}
           </span>
-          <span className="text-xs font-semibold text-runfree-magentaDeep">{showPlan ? "Hide" : "Read the plan"}</span>
         </button>
         {showPlan && (
-          <div className="space-y-3 border-t border-gray-100 px-4 py-4">
+          <div className="divide-y divide-gray-100 border-t border-gray-100">
             {PLAN_FIELDS.map((f) => (
               <PlanBlock
                 key={f.key}
@@ -293,22 +363,22 @@ export default function InitiativeDetail({
               />
             ))}
             {canEdit && (
-              <label className="block min-w-0 pt-1">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                  Type of initiative
+              <label className="block min-w-0 px-4 py-3.5">
+                <Label>Type of initiative</Label>
+                <span className="mt-1 block">
+                  <Select
+                    value={i.kind}
+                    onChange={(e) => void patch({ kind: e.target.value as Initiative["kind"] })}
+                    className="max-w-md border-gray-200 bg-white"
+                  >
+                    {INITIATIVE_KINDS.map((k) => (
+                      <option key={k.key} value={k.key}>
+                        {k.label} — {k.steps} step{k.steps === "One" ? "" : "s"}, {k.responsibility.toLowerCase()}
+                      </option>
+                    ))}
+                  </Select>
                 </span>
-                <select
-                  value={i.kind}
-                  onChange={(e) => void patch({ kind: e.target.value as Initiative["kind"] })}
-                  className="mt-0.5 w-full max-w-md rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-runfree-ink outline-none focus:border-runfree-magenta"
-                >
-                  {INITIATIVE_KINDS.map((k) => (
-                    <option key={k.key} value={k.key}>
-                      {k.label} — {k.steps} step{k.steps === "One" ? "" : "s"}, {k.responsibility.toLowerCase()}
-                    </option>
-                  ))}
-                </select>
-                <span className="mt-1 block text-[11px] leading-relaxed text-gray-500">
+                <span className="mt-1 block text-xs leading-relaxed text-gray-500">
                   {kind.blurb} Reviewed: {kind.review.toLowerCase()}.
                 </span>
               </label>
@@ -320,12 +390,14 @@ export default function InitiativeDetail({
       {canEdit && (
         <div className="flex flex-wrap items-center gap-4 border-t border-gray-200 pt-4">
           <button
+            type="button"
             onClick={() => void patch({ is_complete: !i.is_complete })}
-            className="text-xs font-semibold text-gray-500 transition hover:text-runfree-ink"
+            className="text-xs font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
           >
             {i.is_complete ? "Reopen this initiative" : "Mark this initiative finished"}
           </button>
           <button
+            type="button"
             onClick={async () => {
               if (!confirm(`Delete “${i.name}” and its action steps? This cannot be undone.`)) return;
               await deleteInitiative(accessToken, i.id);
@@ -377,16 +449,18 @@ function CheckIn({
   if (!open) {
     return (
       <button
+        type="button"
         onClick={() => {
           setLight(status);
           setOpen(true);
         }}
-        className={`shrink-0 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+        className={
           nudge
-            ? "bg-runfree-grad text-white hover:opacity-90"
-            : "bg-white text-runfree-magentaDeep ring-1 ring-gray-300 hover:bg-runfree-pink"
-        }`}
+            ? "inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-runfree-grad px-3.5 py-2 text-xs font-bold text-white transition hover:opacity-90"
+            : `${PINK_BUTTON} shrink-0`
+        }
       >
+        <Icon name="message" className="h-3.5 w-3.5" />
         Post this week&rsquo;s check-in
       </button>
     );
@@ -409,15 +483,13 @@ function CheckIn({
           setBusy(false);
         }
       }}
-      className="w-full rounded-xl bg-white p-4 ring-1 ring-runfree-magenta/30 sm:basis-full"
+      className="w-full rounded-2xl bg-white p-4 shadow-sm ring-1 ring-runfree-magenta/30 sm:basis-full sm:p-5"
     >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-          This week&rsquo;s check-in
-        </span>
+      <SubHeading icon="message">This week&rsquo;s check-in</SubHeading>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="flex items-center gap-2">
-          <RagPicker value={light} onChange={setLight} />
-          <span className="text-xs text-gray-600">{RAG_LABEL[light]}</span>
+          <RagPicker value={light} onChange={setLight} label="This week's light" />
+          <StatusWord status={light} size="xs" />
         </span>
         <label className="ml-auto flex items-center gap-2 text-[11px] text-gray-500">
           Dated
@@ -464,26 +536,30 @@ function UpdateHistory({
   const shown = all ? updates : updates.slice(0, 3);
   return (
     <section>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-          Check-ins
-        </h4>
-        {updates.length > 3 && (
-          <button
-            onClick={() => setAll((v) => !v)}
-            className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
-          >
-            {all ? "Show the latest three" : `Show all ${updates.length}`}
-          </button>
-        )}
-      </div>
-      <ol className="mt-2 space-y-1.5">
+      <SubHeading
+        icon="message"
+        count={updates.length}
+        aside={
+          updates.length > 3 ? (
+            <button
+              type="button"
+              onClick={() => setAll((v) => !v)}
+              className="text-[11px] font-semibold text-runfree-magentaDeep hover:underline"
+            >
+              {all ? "Show the latest three" : `Show all ${updates.length}`}
+            </button>
+          ) : undefined
+        }
+      >
+        Check-ins
+      </SubHeading>
+      <ol className="mt-3 divide-y divide-gray-100 rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
         {shown.map((u) => (
-          <li key={u.id} className="flex items-start gap-3 rounded-xl bg-white px-3.5 py-2.5 ring-1 ring-gray-200">
-            <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${RAG_DOT[u.status]}`} title={RAG_LABEL[u.status]} />
+          <li key={u.id} className="flex items-start gap-3 px-4 py-3">
+            <StatusMark status={u.status} size="sm" className="mt-1" />
             <div className="min-w-0 flex-1">
               <p className="text-xs text-gray-500">
-                <span className="font-semibold text-runfree-ink">{prettyDate(u.on_date)}</span>
+                <span className="font-semibold tabular-nums text-runfree-ink">{prettyDate(u.on_date)}</span>
                 {who(u.author_profile_id) ? ` · ${who(u.author_profile_id)}` : ""}
                 {` · ${RAG_LABEL[u.status].toLowerCase()}`}
               </p>
@@ -491,11 +567,12 @@ function UpdateHistory({
             </div>
             {canManage && (
               <button
+                type="button"
                 onClick={async () => {
                   if (!confirm(`Delete the ${prettyDate(u.on_date)} check-in?`)) return;
                   await onDelete(u.id);
                 }}
-                className="shrink-0 text-[10px] font-semibold text-gray-400 transition hover:text-rose-600"
+                className="shrink-0 text-[10px] font-semibold text-gray-500 transition hover:text-rose-600"
               >
                 Delete
               </button>
@@ -524,8 +601,8 @@ function PlanBlock({
   const blank = richTextIsEmpty(body);
   if (blank && !canEdit) return null;
   return (
-    <div className="rounded-xl bg-gray-50 px-4 py-3">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">{f.label}</p>
+    <div className="px-4 py-3.5">
+      <Label>{f.label}</Label>
       {editing ? (
         <div className="mt-2 space-y-2">
           <RichText value={draft} onChange={setDraft} minHeight="6rem" placeholder={f.hint} />
@@ -544,19 +621,18 @@ function PlanBlock({
           />
         </div>
       ) : blank ? (
-        <p className="mt-1 text-xs italic text-gray-400">{f.hint}</p>
+        <p className="mt-1 text-sm text-gray-500">{f.hint}</p>
       ) : (
-        <div className="mt-1.5">
-          <RichTextView html={body!} className="text-runfree-ink" />
-        </div>
+        <RichTextView html={body!} className="mt-1 text-runfree-ink" />
       )}
       {canEdit && !editing && (
         <button
+          type="button"
           onClick={() => {
             setDraft(body ?? "");
             setEditing(true);
           }}
-          className="mt-1.5 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
+          className="mt-1 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
         >
           {blank ? "Write it" : "Edit"}
         </button>
@@ -601,16 +677,16 @@ function Scoreboard({
   const daysLeft = i.start_date ? 90 - daysBetween(i.start_date, today) : null;
 
   return (
-    <div>
-      <StepStrip steps={steps} className="!h-2" />
-      <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200 sm:p-5">
+      <StepStrip steps={steps} className="!h-2.5" />
+      <dl className="mt-4 grid grid-cols-2 gap-y-4 sm:grid-cols-4 sm:divide-x sm:divide-gray-100">
         <Stat
           label="Steps"
           value={
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2.5">
               {(["green", "amber", "red"] as const).map((s) => (
                 <span key={s} className="flex items-center gap-1" title={RAG_LABEL[s]}>
-                  <span className={`h-2.5 w-2.5 rounded-full ${RAG_DOT[s]}`} />
+                  <StatusMark status={s} size="sm" labelHidden />
                   <span className="tabular-nums">{by(s)}</span>
                   <span className="sr-only">{RAG_LABEL[s].toLowerCase()}</span>
                 </span>
@@ -628,7 +704,7 @@ function Scoreboard({
             <span className="tabular-nums">
               ${total.toLocaleString()}
               {unpriced > 0 && (
-                <span className="ml-1 text-xs font-normal text-gray-400">+{unpriced} tbd</span>
+                <span className="ml-1 text-xs font-normal text-gray-500">+{unpriced} tbd</span>
               )}
             </span>
           }
@@ -651,15 +727,26 @@ function Scoreboard({
 }
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+  // dt first in the DOM for a valid list; the number is what the eye reads first.
   return (
-    <div className="rounded-xl bg-runfree-indigo/50 px-3 py-2.5">
-      <dd className="font-display text-base font-extrabold leading-none text-runfree-ink">{value}</dd>
-      <dt className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-        {label}
+    <div className="flex flex-col px-3 sm:first:pl-0">
+      <dt className="order-2 mt-1.5">
+        <Label>{label}</Label>
       </dt>
+      <dd className="order-1 font-display text-xl font-extrabold leading-none tabular-nums text-runfree-ink">
+        {value}
+      </dd>
     </div>
   );
 }
+
+/**
+ * Inline fields on a step's meta line size to what they hold. A text input's
+ * own width is about twenty characters whatever is in it, which left a wide
+ * gap between "Sep 5, 2026" and "past due". `field-sizing` is Chromium-only
+ * for now; elsewhere the input simply keeps its default width.
+ */
+const HUG = "!w-auto [field-sizing:content] min-w-[3.5rem] max-w-[14rem]";
 
 /**
  * One row of the Action Step List.
@@ -696,80 +783,103 @@ function StepRow({
 
   return (
     <li
-      className={`rounded-xl bg-white px-3 py-2.5 ring-1 ${
-        overdue ? "ring-rose-200" : "ring-gray-200"
+      className={`group rounded-2xl px-4 py-3 ring-1 transition-colors ${
+        overdue ? "bg-rose-50/40 ring-rose-200" : "bg-white ring-gray-200 hover:ring-gray-300"
       }`}
     >
-      <div className="flex items-start gap-3">
-        <span className="mt-1 w-4 shrink-0 text-right text-xs tabular-nums text-gray-300">{n}</span>
-        <div className="min-w-0 flex-1">
-          <Cell
-            value={s.description}
-            onSave={(v) => v && void patch({ description: v })}
-            disabled={!canManage}
-            required
-            wrap
-            ariaLabel="Action step"
-            className={`!px-0 font-medium !text-runfree-ink ${s.status === "green" ? "!text-gray-400 line-through decoration-gray-300" : ""}`}
-          />
-          <div className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-4">
-            <MiniField label="By">
-              <Cell
-                value={s.by_when}
-                onSave={(v) => void patch({ by_when: v })}
-                disabled={!canManage}
-                ariaLabel="By when"
-                placeholder="Date or cadence"
-                className={`!text-xs ${overdue ? "!text-rose-600" : ""}`}
-                display={(v) => (isDateish(v) ? prettyDate(v) : v)}
-              />
-            </MiniField>
-            <MiniField label="Accountable">
-              <Cell
-                value={s.accountable}
-                onSave={(v) => void patch({ accountable: v })}
-                disabled={!canManage}
-                ariaLabel="Accountable"
-                placeholder="Who"
-                className="!text-xs"
-              />
-            </MiniField>
-            <MiniField label="Cost">
-              <Cell
-                value={s.cost}
-                onSave={(v) => void patch({ cost: v })}
-                disabled={!canManage}
-                ariaLabel="Cost"
-                placeholder="$"
-                className="!text-xs"
-              />
-            </MiniField>
-            <MiniField label="Assigned">
-              {canManage ? (
-                <select
-                  value={s.assignee_profile_id ?? ""}
-                  onChange={(e) => void patch({ assignee_profile_id: e.target.value || null })}
-                  className="w-full min-w-0 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xs text-runfree-ink outline-none transition hover:border-gray-200 focus:border-runfree-magenta focus:bg-white"
-                >
-                  <option value="">Nobody</option>
-                  {members.map((m) => (
-                    <option key={m.profileId} value={m.profileId}>
-                      {m.fullName || m.email}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="block truncate text-xs text-gray-600">
-                  {assignee ? assignee.fullName || assignee.email : <span className="text-gray-300">—</span>}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <span aria-hidden className="mt-[5px] w-5 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-500">
+            {n}
+          </span>
+          <div className="min-w-0 flex-1">
+            <Cell
+              value={s.description}
+              onSave={(v) => v && void patch({ description: v })}
+              disabled={!canManage}
+              required
+              wrap
+              ariaLabel="Action step"
+              className={`!px-0 !text-[15px] font-medium ${s.status === "green" ? "!text-gray-500" : "!text-runfree-ink"}`}
+            />
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+              <span className="flex min-w-0 items-center gap-1">
+                <Icon name="calendar" className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                <span className="sr-only">By</span>
+                <Cell
+                  value={s.by_when}
+                  onSave={(v) => void patch({ by_when: v })}
+                  disabled={!canManage}
+                  ariaLabel="By when"
+                  placeholder="By when"
+                  className={`${HUG} !text-xs ${overdue ? "!font-semibold !text-rose-700" : ""}`}
+                  display={(v) => (isDateish(v) ? prettyDate(v) : v)}
+                />
+                {overdue && <span className="shrink-0 font-semibold text-rose-700">past due</span>}
+              </span>
+              <span className="flex min-w-0 items-center gap-1">
+                <Icon name="user" className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                <span className="sr-only">Accountable</span>
+                <Cell
+                  value={s.accountable}
+                  onSave={(v) => void patch({ accountable: v })}
+                  disabled={!canManage}
+                  ariaLabel="Accountable"
+                  placeholder="Accountable"
+                  className={`${HUG} !text-xs`}
+                />
+              </span>
+              <span className="flex min-w-0 items-center gap-1">
+                <span aria-hidden className="shrink-0 text-gray-400">
+                  $
                 </span>
-              )}
-            </MiniField>
+                <span className="sr-only">Cost</span>
+                <Cell
+                  value={s.cost}
+                  onSave={(v) => void patch({ cost: v })}
+                  disabled={!canManage}
+                  ariaLabel="Cost"
+                  placeholder="Cost"
+                  className={`${HUG} !text-xs`}
+                />
+              </span>
+              <span className="flex min-w-0 items-center gap-1">
+                <Icon name="users" className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                {canManage ? (
+                  <Select
+                    dense
+                    aria-label="Assigned"
+                    value={s.assignee_profile_id ?? ""}
+                    onChange={(e) => void patch({ assignee_profile_id: e.target.value || null })}
+                  >
+                    <option value="">Nobody</option>
+                    {members.map((m) => (
+                      <option key={m.profileId} value={m.profileId}>
+                        {m.fullName || m.email}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <span className="truncate text-gray-600">
+                    <span className="sr-only">Assigned: </span>
+                    {assignee ? assignee.fullName || assignee.email : "Nobody"}
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
-          <RagPicker value={s.status} onChange={(v) => void patch({ status: v })} disabled={!canManage} />
+        <div className="flex shrink-0 items-center justify-end gap-3 sm:flex-col sm:items-end sm:gap-1">
+          <RagPicker
+            quiet
+            value={s.status}
+            onChange={(v) => void patch({ status: v })}
+            disabled={!canManage}
+            label={`Step ${n} light`}
+          />
           {canManage && (
             <button
+              type="button"
               onClick={async () => {
                 if (!confirm(`Remove “${s.description}”?`)) return;
                 await deleteStep(accessToken, s.id);

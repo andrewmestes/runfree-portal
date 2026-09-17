@@ -31,7 +31,7 @@ import MidgroundDetail from "./execution/MidgroundDetail";
 import InitiativeDetail from "./execution/InitiativeDetail";
 import MinistryDashboard from "./execution/MinistryDashboard";
 import RenewalCycle from "./execution/RenewalCycle";
-import { BlockHeading, Cell, isDateish, prettyDate, todayIso } from "./execution/ui";
+import { BlockHeading, Cell, Icon, NumberDisc, PINK_BUTTON, isDateish, prettyDate, todayIso, type IconName } from "./execution/ui";
 
 /**
  * Execution — the Horizon Storyline, run.
@@ -59,6 +59,11 @@ import { BlockHeading, Cell, isDateish, prettyDate, todayIso } from "./execution
  *
  * It loads its own data when opened rather than riding on `getProjectDetail`,
  * for the same reason the books panel does.
+ *
+ * 17 Sept 2026 — "functionally great … the visual feels a little dated." The
+ * refresh changed how it looks and nothing about what it does: the same
+ * data, the same gates, the same meeting order. See
+ * docs/design/execution-redesign-spec.md for the judged direction.
  */
 export default function ExecutionPanel({
   projectId,
@@ -178,6 +183,7 @@ export default function ExecutionPanel({
     <DetailShell
       title={detailTitle(selected, data)}
       eyebrow={detailEyebrow(selected)}
+      bandIcon={BAND_ICON[selected.band]}
       onClose={() => select(null)}
       onRename={
         selected.band === "foreground" && canEdit
@@ -241,10 +247,10 @@ export default function ExecutionPanel({
     <section className="pb-16">
       <header className="flex flex-col items-center text-center">
         {/* God Dreams' own Execute mark, over the Vision Frame window. */}
-        <span className="flex items-center justify-center gap-3">
+        <span className="mx-auto inline-flex items-center gap-2 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-gray-200">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/god-dreams/execute-icon.png" alt="" className="h-11 w-11" />
-          <VisionFrameMark className="h-7 w-7 text-runfree-navy/60" />
+          <img src="/brand/god-dreams/execute-icon.png" alt="" className="h-8 w-8" />
+          <VisionFrameMark className="h-8 w-8 text-runfree-navy/60" />
         </span>
         <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
           God Dreams · The Horizon Storyline, run
@@ -286,52 +292,61 @@ export default function ExecutionPanel({
               onAddInitiative={canEdit ? () => setAddSignal((n) => n + 1) : undefined}
               detail={detail}
             />
-            {canEdit && (
-              <AddInitiative
-                data={data}
-                projectId={projectId}
-                accessToken={accessToken}
-                onChanged={load}
-                onCreated={(id) => select({ band: "foreground", id })}
-                signal={addSignal}
-              />
-            )}
-
-            {/* Finished initiatives are the record of what the church did.
-                Marking one finished used to make it vanish from the only list
-                that showed it, with no way back — "Reopen" lived on a detail
-                view you could no longer reach. */}
-            {data.initiatives.some((i) => i.is_complete) && (
-              <div className="mt-4">
-                <button
-                  onClick={() => setShowFinished((v) => !v)}
-                  className="text-xs font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
-                >
-                  {showFinished ? "Hide" : "Show"}{" "}
-                  {data.initiatives.filter((i) => i.is_complete).length} finished
-                </button>
-                {showFinished && (
-                  <ul className="mt-2 flex flex-wrap gap-2">
-                    {data.initiatives
-                      .filter((i) => i.is_complete)
-                      .map((i) => (
-                        <li key={i.id}>
-                          <button
-                            onClick={() => select({ band: "foreground", id: i.id })}
-                            aria-pressed={selected?.band === "foreground" && selected.id === i.id}
-                            className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
-                              selected?.band === "foreground" && selected.id === i.id
-                                ? "bg-runfree-pink text-runfree-magentaDeep ring-runfree-magenta/30"
-                                : "bg-white text-gray-600 ring-gray-200 hover:ring-runfree-magenta/40"
-                            }`}
-                          >
-                            {i.name}
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
+            {/* Adding, and the record of what is finished, on one row under
+                the board. Finished initiatives are the record of what the
+                church did: marking one finished used to make it vanish from
+                the only list that showed it, with no way back — "Reopen"
+                lived on a detail view you could no longer reach. */}
+            {(canEdit || data.initiatives.some((i) => i.is_complete)) && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                {canEdit && (
+                  <AddInitiative
+                    data={data}
+                    projectId={projectId}
+                    accessToken={accessToken}
+                    onChanged={load}
+                    onCreated={(id) => select({ band: "foreground", id })}
+                    signal={addSignal}
+                  />
+                )}
+                {data.initiatives.some((i) => i.is_complete) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFinished((v) => !v)}
+                    aria-expanded={showFinished}
+                    className="text-xs font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
+                  >
+                    {showFinished ? "Hide" : "Show"}{" "}
+                    {data.initiatives.filter((i) => i.is_complete).length} finished
+                  </button>
                 )}
               </div>
+            )}
+            {showFinished && data.initiatives.some((i) => i.is_complete) && (
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {data.initiatives
+                  .filter((i) => i.is_complete)
+                  .map((i) => {
+                    const on = selected?.band === "foreground" && selected.id === i.id;
+                    return (
+                      <li key={i.id}>
+                        <button
+                          type="button"
+                          onClick={() => select({ band: "foreground", id: i.id })}
+                          aria-pressed={on}
+                          className={`inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+                            on
+                              ? "text-runfree-ink ring-2 ring-runfree-magenta"
+                              : "text-gray-600 ring-1 ring-gray-200 hover:ring-runfree-magenta/40"
+                          }`}
+                        >
+                          <Icon name="check" className="h-3 w-3 text-emerald-600" />
+                          {i.name}
+                        </button>
+                      </li>
+                    );
+                  })}
+              </ul>
             )}
           </section>
 
@@ -354,6 +369,14 @@ export default function ExecutionPanel({
 }
 
 /* -------------------------------------------------------------------------- */
+
+/** The glyph each band carries on its rail, repeated on its detail. */
+const BAND_ICON: Record<Selection["band"], IconName> = {
+  beyond: "telescope",
+  background: "flag",
+  midground: "target",
+  foreground: "footprints",
+};
 
 function detailEyebrow(s: Selection): string {
   switch (s.band) {
@@ -384,31 +407,34 @@ function detailTitle(s: Selection, data: ExecutionData): string {
  * The one detail area, opened under the band it belongs to.
  *
  * A single shell rather than four differently-shaped panels: whatever you
- * click lands in the same shape, with the same way out. Flat, because it
- * sits inside the board now rather than as a card below it.
+ * click lands in the same shape, with the same way out. It owns the eyebrow
+ * and the title — the views inside never print the name again. The card that
+ * was clicked points down into it, so it needs no stripe of its own.
  */
 function DetailShell({
   eyebrow,
   title,
+  bandIcon,
   onClose,
   onRename,
   children,
 }: {
   eyebrow: string;
   title: string;
+  bandIcon: IconName;
   onClose: () => void;
   /** Supplied only where the title is a name someone owns — an initiative. */
   onRename?: (v: string) => void;
   children: React.ReactNode;
 }) {
   return (
-    <section className="relative">
-      <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-runfree-grad" />
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 bg-white px-5 py-3.5 sm:px-7">
+    <section className="animate-fade">
+      <div className="flex items-start justify-between gap-3 border-b border-gray-200 bg-white px-5 py-4 sm:px-7">
         {/* flex-1 as well as min-w-0: without it the rename Cell's w-full
             input was only as wide as the eyebrow above it. */}
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
+            <Icon name={bandIcon} className="h-3.5 w-3.5 shrink-0" />
             {eyebrow}
           </p>
           {onRename ? (
@@ -417,22 +443,24 @@ function DetailShell({
               onSave={(v) => v && onRename(v)}
               required
               ariaLabel="Initiative name"
-              className="!px-0 font-display !text-lg font-extrabold tracking-tight !text-runfree-ink"
+              className="mt-1 !px-0 font-display !text-xl font-extrabold tracking-tight !text-runfree-ink sm:!text-2xl"
             />
           ) : (
-            <h3 className="mt-0.5 font-display text-lg font-extrabold tracking-tight text-runfree-ink">
+            <h3 className="mt-1 font-display text-xl font-extrabold tracking-tight text-runfree-ink sm:text-2xl">
               {title}
             </h3>
           )}
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-runfree-ink"
+          aria-label="Close"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-runfree-ink"
         >
-          Close
+          <Icon name="x" className="h-4 w-4" />
         </button>
       </div>
-      <div className="px-5 py-5 sm:px-7">{children}</div>
+      <div className="px-5 py-6 sm:px-7">{children}</div>
     </section>
   );
 }
@@ -488,26 +516,26 @@ function SetupStrip({
   ];
   if (steps.every((s) => s.done)) return null;
   return (
-    <ol className="mb-3 flex flex-wrap gap-2">
+    <ol className="mb-4 inline-flex max-w-full flex-wrap items-center gap-1 rounded-3xl bg-white p-1 shadow-sm ring-1 ring-gray-200 sm:rounded-full">
       {steps.map((s, n) => (
         <li key={s.label}>
           <button
+            type="button"
             onClick={s.go}
-            className={`flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-xs font-semibold ring-1 transition ${
-              s.done
-                ? "bg-white text-gray-400 ring-gray-200"
-                : "bg-white text-runfree-ink ring-runfree-magenta/40 hover:bg-runfree-pink"
+            className={`inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-xs font-semibold transition-colors hover:bg-runfree-indigo/60 ${
+              s.done ? "text-gray-500" : "text-runfree-ink"
             }`}
           >
-            <span
-              className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-extrabold ${
-                s.done ? "bg-emerald-500 text-white" : "bg-runfree-indigo text-runfree-navy"
-              }`}
-            >
-              {s.done ? "✓" : n + 1}
-            </span>
+            {s.done ? (
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-white">
+                <Icon name="check" className="h-3 w-3" />
+                <span className="sr-only">Done: </span>
+              </span>
+            ) : (
+              <NumberDisc n={n + 1} />
+            )}
             {s.label}
-            <span className={`font-normal ${s.done ? "text-gray-300" : "text-gray-400"}`}>{s.detail}</span>
+            <span className="font-normal text-gray-500">{s.detail}</span>
           </button>
         </li>
       ))}
@@ -539,7 +567,7 @@ function AddInitiative({
   }, [signal]);
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-3">
+    <div className={adding ? "w-full" : "flex flex-wrap items-center gap-3"}>
       {adding ? (
         <form
           onSubmit={async (e) => {
@@ -581,15 +609,13 @@ function AddInitiative({
       ) : (
         <>
           {live < 4 && (
-            <button
-              onClick={() => setAdding(true)}
-              className="rounded-lg px-3 py-2 text-xs font-semibold text-runfree-magentaDeep transition hover:bg-runfree-pink"
-            >
-              + Add an initiative
+            <button type="button" onClick={() => setAdding(true)} className={PINK_BUTTON}>
+              <Icon name="plus" className="h-3.5 w-3.5" />
+              Add an initiative
             </button>
           )}
           {live >= 4 && (
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-gray-500">
               Four initiatives are live — the sheet&rsquo;s full. Finish one to make room, or
               {" "}
               <button onClick={() => setAdding(true)} className="font-semibold text-runfree-magentaDeep hover:underline">
@@ -753,7 +779,7 @@ function ThisWeek({
       node: (
         <>
           <span className="font-semibold text-white">{i.name}</span> — {reasons.join(" · ")}
-          {i.leader ? <span className="text-white/50"> · {i.leader}</span> : null}
+          {i.leader ? <span className="text-white/60"> · {i.leader}</span> : null}
         </>
       ),
     })),
@@ -767,7 +793,7 @@ function ThisWeek({
           {s.description}
           {owner(s) ? ` · ${owner(s)}` : ""} — due {prettyDate(s.by_when)}
           {initiativeOf(s.initiative_id) ? (
-            <span className="text-white/50"> · {initiativeOf(s.initiative_id)!.name}</span>
+            <span className="text-white/60"> · {initiativeOf(s.initiative_id)!.name}</span>
           ) : null}
         </>
       ),
@@ -790,27 +816,42 @@ function ThisWeek({
     a === UNOWNED ? 1 : b === UNOWNED ? -1 : 0
   );
 
+  /*
+   * The portal's own dark card — runfree-navy, a gradient bar on top — not
+   * the sidebar's navyDeep it used to share, which made the agenda look like
+   * part of the navigation. The count is the largest number on the page,
+   * because it is the first thing the meeting needs to know.
+   */
   return (
-    <section className="mt-8">
-      <div className="rounded-2xl bg-runfree-navyDeep px-5 py-5 text-white sm:px-6 sm:py-6">
+    <section className="mt-8 overflow-hidden rounded-3xl bg-runfree-navy text-white shadow-sm">
+      <div aria-hidden className="h-1.5 bg-runfree-grad" />
+      <div className="px-5 py-5 sm:px-7 sm:py-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/50">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">
               This week
             </p>
-            <h3 className="mt-1 font-display text-xl font-extrabold tracking-tight">
-              {talk === 0
-                ? "Everything is on track"
-                : `${talk} thing${talk === 1 ? "" : "s"} to talk about`}
+            <h3 className="mt-1.5 flex flex-wrap items-baseline gap-x-2 font-display tracking-tight">
+              {talk === 0 ? (
+                <span className="text-xl font-extrabold">Everything is on track</span>
+              ) : (
+                <>
+                  <span className="text-3xl font-extrabold leading-none tabular-nums sm:text-4xl">{talk}</span>
+                  <span className="text-xl font-extrabold">
+                    thing{talk === 1 ? "" : "s"} to talk about
+                  </span>
+                </>
+              )}
             </h3>
             {next && (
-              <p className="mt-1 text-xs text-white/60">
+              <p className="mt-1.5 text-xs text-white/70">
                 Next renewal {prettyDate(next.on)} · {next.length.toLowerCase()} ·{" "}
                 {daysBetween(today, next.on)} days away
               </p>
             )}
           </div>
           <button
+            type="button"
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(digest);
@@ -820,9 +861,10 @@ function ThisWeek({
                 /* clipboard blocked — the text is on screen either way */
               }
             }}
-            className="shrink-0 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
+            className="inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg bg-white/10 px-3.5 py-2 text-xs font-bold text-white ring-1 ring-white/20 transition-colors hover:bg-white/20 sm:w-auto"
           >
-            {copied ? "Copied" : "Copy update"}
+            <Icon name="clipboard" className="h-3.5 w-3.5" />
+            <span aria-live="polite">{copied ? "Copied" : "Copy update"}</span>
           </button>
         </div>
 
@@ -831,17 +873,18 @@ function ThisWeek({
           <Stat n={attention.length} label="Need attention" tone={attention.length ? "amber" : undefined} />
           <Stat n={due.length} label="Past due" tone={due.length ? "rose" : undefined} />
           {dayOf != null ? (
-            <div className="rounded-xl bg-white/5 px-3 py-3">
-              <dd className="font-display text-2xl font-extrabold leading-none">
-                {Math.min(dayOf, 90)}
-                <span className="text-sm font-semibold text-white/40"> / 90</span>
-              </dd>
-              <dt className="mt-1.5 text-[11px] uppercase tracking-wide text-white/50">
+            <div className="flex flex-col rounded-2xl bg-white/10 px-4 py-3.5 ring-1 ring-white/10">
+              <dt className="order-2 mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
                 {dayOf > 90 ? `Day ${dayOf} — renewal due` : "Day of the ninety"}
               </dt>
-              <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10" aria-hidden>
+              <dd className="order-1 font-display text-3xl font-extrabold leading-none tabular-nums">
+                {Math.min(dayOf, 90)}
+                <span className="ml-1 text-sm font-semibold text-white/60">/ 90</span>
+              </dd>
+              {/* Time gone, not work done — the ninety days are the clock. */}
+              <div className="order-3 mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-white/15" aria-hidden>
                 <div
-                  className="h-full rounded-full bg-runfree-grad"
+                  className="h-full rounded-full bg-runfree-orangeLight"
                   style={{ width: `${Math.min(100, (dayOf / 90) * 100)}%` }}
                 />
               </div>
@@ -859,32 +902,34 @@ function ThisWeek({
                 standup actually goes round the room. Only offered when it
                 would group into more than one name — a list of four lines
                 all owned by the same person is not a grouping. */}
-            {owners.length > 1 && (
-              <div className="mt-4 flex justify-end">
-                <div className="inline-flex rounded-lg bg-white/10 p-0.5" role="group" aria-label="Group the agenda">
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-runfree-pink">Agenda</p>
+              {owners.length > 1 && (
+                <div className="inline-flex rounded-lg bg-white/10 p-0.5 ring-1 ring-white/10" role="group" aria-label="Group the agenda">
                   {(["initiative", "person"] as const).map((m) => (
                     <button
                       key={m}
+                      type="button"
                       onClick={() => setGroupBy(m)}
                       aria-pressed={groupBy === m}
-                      className={`rounded-[6px] px-2.5 py-1 text-[11px] font-semibold transition ${
-                        groupBy === m ? "bg-white text-runfree-navyDeep" : "text-white/60 hover:text-white"
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                        groupBy === m ? "bg-white text-runfree-navy" : "text-white/75 hover:text-white"
                       }`}
                     >
                       By {m}
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             {groupBy === "person" && owners.length > 1 ? (
-              <div className="mt-3 space-y-4 border-t border-white/10 pt-4">
+              <div className="mt-2 space-y-4">
                 {owners.map((name) => (
                   <div key={name}>
-                    <p className="px-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">
+                    <p className="px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-white/60">
                       {name}
                     </p>
-                    <ul className="mt-1 space-y-1">
+                    <ul className="mt-1 space-y-0.5">
                       {agenda
                         .filter((a) => (a.owner ?? UNOWNED) === name)
                         .map((a) => (
@@ -897,7 +942,7 @@ function ThisWeek({
                 ))}
               </div>
             ) : (
-              <ul className="mt-3 space-y-1 border-t border-white/10 pt-4">
+              <ul className="mt-2 space-y-0.5">
                 {agenda.map((a) => (
                   <Line key={a.key} dot={a.dot} onClick={a.go}>
                     {a.node}
@@ -924,12 +969,17 @@ function Line({
   return (
     <li>
       <button
+        type="button"
         onClick={onClick}
-        className="group flex w-full items-start gap-2 rounded-lg px-2 py-1 text-left text-sm text-white/80 transition hover:bg-white/5"
+        className="group flex w-full items-start gap-2.5 rounded-xl px-3 py-2 text-left text-[15px] text-white/85 transition-colors hover:bg-white/5 focus-visible:bg-white/10"
       >
-        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} />
+        {/* The board's own tile, so a light here and a light there are one shape. */}
+        <span
+          aria-hidden
+          className={`mt-[7px] block h-2.5 w-2.5 shrink-0 rounded-[3px] shadow-[inset_0_-2px_0_rgba(0,0,0,.14)] ${dot}`}
+        />
         <span className="min-w-0 flex-1">{children}</span>
-        <span className="shrink-0 text-white/30 transition group-hover:text-white/70" aria-hidden>
+        <span aria-hidden className="shrink-0 text-white/40 transition group-hover:translate-x-0.5 group-hover:text-white">
           →
         </span>
       </button>
@@ -938,16 +988,17 @@ function Line({
 }
 
 function Stat({ n, label, tone }: { n: number; label: string; tone?: "amber" | "rose" }) {
+  // dt before dd in the DOM, shown the other way round: the number leads.
   return (
-    <div className="rounded-xl bg-white/5 px-3 py-3">
+    <div className="flex flex-col rounded-2xl bg-white/10 px-4 py-3.5 ring-1 ring-white/10">
+      <dt className="order-2 mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">{label}</dt>
       <dd
-        className={`font-display text-2xl font-extrabold leading-none ${
+        className={`order-1 font-display text-3xl font-extrabold leading-none tabular-nums ${
           tone === "rose" ? "text-rose-300" : tone === "amber" ? "text-amber-300" : "text-white"
         }`}
       >
         {n}
       </dd>
-      <dt className="mt-1.5 text-[11px] uppercase tracking-wide text-white/50">{label}</dt>
     </div>
   );
 }
@@ -964,7 +1015,8 @@ function Framework({ onGoTo }: { onGoTo: (panel: string) => void }) {
     <section className="mt-12">
       <button
         onClick={() => onGoTo("books")}
-        className="group flex w-full items-center gap-4 rounded-2xl bg-white px-4 py-4 text-left ring-1 ring-gray-200 transition hover:ring-runfree-magenta/40 sm:px-5"
+        type="button"
+        className="group flex w-full items-center gap-4 rounded-3xl bg-white px-4 py-4 text-left shadow-sm ring-1 ring-gray-200 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-runfree-magenta/40 motion-reduce:hover:translate-y-0 sm:px-5"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

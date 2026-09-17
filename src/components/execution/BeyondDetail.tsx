@@ -17,7 +17,7 @@ import {
   uploadHorizonFile,
   type ExecutionData,
 } from "@/lib/execution";
-import { Chip, EditorActions } from "./ui";
+import { Chip, EditorActions, Icon, Label, PINK_BUTTON, SubHeading } from "./ui";
 
 /**
  * Beyond the Horizon — the 5-to-20-year vision, and the templates that name
@@ -80,13 +80,11 @@ export default function BeyondDetail({
   const full = chosen.length >= MAX_TEMPLATES;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <section>
-        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-          The vivid description
-        </h4>
+        <SubHeading icon="telescope">The vivid description</SubHeading>
         {editing ? (
-          <div className="mt-2 space-y-2">
+          <div className="mt-3 space-y-2">
             <RichText
               value={draft}
               onChange={setDraft}
@@ -111,23 +109,22 @@ export default function BeyondDetail({
             />
           </div>
         ) : richTextIsEmpty(box?.body) ? (
-          <p className="mt-1.5 text-sm italic text-gray-400">
+          <p className="mt-3 text-sm text-gray-500">
             {canEdit
               ? "Not written yet. This is the long-range dream — the one that outlives the current staff."
               : "Not written yet."}
           </p>
         ) : (
-          <div className="mt-1.5">
-            <RichTextView html={box!.body!} className="text-runfree-ink" />
-          </div>
+          <RichTextView html={box!.body!} className="mt-3 !text-base !text-runfree-ink" />
         )}
         {canEdit && !editing && (
           <button
+            type="button"
             onClick={() => {
               setDraft(box?.body ?? "");
               setEditing(true);
             }}
-            className="mt-1.5 text-[11px] font-semibold text-gray-400 transition hover:text-runfree-magentaDeep"
+            className="mt-1.5 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
           >
             {richTextIsEmpty(box?.body) ? "Write it" : "Edit"}
           </button>
@@ -138,14 +135,13 @@ export default function BeyondDetail({
           PDF that they could click on that has their full vivid description."
           It opens from the board, beside the templates. */}
       <section>
-        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-          The full vivid description, as a PDF
-        </h4>
+        <SubHeading icon="book">The full vivid description, as a PDF</SubHeading>
         {box?.file_path ? (
-          <p className="mt-1.5 flex flex-wrap items-center gap-3 text-sm text-runfree-ink">
+          <p className="mt-3 flex flex-wrap items-center gap-3 text-sm text-runfree-ink">
             <span className="font-medium">{box.file_name ?? "Vivid description.pdf"}</span>
             {canEdit && (
               <button
+                type="button"
                 onClick={async () => {
                   if (!confirm("Remove the attached PDF?")) return;
                   const old = box.file_path!;
@@ -164,12 +160,13 @@ export default function BeyondDetail({
             )}
           </p>
         ) : (
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-3 text-sm text-gray-500">
             The church&rsquo;s written vivid description, opened from the board with one click.
           </p>
         )}
         {canEdit && (
-          <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink">
+          <label className={`${PINK_BUTTON} mt-3 cursor-pointer focus-within:ring-2 focus-within:ring-runfree-magenta`}>
+            <Icon name="book" className="h-3.5 w-3.5" />
             {uploading ? "Attaching…" : box?.file_path ? "Replace the PDF" : "Attach a PDF"}
             <input
               type="file"
@@ -188,20 +185,29 @@ export default function BeyondDetail({
       </section>
 
       <section>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-            Vision templates
-          </h4>
-          {canEdit && (
-            <button
-              onClick={() => setPicking((v) => !v)}
-              className="text-[11px] font-semibold text-runfree-magentaDeep transition hover:underline"
-            >
-              {picking ? "Done" : chosen.length ? "Change" : "Choose"}
-            </button>
-          )}
-        </div>
-        <p className="mt-1 text-xs leading-relaxed text-gray-500">
+        <SubHeading
+          icon="flag"
+          aside={
+            <span className="flex items-center gap-3">
+              <span className="text-[11px] tabular-nums text-gray-500">
+                {chosen.length} of {MAX_TEMPLATES}
+              </span>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setPicking((v) => !v)}
+                  aria-expanded={picking}
+                  className={PINK_BUTTON}
+                >
+                  {picking ? "Done" : chosen.length ? "Change" : "Choose"}
+                </button>
+              )}
+            </span>
+          }
+        >
+          Vision templates
+        </SubHeading>
+        <p className="mt-2 text-sm leading-relaxed text-gray-500">
           Which of Will&rsquo;s twelve describe this vision. Most churches land on two — a
           primary and a secondary.
         </p>
@@ -214,7 +220,7 @@ export default function BeyondDetail({
               return (
                 <li
                   key={row.id}
-                  className="flex items-start gap-3 rounded-xl bg-white px-3.5 py-3 ring-1 ring-gray-200"
+                  className="flex items-center gap-3 rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-gray-200"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -233,23 +239,16 @@ export default function BeyondDetail({
                   </div>
                   {canEdit && (
                     <button
+                      type="button"
                       onClick={async () => {
                         await removeVisionTemplate(accessToken, row.id);
                         await onChanged();
                       }}
                       title="Remove"
-                      className="shrink-0 text-gray-300 transition hover:text-rose-600"
+                      aria-label={`Remove ${t.name}`}
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
                     >
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        className="h-4 w-4"
-                      >
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
+                      <Icon name="x" className="h-4 w-4" />
                     </button>
                   )}
                 </li>
@@ -259,7 +258,7 @@ export default function BeyondDetail({
         )}
 
         {picking && canEdit && (
-          <div className="mt-4 space-y-4 rounded-xl bg-gray-50 p-4">
+          <div className="mt-4 space-y-4 rounded-2xl bg-gray-50 p-4">
             {full && (
               <p className="text-xs text-gray-500">
                 Two chosen. Remove one to swap it.
@@ -267,10 +266,10 @@ export default function BeyondDetail({
             )}
             {TEMPLATE_GROUPS.map((g) => (
               <div key={g.key}>
-                <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                <p className="flex items-center gap-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={g.icon} alt="" className="h-4 w-4 rounded" />
-                  {g.label}
+                  <Label>{g.label}</Label>
                 </p>
                 <div className="mt-1.5 grid gap-1.5 sm:grid-cols-3">
                   {VISION_TEMPLATES.filter((t) => t.group === g.key).map((t) => {
@@ -278,18 +277,19 @@ export default function BeyondDetail({
                     return (
                       <button
                         key={t.key}
+                        type="button"
                         title={t.definition}
                         disabled={already || full}
                         onClick={async () => {
                           await addVisionTemplate(accessToken, projectId, t.key, chosen.length);
                           await onChanged();
                         }}
-                        className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold transition ${
+                        className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold ring-1 transition ${
                           already
-                            ? "bg-runfree-pink text-runfree-magentaDeep"
+                            ? "bg-runfree-pink text-runfree-magentaDeep ring-runfree-magenta/40"
                             : full
-                              ? "cursor-not-allowed bg-white text-gray-300 ring-1 ring-gray-200"
-                              : "bg-white text-runfree-ink ring-1 ring-gray-200 hover:ring-runfree-magenta/50"
+                              ? "cursor-not-allowed bg-white text-gray-400 ring-gray-200"
+                              : "bg-white text-runfree-ink ring-gray-200 hover:ring-runfree-magenta/40"
                         }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}

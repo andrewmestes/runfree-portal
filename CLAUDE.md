@@ -1729,3 +1729,89 @@ content — which is correct (the Stack has a deliberate Draft/Live toggle) but
 means a viewer's Deliverables panel is the Vision Frame sheet and nothing
 else until the first session. **The "2-Day Launch Retreat" Key Date is
 empty**, which is the first thing a church looks for.
+
+## Execution, third pass: the same tab, redrawn (17 Sept 2026)
+
+Andrew: "the execution tab is functionally great, however, the user
+interface and visual feels a little dated. let's revisit that and update it
+across all projects. make it better." So nothing it does changed — same data,
+same three write gates, same meeting order, `lib/execution.ts` untouched — and
+nearly everything about how it looks did. Three directions ("the sheets,
+typeset", "calm operating room", "the horizon in RunFree's colours") were
+judged from three seats: a church lead team running the Tuesday meeting off a
+TV, a product designer, and whoever maintains this. All three picked the
+brand-forward one. The full build spec, with the ideas grafted from the
+losers and the two it rejected, is `docs/design/execution-redesign-spec.md`.
+
+- **One light shape.** `StatusMark` — a rounded mosaic tile — is the light
+  everywhere: board cards, the detail, This Week, check-in history, the
+  scoreboard counts, the chosen option of every `RagPicker`. It is the same
+  tile `StepStrip`, `TrendStrip` and `MeasureMosaic` are made of, so the tab
+  speaks one God Dreams progress language. **It always travels with its
+  word** (`StatusWord`): this is read across a room, and colour alone was
+  never enough for anyone who does not see red and green apart.
+- **`ui.tsx` grew the vocabulary**, still in one file: `Icon` (stroke glyphs
+  per band), `StatusMark`, `StatusWord`, `NumberDisc` (amber when an
+  initiative is stale — visible from across the room), `SubHeading`, `Label`
+  (the ONE small-caps caption voice; `tone` replaces the grey rather than
+  racing it), `Select` (no OS chevron; `dense`, not `size`, which is a native
+  attribute), `PINK_BUTTON`, `STATUS_TEXT`.
+- **`RagPicker` has two new states.** `quiet` fades the unchosen options until
+  the row is hovered or focused (always visible on a coarse pointer); a
+  disabled picker renders ONE labelled tile (`role="img"`), not a radio group
+  with nothing selectable in it. The check-in form's picker stays loud. There
+  is still no picker on an initiative.
+- **`DateCell` is text until clicked.** The rest state is a button reading
+  "Aug 1, 2026"; a click swaps in the native input and calls `showPicker()`
+  where it exists; Escape or blur returns focus to the button. Read-only
+  matches `Cell`'s read-only exactly (no padding) so a reader's row of facts
+  lines up.
+- **The board is a horizon.** Rails are gradients (sideways on a phone, down
+  from `sm`) with a band icon; one 3px `bg-runfree-sunset` line under Beyond
+  is the board's only gradient; only the Foreground body is tinted; boxes are
+  cards on `gap-3` (room for the focus ring and the selected card's caret,
+  which `gap-px` never had); Foreground cards lift on hover
+  (`motion-reduce` off). No `animate-rise` on any card — its `both` fill mode
+  pins `transform` and cancels the lift. A long vivid description steps down
+  a size (display face at 22px is a headline; three paragraphs of it is a
+  wall).
+- **The detail lost a nesting level.** The header fields are a flat grid of
+  facts, the plan is a flat list, check-ins are one card with dividers, and
+  done steps lose their strikethrough (green tile + grey text). A step's meta
+  fields use `[field-sizing:content]` so the date sits next to "past due"
+  (Chromium; elsewhere they keep the input's own width).
+- **This Week is the portal's dark card** — `runfree-navy` with the gradient
+  bar, not the sidebar's `navyDeep` it used to melt into — with the count as
+  the page's largest number. The digest string is byte-identical to before.
+- **Measures:** `ROW_GRID` is the one column definition the header row and
+  every `MetricRow` share (status column 9.5rem, so the trend arrow no longer
+  sits on the goal number). `TrajectoryChart` plots prior / now / goal as
+  heights under their own columns — lines in a stretched SVG with
+  non-scaling strokes, marks as positioned HTML so a dot stays round.
+- **Renewal is a timeline**; the unfold moved into `BlockHeading`'s new
+  `action` slot.
+- A unit that is a word gets its space: "5 coaches", "44%".
+
+**How it was checked, and how to check the next change.** An empty project
+proves nothing about this tab, so there is now a seed and a driver:
+
+```bash
+./node_modules/.bin/tsx --env-file=.env.local scripts/scratch-project.ts pivvot-vision-framing "Scratch — Execution"
+./node_modules/.bin/tsx --env-file=.env.local scripts/execution-demo-seed.ts <id>      # refuses any non-"Scratch" project
+./node_modules/.bin/tsx --env-file=.env.local scripts/panel-shot.ts <id> execution admin 1440 7000 expand
+./node_modules/.bin/tsx --env-file=.env.local scripts/execution-interact.ts <id> admin   # 12 checks
+./node_modules/.bin/tsx --env-file=.env.local scripts/execution-interact.ts <id> viewer  # 10 checks
+./node_modules/.bin/tsx --env-file=.env.local scripts/scratch-project.ts --delete <id>
+```
+
+At merge: 12/12 admin, 10/10 viewer, 21/21 `tests/execution.test.ts`, all
+five captures clean (no sideways scroll, no spill, no broken image, no console
+error), and the gate audit — every `disabled={!…}` / `{canEdit && …}` /
+`{canManageSteps && …}` counted per file against HEAD — identical in all ten
+files. The phone capture is ~8% TALLER than before (18,864px vs 17,434px),
+not the 15–20% shorter the spec guessed: card padding and 15px agenda lines
+cost height. Judged worth it; say so if it is not.
+
+A `\d` inside a TypeScript template literal that is shipped to the browser as
+a string arrives as a bare `d`. The first run of the driver "failed" on the
+Renewal year chips for exactly that reason. Write `\\d` there.

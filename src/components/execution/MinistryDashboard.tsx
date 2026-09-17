@@ -8,7 +8,7 @@ import {
   type ExecutionData,
   type ScoreboardMetric,
 } from "@/lib/execution";
-import { BlockHeading, Cell, RagPicker } from "./ui";
+import { BlockHeading, Cell, Icon, Label, PINK_BUTTON, RagPicker } from "./ui";
 
 /**
  * The Measures Dashboard.
@@ -27,6 +27,14 @@ import { BlockHeading, Cell, RagPicker } from "./ui";
  * A strategy-input row a church already had is kept, folded away.
  */
 const NONE = "__none__";
+
+/**
+ * The one column definition the header row and every measure row share, so
+ * the two cannot drift: three columns on a phone (the label on its own row,
+ * then the three numbers, then the controls), five from `sm`.
+ */
+const ROW_GRID =
+  "grid grid-cols-3 items-center gap-x-2 gap-y-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_9.5rem] sm:gap-x-4 sm:gap-y-0";
 
 export default function MinistryDashboard({
   data,
@@ -76,14 +84,14 @@ export default function MinistryDashboard({
       />
 
       {outputs.length === 0 && (
-        <p className="mb-6 rounded-2xl bg-gray-50 px-5 py-6 text-center text-sm text-gray-500">
+        <p className="mb-4 rounded-3xl border border-dashed border-gray-200 px-5 py-8 text-center text-sm text-gray-500">
           {canEdit
             ? "Nothing on the scoreboard yet. Start with a header — Bible reading, Evangelism, Community involvement — and one measure under it."
             : "Nothing on the scoreboard yet."}
         </p>
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {categories.map((c) => (
           <CategoryGroup
             key={c}
@@ -120,43 +128,39 @@ export default function MinistryDashboard({
               setBusy(false);
             }
           }}
-          className="mt-6 flex flex-wrap items-end gap-2 rounded-2xl border border-dashed border-gray-300 px-4 py-3.5 sm:px-5"
+          className="mt-4 rounded-3xl bg-runfree-indigo/40 px-5 py-4"
         >
-          <label className="min-w-0 flex-1 basis-40">
-            <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              New header
-            </span>
-            <input
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              placeholder="Bible reading"
-              className="mt-0.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-            />
-          </label>
-          <label className="min-w-0 flex-1 basis-56">
-            <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              Its first measure
-            </span>
-            <input
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Adults in a reading plan"
-              className="mt-0.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-runfree-grad px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-          >
-            {busy ? "Adding…" : "Add header"}
-          </button>
+          <p className="font-display text-sm font-extrabold text-runfree-ink">Add a header</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <label className="min-w-0">
+              <Label>New header</Label>
+              <input
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                placeholder="Bible reading"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+              />
+            </label>
+            <label className="min-w-0">
+              <Label>Its first measure</Label>
+              <input
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="Adults in a reading plan"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+              />
+            </label>
+            <button type="submit" disabled={busy} className={PINK_BUTTON}>
+              {busy ? "Adding…" : "Add header"}
+            </button>
+          </div>
         </form>
       )}
 
       {legacy.length > 0 && (
-        <div className="mt-6">
+        <div className="mt-4">
           <button
+            type="button"
             onClick={() => setShowLegacy((v) => !v)}
             aria-expanded={showLegacy}
             className="text-xs font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
@@ -214,55 +218,69 @@ function CategoryGroup({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl ring-1 ring-gray-200">
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-runfree-indigo/60 px-4 py-3 sm:px-5">
-        {renaming ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void renameCategory();
-            }}
-            className="flex min-w-0 flex-1 items-center gap-2"
-          >
-            <input
-              autoFocus
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm outline-none focus:border-runfree-magenta"
-            />
-            <button type="submit" className="text-xs font-semibold text-runfree-magentaDeep">Save</button>
-            <button type="button" onClick={() => setRenaming(false)} className="text-xs text-gray-500">Cancel</button>
-          </form>
-        ) : (
-          <p className="font-display text-sm font-extrabold tracking-tight text-runfree-ink">
-            {category ?? "Measures"}
-            {canEdit && !legacy && (
-              <button
-                onClick={() => {
-                  setDraft(category ?? "");
-                  setRenaming(true);
-                }}
-                className="ml-3 text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
-              >
-                Rename
+    <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-200">
+      <div className="px-4 pt-4 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {renaming ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void renameCategory();
+              }}
+              className="flex min-w-0 flex-1 items-center gap-2"
+            >
+              <input
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                aria-label="Header name"
+                className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-runfree-magenta"
+              />
+              <button type="submit" className="text-xs font-semibold text-runfree-magentaDeep">
+                Save
               </button>
-            )}
+              <button type="button" onClick={() => setRenaming(false)} className="text-xs text-gray-500">
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <h4 className="flex items-center gap-2 font-display text-base font-extrabold tracking-tight text-runfree-ink">
+              <span
+                aria-hidden
+                className="grid h-6 w-6 place-items-center rounded-md bg-runfree-indigo text-runfree-navy"
+              >
+                <Icon name="chart" className="h-3.5 w-3.5" />
+              </span>
+              {category ?? "Measures"}
+              {canEdit && !legacy && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(category ?? "");
+                    setRenaming(true);
+                  }}
+                  className="ml-1 font-sans text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
+                >
+                  Rename
+                </button>
+              )}
+            </h4>
+          )}
+          <p className="text-[11px] text-gray-500">
+            {rows.length} measure{rows.length === 1 ? "" : "s"}
           </p>
-        )}
-        <p className="text-[11px] text-gray-500">
-          {rows.length} measure{rows.length === 1 ? "" : "s"}
-        </p>
+        </div>
+
+        <div className={`mt-3 hidden border-b border-gray-100 pb-2 sm:grid ${ROW_GRID}`}>
+          <span />
+          <Label className="text-right">Prior yr.</Label>
+          <Label className="text-right">Now</Label>
+          <Label className="text-right">Goal (next yr.)</Label>
+          <Label className="text-right">Status</Label>
+        </div>
       </div>
 
-      <div className="hidden border-b border-gray-200 bg-white px-4 py-2 sm:grid sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_6.5rem] sm:gap-x-2 sm:px-5">
-        <span />
-        <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">Prior yr.</span>
-        <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">Now</span>
-        <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">Goal (next yr.)</span>
-        <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">Status</span>
-      </div>
-
-      <ul className="divide-y divide-gray-100 bg-white">
+      <ul className="divide-y divide-gray-100">
         {rows.map((m) => (
           <MetricRow key={m.id} metric={m} accessToken={accessToken} canEdit={canEdit} onChanged={onChanged} />
         ))}
@@ -277,18 +295,17 @@ function CategoryGroup({
             setLabel("");
             await onChanged();
           }}
-          className="flex flex-wrap items-center gap-2 border-t border-gray-200 bg-gray-50 px-4 py-2.5 sm:px-5"
+          className="flex items-center gap-2 border-t border-gray-100 px-4 py-2 sm:px-5"
         >
+          <Icon name="plus" className="h-3.5 w-3.5 shrink-0 text-gray-400" />
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder={`Add a measure under ${category ?? "Measures"}`}
-            className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+            aria-label={`New measure under ${category ?? "Measures"}`}
+            className="min-w-0 flex-1 rounded-md bg-transparent px-1 py-1.5 text-sm outline-none placeholder:text-gray-500 focus:bg-gray-50 focus-visible:ring-1 focus-visible:ring-runfree-magenta"
           />
-          <button
-            type="submit"
-            className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink"
-          >
+          <button type="submit" className="text-xs font-semibold text-runfree-magentaDeep hover:underline">
             Add
           </button>
         </form>
@@ -298,6 +315,7 @@ function CategoryGroup({
 }
 
 const TREND_MARK: Record<"up" | "flat" | "down", string> = { up: "↑", flat: "→", down: "↓" };
+const TREND_WORD: Record<"up" | "flat" | "down", string> = { up: "up", flat: "flat", down: "down" };
 
 function asNumber(v: string | null): number | null {
   if (!v) return null;
@@ -335,8 +353,8 @@ function MetricRow({
   const goal = asNumber(m.next_year);
 
   return (
-    <li className="px-4 py-3 sm:px-5 sm:py-2.5">
-      <div className="grid grid-cols-3 items-center gap-x-2 gap-y-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_6.5rem] sm:gap-y-0">
+    <li className="group px-4 py-3 sm:px-5">
+      <div className={ROW_GRID}>
         <div className="col-span-3 min-w-0 sm:col-span-1">
           <Cell
             value={m.label}
@@ -344,7 +362,7 @@ function MetricRow({
             disabled={!canEdit}
             required
             ariaLabel="Measure name"
-            className="!px-0 font-semibold !text-runfree-ink"
+            className="!px-0 font-display !text-sm font-bold !text-runfree-ink"
           />
         </div>
         <LabelledValue label="Prior">
@@ -386,15 +404,23 @@ function MetricRow({
             onClick={canEdit ? cycleTrend : undefined}
             disabled={!canEdit}
             title={m.trend ? `Trending ${m.trend}` : "No trend set"}
-            className={`w-4 text-center text-sm text-gray-500 ${
-              canEdit ? "cursor-pointer hover:text-runfree-ink" : "cursor-default"
+            aria-label={`Trend: ${m.trend ? TREND_WORD[m.trend] : "not set"}${canEdit ? ". Change" : ""}`}
+            className={`w-5 text-center text-sm font-bold ${m.trend ? "text-runfree-navy" : "text-gray-400"} ${
+              canEdit ? "cursor-pointer hover:text-runfree-magentaDeep" : "cursor-default"
             }`}
           >
-            {m.trend ? TREND_MARK[m.trend] : <span className="text-gray-300">·</span>}
+            {m.trend ? TREND_MARK[m.trend] : "·"}
           </button>
-          <RagPicker value={m.status} onChange={(v) => void patch({ status: v })} disabled={!canEdit} />
+          <RagPicker
+            quiet
+            value={m.status}
+            onChange={(v) => void patch({ status: v })}
+            disabled={!canEdit}
+            label={`${m.label} light`}
+          />
           {canEdit && (
             <button
+              type="button"
               onClick={async () => {
                 if (!confirm(`Remove “${m.label}” from the scoreboard?`)) return;
                 await deleteMetric(accessToken, m.id);
@@ -404,56 +430,86 @@ function MetricRow({
               aria-label={`Remove ${m.label}`}
               className="ml-1 grid h-7 w-7 place-items-center rounded-full text-gray-400 transition hover:bg-rose-50 hover:text-rose-600"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-3.5 w-3.5">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <Icon name="x" className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
+        {now != null && goal != null && (
+          <div className="col-span-3 sm:col-start-2 sm:col-end-5">
+            <TrajectoryChart prior={prior} now={now} goal={goal} />
+          </div>
+        )}
       </div>
-      {now != null && goal != null && <Trajectory prior={prior} now={now} goal={goal} />}
     </li>
   );
 }
 
 /**
- * Where a measure was, is, and is going — one line with three marks. Drawn
- * only when the numbers parse; text like "many" or "?" stays text.
+ * Where a measure was, is, and is going — drawn under the three numbers it
+ * plots, one mark per column. Drawn only when the numbers parse; text like
+ * "many" or "?" stays text.
+ *
+ * The lines are a stretched SVG (non-scaling strokes keep them crisp); the
+ * marks are positioned HTML, so a dot stays a dot at any width — a
+ * non-uniform viewBox draws every circle as an ellipse.
  */
-function Trajectory({ prior, now, goal }: { prior: number | null; now: number; goal: number }) {
+function TrajectoryChart({ prior, now, goal }: { prior: number | null; now: number; goal: number }) {
+  const reached = goal >= (prior ?? now) ? now >= goal : now <= goal;
   const lo = Math.min(prior ?? now, now, goal);
   const hi = Math.max(prior ?? now, now, goal);
-  const span = hi - lo || 1;
-  const pct = (v: number) => `${2 + ((v - lo) / span) * 96}%`;
-  const reached = goal >= (prior ?? now) ? now >= goal : now <= goal;
-  const from = prior ?? now;
-  // Positioned with percentages on a real element rather than a stretched
-  // SVG — a non-uniform viewBox drew every dot as an ellipse.
+  // viewBox units 0–44, higher value higher up; a flat line sits mid-height.
+  const y = (v: number) => (hi === lo ? 22 : 38 - ((v - lo) / (hi - lo)) * 32);
+  const top = (v: number) => `${(y(v) / 44) * 100}%`;
+  const X = { prior: 16.667, now: 50, goal: 83.333 };
   return (
-    <div className="relative mt-2 h-3 w-full max-w-md" aria-hidden="true">
-      <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-gray-200" />
-      <div
-        className="absolute top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-runfree-navy/40"
-        style={{ left: pct(Math.min(from, now)), width: `calc(${pct(Math.max(from, now))} - ${pct(Math.min(from, now))})` }}
-      />
+    <div aria-hidden="true" className="relative mt-2 h-11 w-full">
+      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 44" preserveAspectRatio="none">
+        {[X.prior, X.now, X.goal].map((x) => (
+          <line key={x} x1={x} x2={x} y1={4} y2={40} stroke="#E9EDF9" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        ))}
+        {prior != null && (
+          <path
+            d={`M${X.prior},${y(prior)} L${X.now},${y(now)} L${X.now},40 L${X.prior},40 Z`}
+            fill="#E43D96"
+            fillOpacity={0.1}
+          />
+        )}
+        {prior != null && (
+          <path
+            d={`M${X.prior},${y(prior)} L${X.now},${y(now)}`}
+            fill="none"
+            stroke="#C21F73"
+            strokeWidth={1.75}
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
+        <path
+          d={`M${X.now},${y(now)} L${X.goal},${y(goal)}`}
+          fill="none"
+          stroke={reached ? "#10B981" : "#F15A25"}
+          strokeWidth={1.5}
+          strokeDasharray="4 3"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
       {prior != null && (
         <span
           title={`Prior year ${prior}`}
-          className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-400"
-          style={{ left: pct(prior) }}
+          className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-400"
+          style={{ left: `${X.prior}%`, top: top(prior) }}
         />
       )}
       <span
         title={`Goal ${goal}`}
-        className={`absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-white ${
+        className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-white ${
           reached ? "border-emerald-500" : "border-runfree-orange"
         }`}
-        style={{ left: pct(goal) }}
+        style={{ left: `${X.goal}%`, top: top(goal) }}
       />
       <span
         title={`Now ${now}`}
-        className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-runfree-magentaDeep ring-2 ring-white"
-        style={{ left: pct(now) }}
+        className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-runfree-magentaDeep shadow-sm ring-2 ring-white"
+        style={{ left: `${X.now}%`, top: top(now) }}
       />
     </div>
   );
@@ -462,9 +518,7 @@ function Trajectory({ prior, now, goal }: { prior: number | null; now: number; g
 function LabelledValue({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <span className="flex min-w-0 flex-col items-stretch">
-      <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400 sm:hidden">
-        {label}
-      </span>
+      <Label className="text-right sm:hidden">{label}</Label>
       <span className="min-w-0">{children}</span>
     </span>
   );

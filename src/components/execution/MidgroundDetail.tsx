@@ -18,7 +18,7 @@ import {
   type MeasureReading,
   type MidgroundMeasure,
 } from "@/lib/execution";
-import { Cell, EditorActions, prettyDate, todayIso } from "./ui";
+import { Cell, EditorActions, Label, PINK_BUTTON, SubHeading, prettyDate, todayIso } from "./ui";
 
 /**
  * The Midground Milestone — the one-year goal, scored.
@@ -66,19 +66,24 @@ export default function MidgroundDetail({
   const [newMeasure, setNewMeasure] = useState("");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <section>
-        <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-          The one-year goal — qualitative and quantitative
-        </h4>
+        <SubHeading
+          icon="target"
+          aside={<span className="text-[11px] text-gray-500">qualitative and quantitative</span>}
+        >
+          The one-year goal
+        </SubHeading>
         {/* God Dreams' own definition, verbatim (Andrew: "give the specific
             definition from the book"). */}
-        <blockquote className="mt-2 rounded-xl border-l-4 border-runfree-magenta/40 bg-white px-4 py-3 text-xs leading-relaxed text-gray-600 ring-1 ring-gray-200">
+        <blockquote className="mt-3 rounded-2xl border-l-4 border-runfree-navy/30 bg-white px-4 py-3 text-sm leading-relaxed text-gray-600 shadow-sm ring-1 ring-gray-200">
           {HORIZON_DEFINITIONS.midground.definition}
-          <span className="mt-1 block text-[11px] text-gray-400">— God Dreams, The Horizon Storyline</span>
+          <footer className="mt-1 font-display text-[11px] font-bold text-runfree-navy">
+            God Dreams, The Horizon Storyline
+          </footer>
         </blockquote>
         {editing ? (
-          <div className="mt-2 space-y-2">
+          <div className="mt-4 space-y-2">
             <RichText
               value={draft}
               onChange={setDraft}
@@ -103,17 +108,14 @@ export default function MidgroundDetail({
             />
           </div>
         ) : richTextIsEmpty(box?.body) ? (
-          <p className="mt-1.5 text-sm italic text-gray-400">
-            Not written yet.
-          </p>
+          <p className="mt-4 text-sm text-gray-500">Not written yet.</p>
         ) : (
-          <div className="mt-1.5">
-            <RichTextView html={box!.body!} className="!text-base !text-runfree-ink" />
-          </div>
+          <RichTextView html={box!.body!} className="mt-4 !text-base !text-runfree-ink" />
         )}
-        <div className="mt-1.5 flex flex-wrap items-center gap-4">
+        <div className="mt-2 flex flex-wrap items-center gap-4">
           {canEdit && !editing && (
             <button
+              type="button"
               onClick={() => {
                 setDraft(box?.body ?? "");
                 setEditing(true);
@@ -125,6 +127,7 @@ export default function MidgroundDetail({
           )}
           {canEdit && (
             <button
+              type="button"
               onClick={() => setShowTests((v) => !v)}
               aria-expanded={showTests}
               className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
@@ -138,29 +141,29 @@ export default function MidgroundDetail({
             questions the room used to pick this, so it belongs beside it
             rather than in a handout nobody reopens. */}
         {showTests && (
-          <ul className="mt-3 space-y-1.5 rounded-xl bg-gray-50 px-4 py-3">
+          <ul className="mt-3 list-disc space-y-1.5 rounded-2xl bg-gray-50 py-3 pl-9 pr-4 text-sm leading-relaxed text-gray-600 marker:text-runfree-magentaDeep">
             {MIDGROUND_TESTS.map((q) => (
-              <li key={q} className="flex gap-2 text-xs leading-relaxed text-gray-600">
-                <span className="text-runfree-magentaDeep">•</span>
-                {q}
-              </li>
+              <li key={q}>{q}</li>
             ))}
           </ul>
         )}
       </section>
 
       <section>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-navy">
-            How we&rsquo;ll know
-          </h4>
-          <span className="text-[11px] text-gray-400">
-            {data.measures.length === 0 ? "" : "Baseline → target, checked in over the year"}
-          </span>
-        </div>
+        <SubHeading
+          icon="chart"
+          count={data.measures.length || undefined}
+          aside={
+            data.measures.length > 0 ? (
+              <span className="text-[11px] text-gray-500">Baseline → target, checked in over the year</span>
+            ) : undefined
+          }
+        >
+          How we&rsquo;ll know
+        </SubHeading>
 
         {data.measures.length === 0 ? (
-          <p className="mt-2 text-xs italic leading-relaxed text-gray-400">
+          <p className="mt-3 text-sm leading-relaxed text-gray-500">
             {canEdit
               ? "No measures yet. Pull the number out of the milestone above — “from 12% to 25%” is a measure with a baseline of 12 and a target of 25."
               : "No measures set yet."}
@@ -191,18 +194,16 @@ export default function MidgroundDetail({
               setNewMeasure("");
               await onChanged();
             }}
-            className="mt-3 flex flex-wrap items-center gap-2"
+            className="mt-3 flex gap-2"
           >
             <input
               value={newMeasure}
               onChange={(e) => setNewMeasure(e.target.value)}
               placeholder="Add a measure — “People on a mission trip”"
-              className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+              aria-label="New measure"
+              className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
             />
-            <button
-              type="submit"
-              className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink"
-            >
+            <button type="submit" className={PINK_BUTTON}>
               Add
             </button>
           </form>
@@ -246,36 +247,50 @@ function MeasureRow({
   };
 
   return (
-    <li className="rounded-xl bg-white px-4 py-3.5 ring-1 ring-gray-200">
-      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+    <li className="rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-gray-200">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <Cell
             value={m.label}
             onSave={(v) => v && void patch({ label: v })}
             disabled={!canEdit}
-            className="!px-0 font-semibold !text-runfree-ink"
+            required
+            ariaLabel="Measure"
+            className="!px-0 font-display !text-sm font-bold !text-runfree-ink"
           />
         </div>
+        {canLog && !logging && (
+          <button
+            type="button"
+            onClick={() => {
+              setValue(current != null ? String(current) : "");
+              setLogging(true);
+            }}
+            className={PINK_BUTTON}
+          >
+            Log this week&rsquo;s number
+          </button>
+        )}
       </div>
 
       {/* The mosaic — God Dreams' tiles, lit from the baseline to the
           target. The row above already carries the label and the number;
           the mosaic repeats them small, so the caller hides its own. */}
-      <div className="mt-2">
+      <div className="mt-3">
         <MeasureMosaic measure={m} readings={readings} tiles={24} />
       </div>
 
       {readings.length >= 2 && (
-        <div className="mt-2 flex items-center gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <Sparkline readings={readings} />
-          <span className="text-[11px] text-gray-400">
+          <span className="text-[11px] text-gray-500">
             {readings.length} check-ins since {prettyDate([...readings].sort((a, b) => (a.on_date < b.on_date ? -1 : 1))[0].on_date)}
           </span>
         </div>
       )}
 
       {canEdit && (
-        <div className="mt-3 grid gap-x-4 gap-y-2 sm:grid-cols-4">
+        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
           <Small label="Baseline">
             <NumCell value={m.baseline} onSave={(v) => void patch({ baseline: v })} />
           </Small>
@@ -297,19 +312,9 @@ function MeasureRow({
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-        {canLog && !logging && (
-          <button
-            onClick={() => {
-              setValue(current != null ? String(current) : "");
-              setLogging(true);
-            }}
-            className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-gray-300 transition hover:bg-runfree-pink"
-          >
-            Log this week&rsquo;s number
-          </button>
-        )}
         {readings.length > 0 && (
           <button
+            type="button"
             onClick={() => setHistory((v) => !v)}
             aria-expanded={history}
             className="text-[11px] font-semibold text-gray-500 transition hover:text-runfree-magentaDeep"
@@ -319,12 +324,13 @@ function MeasureRow({
         )}
         {canEdit && (
           <button
+            type="button"
             onClick={async () => {
               if (!confirm(`Delete the measure “${m.label}” and its readings?`)) return;
               await deleteMeasure(accessToken, m.id);
               await onChanged();
             }}
-            className="ml-auto text-[11px] font-semibold text-gray-500 transition hover:text-rose-600"
+            className="ml-auto text-[10px] font-semibold text-gray-500 transition hover:text-rose-600"
           >
             Remove
           </button>
@@ -353,9 +359,7 @@ function MeasureRow({
           className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-gray-50 p-3"
         >
           <label className="min-w-0">
-            <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              Value
-            </span>
+            <Label>Value</Label>
             <input
               autoFocus
               inputMode="decimal"
@@ -365,9 +369,7 @@ function MeasureRow({
             />
           </label>
           <label className="min-w-0">
-            <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              Date
-            </span>
+            <Label>Date</Label>
             <input
               type="date"
               value={on}
@@ -376,9 +378,7 @@ function MeasureRow({
             />
           </label>
           <label className="min-w-0 flex-1 basis-full sm:basis-auto">
-            <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              Note (optional)
-            </span>
+            <Label>Note (optional)</Label>
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -409,16 +409,17 @@ function MeasureRow({
             .sort((a, b) => (a.on_date < b.on_date ? 1 : -1))
             .map((r) => (
               <li key={r.id} className="flex items-baseline gap-3 text-xs text-gray-600">
-                <span className="w-24 shrink-0 tabular-nums text-gray-400">
+                <span className="w-24 shrink-0 tabular-nums text-gray-500">
                   {prettyDate(r.on_date)}
                 </span>
                 <span className="w-16 shrink-0 font-semibold tabular-nums text-runfree-ink">
                   {r.value}
-                  {unit}
+                  {/^[A-Za-z]/.test(unit) ? ` ${unit}` : unit}
                 </span>
                 <span className="min-w-0 flex-1">{r.note}</span>
                 {canLog && (
                   <button
+                    type="button"
                     onClick={async () => {
                       if (!confirm(`Delete the ${prettyDate(r.on_date)} reading?`)) return;
                       await deleteReading(accessToken, r.id);
@@ -446,10 +447,8 @@ function MeasureRow({
 
 function Small({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block min-w-0">
-      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-        {label}
-      </span>
+    <label className="block min-w-[5rem]">
+      <Label>{label}</Label>
       {children}
     </label>
   );
@@ -491,27 +490,23 @@ function Sparkline({ readings }: { readings: MeasureReading[] }) {
   const max = Math.max(...values);
   const span = max - min || 1;
   const W = 180;
-  const H = 28;
-  const d = pts
-    .map((p, i) => {
-      const x = (i / (pts.length - 1)) * W;
-      const y = H - ((p.value - min) / span) * (H - 4) - 2;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
+  const H = 32;
+  const xy = pts.map((p, i) => [(i / (pts.length - 1)) * W, H - ((p.value - min) / span) * (H - 6) - 3] as const);
+  const line = xy.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `${line} L${W},${H} L0,${H} Z`;
   const last = pts[pts.length - 1];
-  const lastX = W;
-  const lastY = H - ((last.value - min) / span) * (H - 4) - 2;
+  const [lastX, lastY] = xy[xy.length - 1];
 
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      className="h-7 w-[180px] shrink-0"
+      className="h-8 w-full max-w-[180px] shrink-0 overflow-visible"
       role="img"
       aria-label={`${pts.length} readings, latest ${last.value}`}
     >
-      <path d={d} fill="none" stroke="#C21F73" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-      <circle cx={lastX} cy={lastY} r="2.6" fill="#C21F73" vectorEffect="non-scaling-stroke" />
+      <path d={area} fill="#E43D96" fillOpacity={0.1} />
+      <path d={line} fill="none" stroke="#C21F73" strokeWidth={1.75} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={lastX} cy={lastY} r={3} fill="#C21F73" stroke="#fff" strokeWidth={1.5} />
     </svg>
   );
 }

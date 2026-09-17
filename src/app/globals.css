@@ -168,6 +168,37 @@
   color: #6b7280;
   margin: 0 0 0.6rem;
 }
+/*
+ * Tables in notes (session write-ups imported from Asana carry them).
+ * `display: block` + `overflow-x: auto` makes a wide table scroll inside its
+ * own box on a phone instead of widening the page; `border-collapse` is
+ * inherited by the anonymous table box the browser builds inside it.
+ */
+.rich-text table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.rich-text table:first-child {
+  margin-top: 0;
+}
+.rich-text th,
+.rich-text td {
+  border: 1px solid #e5e7eb;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+  min-width: 6.5rem;
+}
+.rich-text th {
+  font-weight: 700;
+  color: #1b1f4b;
+  background: #f7f7fa;
+}
 
 /*
  * Tap targets, on touch screens only.

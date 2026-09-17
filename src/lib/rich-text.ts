@@ -19,10 +19,21 @@
  * is treated with the same suspicion as fresh input.
  */
 
-/** Tags a note may contain. Everything else is unwrapped to its text. */
+/**
+ * Tags a note may contain. Everything else is unwrapped to its text.
+ *
+ * Tables are here because the Kairos certification's session write-ups in
+ * Asana carry eleven of them — the Five Core Drawings, the module
+ * architecture, the Vision Frame definitions word for word. Unwrapped, a
+ * table's cells ran together into one line ("LevelPostureAuditLearning…"),
+ * and Andrew's one instruction for that import was that the notes "get
+ * transferred properly". Same rule as every other tag: no attributes survive,
+ * so a pasted `style="width:…"` cannot come along with the cell.
+ */
 const ALLOWED = new Set([
   "p", "br", "strong", "em", "u", "s",
   "ul", "ol", "li", "h2", "h3", "blockquote", "a",
+  "table", "thead", "tbody", "tr", "th", "td",
 ]);
 
 /** Tags browsers still emit that mean the same as one we allow. */
@@ -36,6 +47,7 @@ const ALIASES: Record<string, string> = {
   h4: "h3",
   h5: "h3",
   h6: "h3",
+  tfoot: "tbody",
 };
 
 function safeHref(raw: string | null): string | null {
@@ -101,7 +113,7 @@ export function cleanRichText(html: string): string {
 /** True when a stored note is HTML rather than the older Markdown/plain text. */
 export function isRichText(value: string | null | undefined): boolean {
   if (!value) return false;
-  return /<(p|br|ul|ol|li|h2|h3|strong|em|u|s|a|blockquote)\b/i.test(value);
+  return /<(p|br|ul|ol|li|h2|h3|strong|em|u|s|a|blockquote|table|tr|td|th)\b/i.test(value);
 }
 
 /** Is there anything here once the tags come off? */

@@ -57,7 +57,9 @@ function plainText(html: string | null | undefined): string {
   return html
     .replace(/\r/g, "")
     .replace(/<li[^>]*>/gi, "\n• ")
-    .replace(/<\/(p|div|h[1-6]|li|ul|ol)>/gi, "\n")
+    // A table row is a line; cells in it are separated, not glued together.
+    .replace(/<\/t[dh]>(?=\s*<t[dh][\s>])/gi, " · ")
+    .replace(/<\/(p|div|h[1-6]|li|ul|ol|tr|table)>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")

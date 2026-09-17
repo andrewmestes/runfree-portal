@@ -9684,7 +9684,9 @@ function SessionRow({
   const recapHref = (() => {
     const strip = (html: string) =>
       html
-        .replace(/<\/(p|div|li|h[1-6]|br)>/gi, "\n")
+        // A table row is a line of the email; its cells are separated.
+        .replace(/<\/t[dh]>(?=\s*<t[dh][\s>])/gi, " | ")
+        .replace(/<\/(p|div|li|h[1-6]|br|tr|table)>/gi, "\n")
         .replace(/<[^>]+>/g, "")
         .replace(/&nbsp;/g, " ")
         .replace(/&amp;/g, "&")

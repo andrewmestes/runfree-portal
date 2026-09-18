@@ -128,9 +128,18 @@ export default function HighlightShelf({
             // A PDF with no cover draws its own first page. The cache key is
             // the file, not the highlight, so the same handout on two
             // projects renders once.
-            const pdfKey = h.source_kind === "handout" ? h.source_id : h.file_path;
+            const pdfKey =
+              h.source_kind === "handout" || h.source_kind === "book"
+                ? h.source_id
+                : h.file_path;
+            // A book normally wears its jacket. One without art is a loose PDF
+            // from the library — a lead magnet, a reading guide — and its own
+            // first page is a better picture than a document glyph.
+            const isPdf =
+              h.media_kind === "pdf" ||
+              (h.media_kind === "book" && (h.file_mime ?? "").includes("pdf"));
             const artNode =
-              !art && h.media_kind === "pdf" && fetchPdfBytes && pdfKey ? (
+              !art && isPdf && fetchPdfBytes && pdfKey ? (
                 <PdfThumbnail
                   fileId={pdfKey}
                   fetchBytes={() => fetchPdfBytes(h)}

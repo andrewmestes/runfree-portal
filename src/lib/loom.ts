@@ -75,13 +75,22 @@ function thumbnailSessionId(thumbnailUrl: string): string | null {
  *
  * Only swapped in when the JPEG actually exists; not every path has one.
  *
- * Returns null for a still that is a black frame. A long Zoom recording often
- * opens on black, and Loom picks that frame: both Kairos certification
- * sessions came back as 1262×720 JPEGs of pure black, about 5.6 KB each,
- * where every real still checked was 15 KB or more. A card with no picture
- * says "Recording"; a black box says the video is broken.
+ * Returns null for a still that is a black frame. A recording that opens on
+ * black gets a black cover, and a black box on a shelf reads as a broken
+ * video where no picture at all reads as "Recording".
+ *
+ * The line is drawn on file size, because a Node route has no image decoder
+ * and pulling one in to look at three dark frames is not worth it. Seventeen
+ * stills were measured at 720p:
+ *
+ *   both Kairos session recordings   5.6 KB   black
+ *   Upper Room / Lower Room teaching 15.5 KB  black (mean pixel 16 of 255)
+ *   every other still               24 KB and up, none of them black
+ *
+ * So 20 KB sits in the gap. A genuinely plain frame under that loses its
+ * thumbnail and shows the branded card, which is the safe way to be wrong.
  */
-const BLANK_STILL_BYTES = 8_000;
+const BLANK_STILL_BYTES = 20_000;
 
 async function preferStill(gifUrl: string): Promise<string | null> {
   if (!gifUrl.endsWith(".gif")) return gifUrl;

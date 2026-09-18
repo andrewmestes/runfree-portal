@@ -1240,6 +1240,17 @@ export default function ProjectDetailPage() {
           });
           return res.ok ? await res.arrayBuffer() : null;
         }
+        // A book file with no jacket — a lead magnet, a reading guide, one of
+        // the loose PDFs under Other Resources — draws its own first page the
+        // way a handout does. Without this it was the only kind of PDF on the
+        // shelf that fell back to a grey glyph.
+        if (h.source_kind === "book" && h.source_id) {
+          if (!accessToken) return null;
+          const res = await fetch(`/api/books/file/${h.source_id}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          return res.ok ? await res.arrayBuffer() : null;
+        }
         if (h.file_path) {
           const url = imageUrls[h.file_path];
           if (!url) return null;
@@ -2948,6 +2959,7 @@ function ChurchHero({
   const [editing, setEditing] = useState(false);
   const [showAccess, setShowAccess] = useState(false);
   const [form, setForm] = useState({
+    name: detail.name,
     location: detail.location ?? "",
     website_url: detail.websiteUrl ?? "",
     about: detail.about ?? "",
@@ -2957,11 +2969,12 @@ function ChurchHero({
   useEffect(() => {
     if (!editing) return;
     setForm({
+      name: detail.name,
       location: detail.location ?? "",
       website_url: detail.websiteUrl ?? "",
       about: detail.about ?? "",
     });
-  }, [editing, detail.location, detail.websiteUrl, detail.about]);
+  }, [editing, detail.name, detail.location, detail.websiteUrl, detail.about]);
 
   async function uploadLogo(file: File | undefined) {
     if (!file || !accessToken) return;
@@ -2983,6 +2996,9 @@ function ChurchHero({
     setBusy(true);
     try {
       await updateProject(accessToken, detail.id, {
+        // A project with no name is unfindable in every list, so an empty
+        // box keeps the name it had rather than saving one.
+        name: form.name.trim() || detail.name,
         location: form.location || null,
         website_url: form.website_url || null,
         about: form.about || null,
@@ -3202,6 +3218,19 @@ function ChurchHero({
 
             {canManage && editing && (
               <div className="mt-4 max-w-xl space-y-3 rounded-xl bg-gray-50 p-4 ring-1 ring-gray-200">
+                {/* The name was the one thing here that could not be changed,
+                    which left renaming a project to a database edit. Andrew:
+                    "i need to be able to edit a project name. I'm not seeing
+                    how to do that easily." It leads, because it is the
+                    heading of the page it sits under. */}
+                <Field label="Project name">
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Athena Christian Church - Pivvot Vision Framing"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium outline-none focus:border-runfree-magenta focus:ring-1 focus:ring-runfree-magenta"
+                  />
+                </Field>
                 <div className="flex flex-wrap gap-3">
                   <div className="flex-1 min-w-[150px]">
                     <Field label="Location">

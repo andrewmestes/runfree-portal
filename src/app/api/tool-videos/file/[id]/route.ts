@@ -17,6 +17,13 @@ import { verifyTicket } from "@/lib/tool-videos";
  */
 export const maxDuration = 60;
 
+/**
+ * How much to answer an open-ended request with. Big enough that playback
+ * starts and keeps going while the next slice is fetched, small enough that
+ * the function is never streaming hundreds of megabytes.
+ */
+const FIRST_SLICE_BYTES = 8 * 1024 * 1024;
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -27,7 +34,15 @@ export async function GET(
       return NextResponse.json({ error: "This link has expired — open the video again" }, { status: 401 });
     }
 
-    const range = req.headers.get("range");
+    // A player opens with `Range: bytes=0-`, meaning "send it all". Passed
+    // through, Drive starts pushing a 600 MB file through this function and
+    // the picture waits on it. Answering the first open-ended ask with a
+    // slice instead makes the browser range-request the rest itself, which
+    // is what it does for the seek bar anyway.
+    const asked = req.headers.get("range");
+    const range = asked && /^bytes=\d+-$/.test(asked.trim())
+      ? `${asked.trim()}${Number(asked.trim().slice(6, -1)) + FIRST_SLICE_BYTES - 1}`
+      : asked;
     const file = await fetchDriveFileRange(id, range);
 
     const headers: Record<string, string> = {

@@ -41,6 +41,9 @@ const FOLDER_MIME = "application/vnd.google-apps.folder";
 /** Where the PowerPoint conversions live, as a direct child of the folder. */
 const POWERPOINT_SUBFOLDER = "powerpoint";
 
+/** And where the PDF exports live, when they are not beside the .key. */
+const PDF_SUBFOLDER = "pdfs";
+
 export type KeynoteFormat = {
   id: string;
   /** The Drive filename, extension and all. */
@@ -178,12 +181,17 @@ export async function listPresentations(): Promise<Presentation[]> {
     }
   }
 
-  const pptFolder = top.find(
-    (f) =>
-      f.mimeType === FOLDER_MIME &&
-      (f.name || "").trim().toLowerCase() === POWERPOINT_SUBFOLDER
-  );
-  const ppts = pptFolder?.id ? await listChildren(pptFolder.id) : [];
+  const subfolder = async (name: string) => {
+    const hit = top.find(
+      (f) => f.mimeType === FOLDER_MIME && (f.name || "").trim().toLowerCase() === name
+    );
+    return hit?.id ? await listChildren(hit.id) : [];
+  };
+  const ppts = await subfolder(POWERPOINT_SUBFOLDER);
+  // The exports landed in their own folder rather than beside each .key, which
+  // is the tidier shape and the one Andrew used. Both are read, so a PDF sits
+  // wherever it was put.
+  const pdfs = await subfolder(PDF_SUBFOLDER);
 
   const decks = new Map<string, Presentation>();
 
@@ -221,6 +229,7 @@ export async function listPresentations(): Promise<Presentation[]> {
     f.mimeType === "application/pdf" || /\.pdf$/i.test(f.name || "");
   for (const f of top) put(f, isPdf(f) ? "pdf" : "keynote");
   for (const f of ppts) put(f, isPdf(f) ? "pdf" : "powerpoint");
+  for (const f of pdfs) put(f, "pdf");
 
   return [...decks.values()].sort((a, b) => a.title.localeCompare(b.title));
 }

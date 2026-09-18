@@ -160,6 +160,21 @@ export default function LoginPage() {
           Forgot your password?
         </a>
       </p>
+
+      {/* Most of a church team never opens the invitation, and then cannot
+          sign in because an invited account has no password yet. The way in
+          is the same link above, which works whether or not the invitation
+          was ever opened — so say so here, where they are stuck. */}
+      <p className="mt-2 text-center text-xs leading-relaxed text-gray-500">
+        Added to a project but never set a password? Use{" "}
+        <a
+          href="/auth/forgot-password"
+          className="font-medium text-runfree-magentaDeep hover:underline"
+        >
+          Forgot your password
+        </a>{" "}
+        with the email you were added with, and you can set one now.
+      </p>
     </AuthShell>
   );
 }

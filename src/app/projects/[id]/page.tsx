@@ -4198,6 +4198,9 @@ function ProjectAccess({
         : 1
   );
 
+  /** Invited, never arrived. The same test the per-row Resend uses. */
+  const waiting = members.filter((m) => !m.lastSeenAt);
+
   const haveAccess = new Set(
     detail.members.map((m) => m.email.trim().toLowerCase()).filter(Boolean)
   );
@@ -4304,6 +4307,79 @@ function ProjectAccess({
     }
   }
 
+  /**
+   * Send the welcome email again to everyone who has never signed in.
+   *
+   * Andrew, on Athena: "the Athena team was all invited, a couple joined and
+   * viewed, but most haven't. I want to resend a welcome email to them." Doing
+   * that one row at a time is eleven confirmations and eleven waits, so this
+   * is the same call in a loop, with the count named before it sends and a
+   * report of who failed afterwards.
+   *
+   * Sequential, with a pause between sends: these are real emails through the
+   * project's SMTP, and a burst is the shape of a run that gets rate-limited
+   * halfway with no record of where it stopped.
+   */
+  async function resendAll(list: typeof members) {
+    if (list.length === 0) return;
+    if (
+      !confirm(
+        `Send the welcome email again to ${list.length} ${
+          list.length === 1 ? "person who has" : "people who have"
+        } not signed in?\n\n${list.map((m) => m.email).join("\n")}`
+      )
+    )
+      return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const token = await tokenOrExplain();
+      if (!token) return;
+      const failed: string[] = [];
+      let sent = 0;
+      /**
+       * Someone the server knows has signed in, whatever this list thinks.
+       * `last_seen_at` only started being written in August, so a person who
+       * signed in before that still reads as "hasn't signed in yet" here. The
+       * server checks the login itself and refuses; that is not a failure.
+       */
+      let already = 0;
+      let why: string | null = null;
+      for (const [i, m] of list.entries()) {
+        setMessage(`Sending ${i + 1} of ${list.length}…`);
+        try {
+          const res = await fetch(`/api/projects/${projectId}/members`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ profileId: m.profileId }),
+          });
+          if (res.ok) sent += 1;
+          else {
+            const error = (await res.json().catch(() => ({}))).error ?? null;
+            if (/already signed in/i.test(error ?? "")) already += 1;
+            else {
+              failed.push(m.email);
+              if (!why) why = error;
+            }
+          }
+        } catch {
+          failed.push(m.email);
+        }
+        if (i < list.length - 1) await new Promise((r) => setTimeout(r, 400));
+      }
+      const skipped = already > 0 ? ` ${already} had already signed in.` : "";
+      setMessage(
+        failed.length === 0
+          ? `Sent ${sent} welcome email${sent === 1 ? "" : "s"}.${skipped}`
+          : `Sent ${sent}.${skipped} ${failed.length} did not go out: ${failed.join(", ")}${
+              why ? ` — ${why}` : ""
+            }`
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
@@ -4374,6 +4450,26 @@ function ProjectAccess({
 
         {open && (
           <div className={embedded ? "" : "border-t border-gray-100 px-4 py-4 sm:px-5"}>
+            {/* Who never arrived, and one button for all of them. A church
+                team is invited in one go, so it goes quiet in one go too. */}
+            {waiting.length > 1 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-runfree-pink/50 px-3 py-2.5">
+                <span className="min-w-0 flex-1 text-xs leading-relaxed text-runfree-ink">
+                  <strong className="font-semibold">
+                    {waiting.length} of {members.length}
+                  </strong>{" "}
+                  have not signed in yet.
+                </span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => resendAll(waiting)}
+                  className="shrink-0 rounded-lg bg-runfree-grad px-3 py-1.5 text-[11px] font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {busy ? "Sending…" : `Resend the welcome email to all ${waiting.length}`}
+                </button>
+              </div>
+            )}
             <ul className="divide-y divide-gray-100">
               {members.map((m) => (
                 <li key={m.profileId} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">

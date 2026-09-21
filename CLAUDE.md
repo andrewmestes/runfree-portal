@@ -447,8 +447,10 @@ Funnel Fusion and Crowd Cloud overviews — and Loom hands all three the same
 wrong still (`96ada777…`). All three are now pinned in that file's
 `MANUAL_STILLS`, using frames that had been checked into
 `public/brand/videos` since 19 Aug and were never reachable because the map
-was empty. The other four resolve correctly and are deliberately not pinned:
-Loom's own still is fresher and survives a re-record.
+was empty. The other four were left to Loom for a month and rendered as the
+gradient on 21 Sept, so every Orientation teaching is pinned now (plus the
+Upper/Lower Room overview and Satan's Loophole). A re-recorded teaching needs
+its frame refreshed in `public/brand/videos/`.
 
 ## Highlighted resources are pointers, not copies
 
@@ -1912,3 +1914,82 @@ be the same; the Drive Books folder is their natural home); the guide's Drive
 folder link and its draft PDF (the guide is private and served at `/guide`);
 Session 1's action items (re-issued in Session 2 or done). The North Carolina
 cohort is a clean stamp; its dates, host and roster come from Andrew.
+
+## The 20 September end-to-end review (viewer and admin, desktop and phone)
+
+Andrew: "do another pass through the portal from end to end. leave nothing
+unreviewed." `scripts/site-shot.ts` is the instrument that pass produced and
+the one to reach for next time:
+
+```bash
+./node_modules/.bin/tsx --env-file=.env.local scripts/site-shot.ts <project-id> viewer 9411
+./node_modules/.bin/tsx --env-file=.env.local scripts/site-shot.ts <project-id> admin 9412
+PAGES=videos,books WIDTHS=1440 WAIT=7000 ./node_modules/.bin/tsx --env-file=.env.local scripts/site-shot.ts <id> admin 9413
+```
+
+Every page and every project panel, at 1440 and as an emulated iPhone, one
+role per run, one audit line per page (sideways scroll, spills, broken
+images, console errors) and a full-page PNG under `/tmp/runfree-site-shot/
+<role>/`. **Both roles share the throwaway account, so never run two roles at
+once** — the second run's teardown deletes the first run's login mid-capture.
+`viewer` is a church member with no `account_role`; `admin` is staff with
+`runfree_team`, which is what makes the certification pages render.
+
+What it found, and what changed:
+
+- **`/my-work` logged a React error for every church member** — the denied
+  branch called `router.replace()` in the render body. The redirect is an
+  effect now. Same pattern as `/guide` and `/keynotes`; if you add a page with
+  a denied state, redirect from `useEffect`.
+- **The certification shelves said "Checking your access…" through a
+  five-second Drive walk.** They have a `loading` status after access is
+  settled and say what they are loading. A permissions-flavoured message over
+  a slow read makes people with access think they have none.
+- **`listBooksLibrary()` is memoised for sixty seconds** (`lib/books.ts`).
+  Four routes walked the Books folder per request, and a shelf drawing six
+  PDF thumbnails asked for six more walks. A failed walk is not cached.
+- **Drive walkthrough videos have poster frames** — `public/brand/videos/
+  drive/<id>.jpg`, listed in `src/lib/drive-posters.json`, one clean frame per
+  file pulled by ffmpeg (dark frames re-sampled later in the clip). Fifty of
+  the eighty-four cards were the same gradient. A video absent from the
+  manifest falls back to the gradient, so a new upload never breaks the page;
+  add its poster and its id to the manifest.
+- **The Drive "0 - Intro" folder is folded into Orientation** on `/videos`
+  (`foldIntroIntoOrientation`): it holds the same five films the Orientation
+  shelf curates, so the page opened with the same videos twice. A Drive intro
+  matching a database title by words is dropped; an unmatched one joins
+  Orientation rather than standing in its own group.
+- **A highlight filed as a "link" whose address is Loom/YouTube/Vimeo renders
+  as a video.** Athena's first highlight was a prep item pointing at a Loom
+  teaching, saved as `media_kind = 'link'`, and drew as a grey box with an
+  arrow. `HighlightShelf` decides by the address; the one live row was also
+  corrected in place. The Upper Room / Lower Room still (`46ca4a2e…`) is pinned
+  in `MANUAL_STILLS` — Loom's own still is the black pre-roll.
+- **Collapsed session rows show Notes / N next steps marks** from `sm` up.
+  Athena's onsite days had no recording, so a closed row was a title and a
+  date with 3,000 words of notes behind it and nothing saying so.
+- **The dashboard's Join card button is full-width on a phone.** Beside the
+  title it forced "Team call on Zoom · 6:30–8:30 pm Pacific" into six lines.
+- **`/open/…` explains a denial** instead of bouncing to the home page: a
+  church member who taps a guide link now reads that the link is for
+  Certified Vision Framers, with a way back to their project.
+- **Book covers:** Clarity Spiral has a jacket (its own title page). The
+  guide page reads "Digital Facilitator's Guide · September 2026" from the
+  Drive filename (`editionTitle()`), and the cover art is the September
+  edition's title page.
+- **Problem Statement has a Vision Frame mark** (`problem-statement.png`, a
+  more-of / less-of glyph in the frame palette). It was the one element of
+  seven with no icon, so its row sat blank beside six pictures.
+- **Handout module headings drop the folder prefix** ("Funnel Fusion", not
+  "1 - Funnel Fusion"); the rail already says which module it is.
+- **Data fixed on Athena:** a scratch initiative named "test" (no steps, no
+  check-ins, created 4 Sept) was live on the church's Execution tab and was
+  deleted; the nine repeated Zoom key-date notes were shortened after the
+  first so the Key Dates panel is not the same paragraph nine times.
+
+Still open from that pass, for Andrew: the Supabase invite/reset email
+templates could not be checked (Chrome was closed) — `docs/auth-email-
+templates.md` is the wording to paste if they still read "Vision Framers";
+Athena's roster lists Marc Calvert twice (gmail and hotmail); a file called
+"Generic Word Test" sits in the Drive Books folder and shows on every church's
+Books shelf under Other Resources.

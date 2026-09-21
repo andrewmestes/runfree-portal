@@ -37,10 +37,10 @@ const TTL_MS = 6 * 60 * 60 * 1000;
  *
  * The frames were already checked into public/brand/videos — seven of them,
  * one per teaching — and this map was left empty, so none of them were ever
- * reachable. The other four resolve correctly from Loom and are deliberately
- * NOT listed: Loom's own still is fresher and picks up a re-record, which a
- * pinned frame cannot. If one of those breaks later, its file is already
- * there and the fix is one line here.
+ * reachable. The other four were left to Loom for a month on the theory
+ * that its still is fresher; on 21 Sept every one of them rendered as the
+ * gradient, so they are pinned too. Re-record a teaching and refresh its
+ * frame here — nothing else picks up the change.
  */
 const MANUAL_STILLS: Record<string, string> = {
   // 7 Laws Overview Teaching
@@ -49,6 +49,24 @@ const MANUAL_STILLS: Record<string, string> = {
   b42d9b019edd4306897f5ee8fe060615: "/brand/videos/b42d9b019edd4306897f5ee8fe060615.jpg",
   // Crowd Cloud Overview Teaching
   "87e14978ff174c9baaedb5aebfd2dcd8": "/brand/videos/87e14978ff174c9baaedb5aebfd2dcd8.jpg",
+  // Upper Room / Lower Room Overview (Will, 12 min). Loom's still is the
+  // black pre-roll, so the size guard below rejects it and Athena's first
+  // highlight rendered as a grey box. This frame is the last of Loom's own
+  // animated preview — the same recording, not a stand-in.
+  "46ca4a2e6b184bda9f2a746eb3886b78": "/brand/videos/46ca4a2e6b184bda9f2a746eb3886b78.jpg",
+  // The other four Orientation teachings, pinned 21 Sept 2026. They were left
+  // to Loom on purpose ("Loom's own still is fresher") — and on the night
+  // the videos page was checked end to end, all four drew as the gradient:
+  // Loom's `-00001` still for each is the black lead-in the size guard
+  // rejects. Their frames had been on disk since August.
+  // Future Church "Ted Talk"
+  f056b015647b47a1b6d7fc1c4a60b670: "/brand/videos/f056b015647b47a1b6d7fc1c4a60b670.jpg",
+  // Why I Wrote the Book
+  "9e062843240e4aeb92da30e6477a9ad8": "/brand/videos/9e062843240e4aeb92da30e6477a9ad8.jpg",
+  // Leading Church Testimony — Long Hollow
+  e6b4e80dfd6a4efdbb0c04436be819e0: "/brand/videos/e6b4e80dfd6a4efdbb0c04436be819e0.jpg",
+  // Satan's Loophole Reinforcement Training
+  "774ff6bdc7d14734bbabf0041bef5b37": "/brand/videos/774ff6bdc7d14734bbabf0041bef5b37.jpg",
 };
 
 type Entry = { at: number; url: string | null };

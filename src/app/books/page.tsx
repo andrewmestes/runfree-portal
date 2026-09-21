@@ -53,7 +53,7 @@ export default function BooksPage() {
     standalone: [],
   });
   const [status, setStatus] = useState<
-    "checking" | "denied" | "ready" | "error"
+    "checking" | "loading" | "denied" | "ready" | "error"
   >("checking");
   const [loadError, setLoadError] = useState("");
   const [activeId, setActiveId] = useState<string>("");
@@ -113,6 +113,9 @@ export default function BooksPage() {
         setStatus("denied");
         return;
       }
+      // Access is settled; the wait from here is Drive. "Checking your access"
+      // through that read as a permissions problem to people who had access.
+      setStatus("loading");
 
       setFramer(current);
       await load();
@@ -190,6 +193,7 @@ export default function BooksPage() {
   if (status === "checking" || status === "denied") {
     return <PageLoader label="Checking your access…" />;
   }
+  if (status === "loading") return <PageLoader label="Loading the library…" />;
 
   const active =
     [...library.books, ...library.standalone].find((b) => b.id === activeId) || null;

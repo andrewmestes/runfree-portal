@@ -36,11 +36,25 @@ function prettyDate(iso: string | null) {
   });
 }
 
+/**
+ * The Drive filename, said the way a person would. "SEP 2026 Digital
+ * Facilitators Guide - Pivvot - RunFree Co." is how the export is named so
+ * the folder sorts; on the page it reads "Digital Facilitator's Guide ·
+ * September 2026". Anything that does not match the naming pattern is shown
+ * as it is, minus the trailing " - Pivvot - RunFree Co."
+ */
+const MONTHS: Record<string, string> = { JAN: "January", FEB: "February", MAR: "March", APR: "April", MAY: "May", JUN: "June", JUL: "July", AUG: "August", SEP: "September", SEPT: "September", OCT: "October", NOV: "November", DEC: "December" };
+function editionTitle(title: string): string {
+  const m = /^([A-Z]{3,4})\s+(\d{4})\s+Digital Facilitator'?s'? Guide/i.exec(title.trim());
+  if (m && MONTHS[m[1].toUpperCase()]) return `Digital Facilitator's Guide · ${MONTHS[m[1].toUpperCase()]} ${m[2]}`;
+  return title.replace(/\s*-\s*Pivvot\s*-\s*RunFree Co\.?\s*$/i, "").trim();
+}
+
 export default function GuidePage() {
   const [framer, setFramer] = useState<Framer | null>(null);
   const [file, setFile] = useState<GuideFile | null>(null);
   const [status, setStatus] = useState<
-    "checking" | "denied" | "ready" | "error"
+    "checking" | "loading" | "denied" | "ready" | "error"
   >("checking");
   const [loadError, setLoadError] = useState("");
   const [preview, setPreview] = useState<PreviewFile | null>(null);
@@ -64,6 +78,9 @@ export default function GuidePage() {
         setStatus("denied");
         return;
       }
+      // Access is settled; the wait from here is Drive. "Checking your access"
+      // through that read as a permissions problem to people who had access.
+      setStatus("loading");
       setFramer(current);
 
       const {
@@ -146,6 +163,7 @@ export default function GuidePage() {
   if (status === "checking" || status === "denied") {
     return <PageLoader label="Checking your access…" />;
   }
+  if (status === "loading") return <PageLoader label="Loading the guide…" />;
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
@@ -216,7 +234,7 @@ export default function GuidePage() {
                     The complete training playbook
                   </p>
                   <h2 className="mt-2 font-display text-2xl font-bold text-runfree-ink">
-                    {file.title}
+                    {editionTitle(file.title)}
                   </h2>
                   {file.modifiedTime && (
                     <p className="mt-1 text-sm text-gray-500">

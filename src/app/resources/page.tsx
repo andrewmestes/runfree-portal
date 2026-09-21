@@ -48,7 +48,7 @@ export default function ResourcesPage() {
   const [canRefresh, setCanRefresh] = useState(false);
   const [modules, setModules] = useState<PortalModule[]>([]);
   const [status, setStatus] = useState<
-    "checking" | "denied" | "ready" | "error"
+    "checking" | "loading" | "denied" | "ready" | "error"
   >("checking");
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
@@ -107,6 +107,9 @@ export default function ResourcesPage() {
         setStatus("denied");
         return;
       }
+      // Access is settled; the wait from here is Drive. "Checking your access"
+      // through that read as a permissions problem to people who had access.
+      setStatus("loading");
 
       setFramer(current);
       setCanRefresh(await isPortalAdmin());
@@ -226,6 +229,7 @@ export default function ResourcesPage() {
   }
 
   if (status === "checking") return <PageLoader label="Checking your access…" />;
+  if (status === "loading") return <PageLoader label="Loading the handouts…" />;
 
   if (status === "denied") {
     return (
@@ -394,8 +398,11 @@ export default function ResourcesPage() {
                 <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100 px-5 py-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      {/* The folder is "1 - Funnel Fusion"; the rail above
+                          already says which module this is, so the card
+                          reads "Funnel Fusion" like every other heading. */}
                       <h2 className="font-display text-lg font-bold text-runfree-ink">
-                        {mod.name}
+                        {stripModuleNumber(mod.name)}
                       </h2>
                       <span className="rounded-full bg-runfree-indigo px-2.5 py-0.5 text-xs font-semibold text-runfree-navy">
                         {mod.files.length}

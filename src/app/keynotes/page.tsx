@@ -36,7 +36,7 @@ function prettySize(bytes: number | null) {
 export default function KeynotesPage() {
   const [framer, setFramer] = useState<Framer | null>(null);
   const [decks, setDecks] = useState<Presentation[]>([]);
-  const [status, setStatus] = useState<"checking" | "denied" | "ready" | "error">("checking");
+  const [status, setStatus] = useState<"checking" | "loading" | "denied" | "ready" | "error">("checking");
   const [loadError, setLoadError] = useState("");
   /** Drive id currently downloading — these files are big enough to need a state. */
   const [busy, setBusy] = useState<string | null>(null);
@@ -58,6 +58,10 @@ export default function KeynotesPage() {
         return;
       }
       setFramer(current);
+      // Access is settled; the wait from here is Drive listing the decks.
+      // Saying "checking your access" through a five-second Drive call read
+      // as a permissions problem to someone who had every right to be here.
+      setStatus("loading");
 
       const {
         data: { session },
@@ -129,6 +133,7 @@ export default function KeynotesPage() {
 
   if (status === "error") return <AccessError onRetry={() => window.location.reload()} />;
   if (status === "checking" || status === "denied") return <PageLoader label="Checking your access…" />;
+  if (status === "loading") return <PageLoader label="Loading the presentations…" />;
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">

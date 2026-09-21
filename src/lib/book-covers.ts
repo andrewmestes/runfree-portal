@@ -20,6 +20,9 @@ const COVERS: Record<string, string> = {
   "god dreams": "/brand/books/god-dreams.png",
   younique: "/brand/books/younique.png",
   calling: "/brand/books/calling.png",
+  // The book's own title page, rendered from the PDF in Drive. The shelf
+  // showed a grey box with the words "Clarity Spiral" beside five jackets.
+  "clarity spiral": "/brand/books/clarity-spiral.png",
 };
 
 export function coverFor(name: string): string | null {

@@ -164,7 +164,15 @@ export default function HighlightShelf({
                 key={h.id}
                 title={h.title}
                 note={h.note}
-                media={h.media_kind}
+                // A prep item that points at a Loom or YouTube recording is
+                // saved as a "link", and a link card is a grey box with an
+                // arrow. If the address is a video, it is a video — play
+                // mark, still, 16:9 — whatever the row was filed as.
+                media={
+                  h.media_kind === "link" && h.external_url && /loom\.com\/(share|embed)\/|youtu\.?be|vimeo\.com/i.test(h.external_url)
+                    ? "video"
+                    : h.media_kind
+                }
                 art={art}
                 artNode={artNode}
                 liProps={

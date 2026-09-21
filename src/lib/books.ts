@@ -233,7 +233,32 @@ function toBookFile(
   };
 }
 
-export async function listBooksLibrary(): Promise<BooksLibrary> {
+/**
+ * The listing, held for a minute.
+ *
+ * Every book route — the shelf, each file, the project mirror of both — began
+ * by walking the whole Books folder (~7s cold, ~2s warm). A shelf that draws
+ * six PDF thumbnails asked Drive for the tree six more times, one per file,
+ * so the covers arrived long after the shelf. Sixty seconds is short enough
+ * that a file dropped into Drive shows up on the next visit and long enough
+ * that one page load pays for the walk once.
+ */
+const LIBRARY_TTL_MS = 60_000;
+let libraryCache: { at: number; value: Promise<BooksLibrary> } | null = null;
+
+export function listBooksLibrary(): Promise<BooksLibrary> {
+  const now = Date.now();
+  if (libraryCache && now - libraryCache.at < LIBRARY_TTL_MS) return libraryCache.value;
+  const value = listBooksLibraryUncached().catch((err) => {
+    // A failed walk must not be served for a minute.
+    if (libraryCache?.value === value) libraryCache = null;
+    throw err;
+  });
+  libraryCache = { at: now, value };
+  return value;
+}
+
+async function listBooksLibraryUncached(): Promise<BooksLibrary> {
   const rootId = process.env.GOOGLE_BOOKS_FOLDER_ID;
   if (!rootId) throw new Error("GOOGLE_BOOKS_FOLDER_ID is not set");
 

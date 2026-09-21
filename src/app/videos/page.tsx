@@ -51,6 +51,17 @@ function leadingNumber(name: string): number {
   return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
 }
 
+/**
+ * Poster frames for the Drive walkthroughs, checked into
+ * public/brand/videos/drive/<id>.jpg (scripts/_posters.ts pulled one clean
+ * frame per file). Before these, fifty of the eighty-four cards were the same
+ * pink-to-blue gradient, and a wall of identical cards is a wall, not a shelf.
+ * A video missing from the manifest falls back to the gradient, so a new
+ * upload never breaks the page — it just waits for its poster.
+ */
+import DRIVE_POSTERS from "@/lib/drive-posters.json";
+const POSTERS = new Set<string>(DRIVE_POSTERS as string[]);
+
 const DRIVE_PREFIX = "drive:";
 const isDriveVideo = (v: Video) => v.url.startsWith(DRIVE_PREFIX);
 const driveId = (v: Video) => v.url.slice(DRIVE_PREFIX.length);
@@ -79,18 +90,52 @@ function toolVideosAsVideos(groups: ToolVideoGroup[]): Video[] {
         description: null,
         module: g.name,
         sort_order: 100_000 + g.order * 1000 + i,
-        thumbnailUrl: null,
+        thumbnailUrl: POSTERS.has(v.id) ? `/brand/videos/drive/${v.id}.jpg` : null,
       });
     });
   }
   return out;
 }
 
+/**
+ * The Drive folder "0 - Intro" holds the same five films as the Orientation
+ * shelf — the Ted Talk, the book backstory, Why I Wrote the Book, the Long
+ * Hollow testimony — so the page opened with an "Orientation" row and an
+ * "Intro" row that were the same videos twice. The database rows are the
+ * curated ones (they carry a description and a Loom still), so a Drive intro
+ * that matches one by title is dropped, and any that does not match joins
+ * the Orientation group instead of standing in its own.
+ */
+function foldIntroIntoOrientation(db: Video[], tools: Video[]): Video[] {
+  const words = (t: string) =>
+    new Set(t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !["the", "and", "for", "with"].includes(w)));
+  const same = (a: string, b: string) => {
+    const A = words(a), B = words(b);
+    if (!A.size || !B.size) return false;
+    let hit = 0;
+    for (const w of A) if (B.has(w)) hit++;
+    return hit / Math.min(A.size, B.size) >= 0.6;
+  };
+  const orientation = db.find((v) => /orientation/i.test(v.module || ""))?.module ?? null;
+  return tools.flatMap((v) => {
+    if (!/^intro$/i.test(stripModuleNumber(v.module || ""))) return [v];
+    const twin = db.find((d) => same(d.title, v.title));
+    if (twin) {
+      // Same film. The curated row keeps its place; if it has no still of
+      // its own (a Loom whose preview is the black pre-roll), it wears the
+      // Drive copy's poster rather than the gradient.
+      if (!twin.thumbnailUrl && v.thumbnailUrl) twin.thumbnailUrl = v.thumbnailUrl;
+      return [];
+    }
+    return orientation ? [{ ...v, module: orientation }] : [v];
+  });
+}
+
 export default function VideosPage() {
   const [framer, setFramer] = useState<Framer | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
   const [status, setStatus] = useState<
-    "checking" | "denied" | "ready" | "error"
+    "checking" | "loading" | "denied" | "ready" | "error"
   >("checking");
   const [loadError, setLoadError] = useState("");
   const [playing, setPlaying] = useState<Video | null>(null);
@@ -120,6 +165,9 @@ export default function VideosPage() {
         setStatus("denied");
         return;
       }
+      // Access is settled; the wait from here is Drive. "Checking your access"
+      // through that read as a permissions problem to people who had access.
+      setStatus("loading");
       setFramer(current);
 
       const {
@@ -143,7 +191,8 @@ export default function VideosPage() {
           const toolBody = await toolRes.json();
           tools = toolVideosAsVideos(toolBody.groups || []);
         }
-        setVideos([...(res.ok ? body.videos || [] : []), ...tools]);
+        const dbVideos: Video[] = res.ok ? body.videos || [] : [];
+        setVideos([...dbVideos, ...foldIntroIntoOrientation(dbVideos, tools)]);
       }
 
       setStatus("ready");
@@ -274,6 +323,7 @@ export default function VideosPage() {
   if (status === "checking" || status === "denied") {
     return <PageLoader label="Checking your access…" />;
   }
+  if (status === "loading") return <PageLoader label="Loading the videos…" />;
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">

@@ -37,7 +37,7 @@ const KINDS: Record<
   video: { api: (id) => `/api/tool-videos/ticket/${id}`, back: "/videos", backLabel: "Training Videos" },
 };
 
-type Status = "checking" | "ready" | "missing" | "error";
+type Status = "checking" | "ready" | "missing" | "error" | "denied";
 
 type DeckFile = {
   id: string;
@@ -98,7 +98,10 @@ export default function OpenPage() {
         return;
       }
       if (!(await hasCertificationAccess())) {
-        router.replace("/");
+        // Say so, rather than bouncing to the home page. A church member who
+        // taps a guide link — or a framer whose access has not been granted
+        // yet — landed on their dashboard with no idea why.
+        setStatus("denied");
         return;
       }
       const {
@@ -191,24 +194,30 @@ export default function OpenPage() {
 
   if (status === "checking") return <PageLoader label="Opening…" />;
 
-  if (status === "missing" || status === "error") {
+  if (status === "missing" || status === "error" || status === "denied") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-runfree-ink px-4 text-center text-white">
         <div className="max-w-md">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/50">RunFree Portal</p>
           <h1 className="mt-2 font-display text-2xl font-extrabold">
-            {status === "missing" ? "That file isn’t in the library" : "That didn’t open"}
+            {status === "missing"
+              ? "That file isn’t in the library"
+              : status === "denied"
+                ? "This link is for Certified Vision Framers"
+                : "That didn’t open"}
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-white/70">
             {status === "missing"
               ? "The link may be out of date. The current version will be on the shelf."
-              : "Something went wrong fetching it. Try again, or open it from the shelf."}
+              : status === "denied"
+                ? "It opens the facilitator materials behind the Digital Facilitator's Guide. Everything for your own engagement is on your project."
+                : "Something went wrong fetching it. Try again, or open it from the shelf."}
           </p>
           <Link
-            href={back}
+            href={status === "denied" ? "/" : back}
             className="mt-6 inline-block rounded-lg bg-runfree-grad px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
           >
-            Go to {backLabel}
+            {status === "denied" ? "Go to your project" : `Go to ${backLabel}`}
           </Link>
         </div>
       </div>

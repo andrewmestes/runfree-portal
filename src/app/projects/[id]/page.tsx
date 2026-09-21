@@ -1244,9 +1244,13 @@ export default function ProjectDetailPage() {
         // the loose PDFs under Other Resources — draws its own first page the
         // way a handout does. Without this it was the only kind of PDF on the
         // shelf that fell back to a grey glyph.
+        // Through the PROJECT route, not /api/books: that one is gated on
+        // certification access, so a church member got a 403 and the lead
+        // magnet on their own dashboard drew as a document glyph while the
+        // handout beside it drew its first page.
         if (h.source_kind === "book" && h.source_id) {
           if (!accessToken) return null;
-          const res = await fetch(`/api/books/file/${h.source_id}`, {
+          const res = await fetch(`/api/projects/${projectId}/books/file/${h.source_id}`, {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
           return res.ok ? await res.arrayBuffer() : null;
@@ -2589,7 +2593,7 @@ function ChurchTeamInfo({
           {/* Full width on a phone, inline from sm up. Sharing one row with
               the heading at 390px left the title a ~110px column, which broke
               the eyebrow across three lines and "Church Team" across two. */}
-          <span className="flex w-full items-center gap-2 sm:w-auto">
+          <span className={`flex items-center gap-2 ${contacts.length > 0 && canEdit ? "w-full sm:w-auto" : "w-auto"}`}>
             {contacts.length > 0 && canEdit && (
               <button
                 onClick={downloadCsv}
@@ -5970,7 +5974,9 @@ function JoinSessionCard({ nextDate }: { nextDate: PrepItem | null }) {
         </span>
       </span>
 
-      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-bold text-runfree-navy transition group-hover:bg-runfree-pink">
+      {/* Full width on a phone: beside the title it squeezed "Team call on
+          Zoom · 6:30–8:30 pm Pacific" into six lines of one word each. */}
+      <span className="inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-bold text-runfree-navy transition group-hover:bg-runfree-pink sm:w-auto">
         Open the link
         <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
           &rarr;
@@ -9946,6 +9952,21 @@ function SessionRow({
               Recording
             </span>
           ) : null}
+          {/* What the row holds, before it is opened. Athena's two onsite
+              days had no recording, so a closed row was a title and a date
+              and nothing said there were 3,000 words of notes and a list of
+              homework behind it. Hidden below `sm`, where the row has no
+              width to spare. */}
+          {(session.recap || session.takeaways) && (
+            <span className="hidden rounded-full bg-runfree-indigo px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-runfree-navy sm:inline">
+              Notes
+            </span>
+          )}
+          {tasks.length > 0 && (
+            <span className="hidden rounded-full bg-gray-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-600 sm:inline">
+              {tasks.length} {wording?.tasks?.toLowerCase() ?? "next steps"}
+            </span>
+          )}
           <svg
             viewBox="0 0 24 24"
             fill="none"

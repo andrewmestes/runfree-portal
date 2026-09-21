@@ -165,12 +165,16 @@ export default function MyWorkPage() {
     router.replace("/auth/login");
   }
 
+  // A denied caller goes home. The redirect lives in an effect, not the
+  // render body: calling router.replace() while rendering made React log
+  // "Cannot update a component while rendering a different component" on
+  // every church member who followed a /my-work link.
+  useEffect(() => {
+    if (status === "denied") router.replace("/");
+  }, [status, router]);
+
   if (status === "error") return <AccessError onRetry={() => window.location.reload()} />;
-  if (status === "checking") return <PageLoader />;
-  if (status === "denied") {
-    router.replace("/");
-    return <PageLoader />;
-  }
+  if (status === "checking" || status === "denied") return <PageLoader />;
 
   const groups = groupTasks(tasks);
 

@@ -401,7 +401,9 @@ export default function HelpPage() {
             </Faq>
             <Faq q="Which videos can I show a client?">
               <strong>Training Videos</strong> has two tabs. <em>Client Videos</em> are
-              the teaching videos you show the teams you lead. <em>Facilitator
+              the teaching videos you show the teams you lead, plus the clips the
+              guide&rsquo;s text links to (the movie clips, the Carey Nieuwhof
+              interview). <em>Facilitator
               Training</em> holds the Process Tools walkthroughs that train you as the
               facilitator, under the six module headings; they are for you, not for
               clients. Both play without a Google account, and a video replaced in

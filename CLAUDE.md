@@ -2059,7 +2059,13 @@ list of videos we had on there are the client-facing videos." Every video
 on `/videos` carries an `audience`: the database rows (`/api/videos`, the
 original list) are `clients`, the Drive walkthroughs (`/api/tool-videos`)
 are `facilitators`, and a Drive "0 - Intro" film re-homed into Orientation
-by the fold goes with `clients` since it is the same set of films. The tab
+by the fold goes with `clients` since it is the same set of films. The
+unnumbered "Video Clips" folder is `clients` too — the films the guide's
+text links to, the movie clips and the Carey Nieuwhof interview, which a
+facilitator plays for the room (Andrew, later that day: "those are also
+client facing videos"); three of them also sit in the Crowd Cloud folder
+under the same name, and `dropClipTwins` hides that copy so the client
+shelf keeps them without showing them twice. The tab
 lives in the URL (`?tab=facilitators`; the client tab is the bare URL) so
 links and Back work. Tab names — "Client Videos" / "Facilitator Training"
 — were my pick; Andrew offered "Process Videos and Training Videos" and

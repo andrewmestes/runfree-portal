@@ -48,7 +48,7 @@ type Video = {
 type Audience = "clients" | "facilitators";
 
 const TABS: { key: Audience; label: string; blurb: string }[] = [
-  { key: "clients", label: "Client Videos", blurb: "Teaching videos to show the teams you lead." },
+  { key: "clients", label: "Client Videos", blurb: "Teaching videos and the guide's clips, for the teams you lead." },
   { key: "facilitators", label: "Facilitator Training", blurb: "Tool walkthroughs that train you as the facilitator — not for clients." },
 ];
 
@@ -95,6 +95,30 @@ type ToolVideoGroup = {
  * screen assigns), so a module heading holds both and the walkthrough order
  * is the folder's own.
  */
+/**
+ * The unnumbered "Video Clips" folder holds the films the guide's text links
+ * to — the movie clips, the Carey Nieuwhof interview — which a facilitator
+ * plays for the room. Andrew, 22 Sept: "the linked movie clips or carey
+ * nieuhoeff video, the ones that were linked in the text of the digital
+ * facilitator's guide. those are also client facing videos." So that folder
+ * is a client shelf; every numbered module folder trains the facilitator.
+ */
+const isClipsFolder = (g: ToolVideoGroup) =>
+  g.order === Number.MAX_SAFE_INTEGER && /clip/i.test(g.name);
+
+const normTitle = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+/**
+ * Three of those clips also sit inside the Crowd Cloud folder under the
+ * same name. Same film, so the copy under the module heading is dropped
+ * and the Video Clips one stands for it — otherwise the client shelf would
+ * lose them to the facilitator shelf, or show them twice.
+ */
+function dropClipTwins(tools: Video[]): Video[] {
+  const clips = new Set(tools.filter((v) => v.audience === "clients").map((v) => normTitle(v.title)));
+  return tools.filter((v) => v.audience === "clients" || !clips.has(normTitle(v.title)));
+}
+
 function toolVideosAsVideos(groups: ToolVideoGroup[]): Video[] {
   const out: Video[] = [];
   for (const g of groups) {
@@ -107,7 +131,7 @@ function toolVideosAsVideos(groups: ToolVideoGroup[]): Video[] {
         module: g.name,
         sort_order: 100_000 + g.order * 1000 + i,
         thumbnailUrl: POSTERS.has(v.id) ? `/brand/videos/drive/${v.id}.jpg` : null,
-        audience: "facilitators",
+        audience: isClipsFolder(g) ? "clients" : "facilitators",
       });
     });
   }
@@ -227,7 +251,7 @@ export default function VideosPage() {
         let tools: Video[] = [];
         if (toolRes && toolRes.ok) {
           const toolBody = await toolRes.json();
-          tools = toolVideosAsVideos(toolBody.groups || []);
+          tools = dropClipTwins(toolVideosAsVideos(toolBody.groups || []));
         }
         const dbVideos: Video[] = (res.ok ? body.videos || [] : []).map(
           (v: Omit<Video, "audience">) => ({ ...v, audience: "clients" as const })

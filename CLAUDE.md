@@ -2067,6 +2067,13 @@ said he was open to others. The Help FAQ "Which videos can I show a
 client?" and the hub card describe the split. `site-shot.ts` captures
 both tabs (`videos`, `videos-facilitators`).
 
+Numbered Drive files sort by `fileOrder()` in `drive.ts` — whole number
+times a thousand plus the decimal part — so 1.9 comes before 1.10. The old
+key read only the whole number and fell through to a string compare, which
+put 1.10–1.13 ahead of 1.2 on the facilitator shelf (Andrew: "organize the
+facilitator training videos numerically"). Folders still use the integer
+`leadingNumber()`, which the process icons key on.
+
 Card order on the hub (Andrew, 22 Sept): Digital Facilitator's Guide,
 Certification Companion Guide, Books, Process Handouts, Training Videos,
 Keynote Presentations.

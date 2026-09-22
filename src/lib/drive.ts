@@ -299,6 +299,20 @@ function leadingNumber(name: string): number {
   return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
 }
 
+/**
+ * Sort key for a numbered file: "1.10" sits after "1.9", not between "1.1"
+ * and "1.2". leadingNumber() only reads the whole number, so every file in
+ * a module tied and fell through to a string compare — which put 1.10, 1.11,
+ * 1.12 and 1.13 ahead of 1.2 (Andrew, 22 Sept: "organize the facilitator
+ * training videos numerically"). Folders keep leadingNumber(): their
+ * integer is the module number the process icons key on.
+ */
+export function fileOrder(name: string): number {
+  const m = name.match(/^\s*(\d+)(?:\.(\d+))?/);
+  if (!m) return Number.MAX_SAFE_INTEGER;
+  return parseInt(m[1], 10) * 1000 + (m[2] ? parseInt(m[2], 10) : 0);
+}
+
 function toTitle(filename: string): string {
   // The PortalFile type has promised for months that "- CERT" is removed
   // here. It was not, and every certification handout listed as "Welcome -
@@ -483,7 +497,7 @@ export async function listDriveFolder(rootId: string): Promise<DriveFolderGroup[
           mimeType: f.mimeType,
           sizeBytes: f.size ? Number(f.size) : null,
           modifiedTime: f.modifiedTime || null,
-          order: leadingNumber(f.name),
+          order: fileOrder(f.name),
         };
       })
       .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
@@ -731,7 +745,7 @@ export async function listPortalLibrary(): Promise<PortalModule[]> {
           mimeType: f.mimeType,
           sizeBytes: f.size ? Number(f.size) : null,
           modifiedTime: f.modifiedTime || null,
-          order: leadingNumber(f.name),
+          order: fileOrder(f.name),
         };
       })
       .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));

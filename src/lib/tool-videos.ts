@@ -1,4 +1,4 @@
-import { describeDriveFile, fileInsideFolder, listDriveFolder, type DriveListedFile } from "./drive";
+import { describeDriveFile, fileInsideFolder, fileOrder, listDriveFolder, type DriveListedFile } from "./drive";
 
 /**
  * The Process Tools Videos — the per-tool walkthroughs the Digital
@@ -102,7 +102,7 @@ export async function findToolVideo(id: string): Promise<ToolVideo | null> {
     mimeType: meta.mimeType,
     sizeBytes: meta.sizeBytes,
     modifiedTime: meta.modifiedTime,
-    order: num ? parseFloat(num) : Number.MAX_SAFE_INTEGER,
+    order: fileOrder(meta.name),
     group: group.name,
     groupOrder,
   };

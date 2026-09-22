@@ -75,7 +75,7 @@ async function main() {
     ["videos", "/videos"], ["videos-facilitators", "/videos?tab=facilitators"], ["books", "/books"], ["keynotes", "/keynotes"], ["guide", "/guide"], ["resources", "/resources"], ["certification", "/certification"],
     ["open-handout", "/open/handout/1tWQta-q_9X4SgKr-NEPUK-a9uP2dMsFU"], ["open-video", "/open/video/1X0go06NCPcSC7g8Vvff5LRgiE2hd3Iq8"],
     ["privacy", "/privacy"], ["terms", "/terms"], ["forgot", "/auth/forgot-password"],
-    ["vision-stack", `${P}/vision-stack`], ["new-project", "/projects/new"], ["admin", "/admin"], ["open-companion", "/open/companion/current"]];
+    ["vision-stack", `${P}/vision-stack`], ["new-project", "/projects/new"], ["admin", "/admin"], ["open-companion", "/open/companion/current"], ["watch", "/watch/cc588bee-c9df-4980-9f5b-a641d8b9d9b8"]];
   // PAGES=videos,project-dashboard narrows the run; WIDTHS=1440 skips the phone
   // pass; WAIT=12000 gives slow shelves longer to draw before the audit runs.
   const only = (process.env.PAGES ?? "").split(",").map((x) => x.trim()).filter(Boolean);

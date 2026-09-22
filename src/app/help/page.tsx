@@ -411,6 +411,15 @@ export default function HelpPage() {
               player gives you a page with only the video on it, which is what the
               guide links to.
             </Faq>
+            <Faq q="Sharing a video with a client">
+              Every video on the <em>Client Videos</em> tab has a <strong>Copy
+              link</strong> button, on the card and in the player. It copies an
+              address like portal.runfree.co/watch/… that opens the video on a plain
+              RunFree page with no sign-in, so a board member or a pastor you are
+              still talking with can watch it straight from a text or an email. The
+              facilitator walkthroughs never get one of these links; neither, for
+              now, do the movie clips.
+            </Faq>
             <Faq q="What is the difference between this and a church project?">
               The certification library is <em>your</em> material as a facilitator — how
               to run the process. A project is one church&rsquo;s engagement: their dates,

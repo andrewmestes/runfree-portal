@@ -2080,6 +2080,29 @@ put 1.10–1.13 ahead of 1.2 on the facilitator shelf (Andrew: "organize the
 facilitator training videos numerically"). Folders still use the integer
 `leadingNumber()`, which the process icons key on.
 
+**Sharing a client video: `/watch/{id}`** (22 Sept). Andrew: "if a
+certified vision framer needs to share a video link with a client, what's
+the best way to make that accessible? … Those can all be open for anyone
+to view at any time." A public server-rendered page — no sign-in, no way
+into the portal — for one `training_videos` row: RunFree and Pivvot marks,
+the embed, the title and description, "Shared with you by a Certified
+Vision Framer." It carries og tags (the Loom still as og:image) so the link
+previews in a text or an email. Every card on the Client Videos tab and
+the player header have a "Copy link" button (`CopyLinkButton`, a sibling
+of the card button, never inside it) that puts that address on the
+clipboard. What is NOT public: the facilitator walkthroughs (never), and
+the Drive clips (for now) — four of the seven are third-party films
+(Mr. Holland's Opus, Smoke, the Coca-Cola ad, Made to Stick) and I asked
+Andrew which of the seven he wants on a public address before opening any;
+he had not answered when the button shipped. `site-shot.ts` captures the
+page as `watch`.
+
+The client-shelf row "Upper / Lower Room Master Teaching" pointed at an
+older 9-minute Loom while its own description said "12 min"; 084 points it
+at Will's 8/17/21 overview (`46ca4a2e…`, the one the church template's
+Reading & Pre-Work shelf plays). Andrew: "i don't see this upper room and
+lower room video in client facing videos."
+
 Card order on the hub (Andrew, 22 Sept): Digital Facilitator's Guide,
 Certification Companion Guide, Books, Process Handouts, Training Videos,
 Keynote Presentations.

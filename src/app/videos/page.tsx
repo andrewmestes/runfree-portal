@@ -82,6 +82,16 @@ const DRIVE_PREFIX = "drive:";
 const isDriveVideo = (v: Video) => v.url.startsWith(DRIVE_PREFIX);
 const driveId = (v: Video) => v.url.slice(DRIVE_PREFIX.length);
 
+/**
+ * The public address a framer hands a client — /watch/{id}, no sign-in —
+ * or null where there is none. Only the client shelf's database videos
+ * get one: the facilitator walkthroughs are never public, and the Drive
+ * clips stream behind a ticket (see app/watch/[id]/page.tsx for why).
+ */
+const shareUrl = (v: Video) =>
+  v.audience === "clients" && !isDriveVideo(v) ? `${window.location.origin}/watch/${v.id}` : null;
+const isShareable = (v: Video) => v.audience === "clients" && !isDriveVideo(v);
+
 type ToolVideoGroup = {
   id: string;
   name: string;
@@ -540,14 +550,24 @@ export default function VideosPage() {
                     time. */}
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {group.videos.map((v, i) => (
-                    <VideoCard
-                      key={v.id}
-                      video={v}
-                      moduleOrder={group.order}
-                      index={i}
-                      busy={opening === v.id}
-                      onPlay={() => void play(v)}
-                    />
+                    <div key={v.id} className="relative">
+                      <VideoCard
+                        video={v}
+                        moduleOrder={group.order}
+                        index={i}
+                        busy={opening === v.id}
+                        onPlay={() => void play(v)}
+                      />
+                      {/* A sibling, not a child: a button inside the card's
+                          button is invalid HTML and Safari fires both. */}
+                      {isShareable(v) && (
+                        <CopyLinkButton
+                          getUrl={() => shareUrl(v)!}
+                          className="absolute right-2 top-2"
+                          compact
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               </section>
@@ -581,6 +601,7 @@ export default function VideosPage() {
                 {playing.title}
               </h3>
               <div className="flex shrink-0 items-center gap-3">
+                {isShareable(playing) && <CopyLinkButton getUrl={() => shareUrl(playing)!} />}
                 {isDriveVideo(playing) ? (
                   <a
                     href={`/open/video/${driveId(playing)}`}
@@ -633,6 +654,74 @@ export default function VideosPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * "Copy link for a client." Andrew: "if a certified vision framer needs to
+ * share a video link with a client, what's the best way to make that
+ * accessible?" One press puts the public /watch address on the clipboard
+ * and says so for two seconds. Compact on the card (an icon pill over the
+ * thumbnail), spelled out in the player.
+ */
+function CopyLinkButton({
+  getUrl,
+  className = "",
+  compact = false,
+}: {
+  getUrl: () => string;
+  className?: string;
+  compact?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  async function copy() {
+    const url = getUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Older Safari without clipboard permission: fall back to a prompt
+      // the person can copy from by hand.
+      window.prompt("Copy this link for your client:", url);
+    }
+    setCopied(true);
+  }
+
+  const icon = copied ? (
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+      <path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M8.5 11.5a3 3 0 004.2 0l2.6-2.6a3 3 0 00-4.2-4.2L9.9 5.9" strokeLinecap="round" />
+      <path d="M11.5 8.5a3 3 0 00-4.2 0L4.7 11.1a3 3 0 004.2 4.2l1.2-1.2" strokeLinecap="round" />
+    </svg>
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy a link you can send to a client — it opens without a sign-in"
+      aria-label={copied ? "Link copied" : "Copy link for a client"}
+      className={`${className} inline-flex items-center gap-1.5 rounded-full font-semibold shadow-sm transition ${
+        compact
+          ? `px-2.5 py-1 text-[11px] backdrop-blur-sm ${
+              copied ? "bg-runfree-magenta text-white" : "bg-white/90 text-runfree-ink hover:bg-white"
+            }`
+          : `px-3 py-1.5 text-sm ${
+              copied ? "bg-runfree-magenta text-white" : "bg-runfree-pink text-runfree-magentaDeep hover:bg-runfree-magenta hover:text-white"
+            }`
+      }`}
+    >
+      {icon}
+      {copied ? "Copied" : compact ? "Copy link" : "Copy link for a client"}
+    </button>
   );
 }
 

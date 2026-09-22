@@ -28,6 +28,20 @@ the templates read:
   falls back to generic wording.
 - `{{ .Data.portal }}` — always `runfree`.
 
+**The links (changed 22 Sept 2026).** Every button and fallback link is
+`{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=…`, NOT
+`{{ .ConfirmationURL }}`. A ConfirmationURL is Supabase's own verify link,
+spent by whoever opens it — and the email-security gateways at churches and
+denominations open every link in a message seconds after it arrives, which
+is how the September cohort's invites and resets all read "expired" (see
+CLAUDE.md, "Mail scanners spent the cohort's links"). The token-hash link
+lands on the portal's own page, which spends the token only when a human
+submits a password. `RedirectTo` is the portal address the code passes, so
+the link is right whatever the project's Site URL says.
+
+Also, in Authentication → Providers → Email, set **Email OTP expiry** to
+`86400` (24 hours) so an invite opened the next morning still works.
+
 ---
 
 ## 1. Invite user  (subject line first)
@@ -81,7 +95,7 @@ Subject: {{ if .Data.invited_to }}You've been added to {{ .Data.invited_to }}{{ 
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
               <tr>
                 <td bgcolor="#E43D96" style="border-radius:8px;background:linear-gradient(90deg,#E43D96,#F15A25);">
-                  <a href="{{ .ConfirmationURL }}"
+                  <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite"
                      style="display:inline-block;padding:14px 32px;font-family:'Poppins',Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
                     Set up my account
                   </a>
@@ -91,7 +105,7 @@ Subject: {{ if .Data.invited_to }}You've been added to {{ .Data.invited_to }}{{ 
 
             <p style="margin:0 0 24px 0;font-size:13px;line-height:1.6;color:#6b7280;">
               Button not working? Paste this into your browser:<br>
-              <a href="{{ .ConfirmationURL }}" style="color:#C21F73;word-break:break-all;">{{ .ConfirmationURL }}</a>
+              <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite" style="color:#C21F73;word-break:break-all;">{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite</a>
             </p>
 
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 20px 0;">
@@ -154,7 +168,7 @@ Subject: Your sign-in link for the RunFree Portal
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
               <tr>
                 <td bgcolor="#E43D96" style="border-radius:8px;background:linear-gradient(90deg,#E43D96,#F15A25);">
-                  <a href="{{ .ConfirmationURL }}"
+                  <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery"
                      style="display:inline-block;padding:14px 32px;font-family:'Poppins',Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
                     Choose a password
                   </a>
@@ -164,7 +178,7 @@ Subject: Your sign-in link for the RunFree Portal
 
             <p style="margin:0 0 24px 0;font-size:13px;line-height:1.6;color:#6b7280;">
               Button not working? Paste this into your browser:<br>
-              <a href="{{ .ConfirmationURL }}" style="color:#C21F73;word-break:break-all;">{{ .ConfirmationURL }}</a>
+              <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery" style="color:#C21F73;word-break:break-all;">{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery</a>
             </p>
 
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 20px 0;">
@@ -226,7 +240,7 @@ Subject: Your sign-in link for the RunFree Portal
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
               <tr>
                 <td bgcolor="#E43D96" style="border-radius:8px;background:linear-gradient(90deg,#E43D96,#F15A25);">
-                  <a href="{{ .ConfirmationURL }}"
+                  <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=magiclink"
                      style="display:inline-block;padding:14px 32px;font-family:'Poppins',Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
                     Sign me in
                   </a>
@@ -236,7 +250,7 @@ Subject: Your sign-in link for the RunFree Portal
 
             <p style="margin:0 0 24px 0;font-size:13px;line-height:1.6;color:#6b7280;">
               Button not working? Paste this into your browser:<br>
-              <a href="{{ .ConfirmationURL }}" style="color:#C21F73;word-break:break-all;">{{ .ConfirmationURL }}</a>
+              <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=magiclink" style="color:#C21F73;word-break:break-all;">{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=magiclink</a>
             </p>
 
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 20px 0;">

@@ -2180,7 +2180,12 @@ works. Authentication → Emails → SMTP: confirm a custom provider is on.
 Until the templates change, every link sent is the old shape and a
 scanner will keep eating it for those three organisations.
 
-Re-sending, once the templates are changed: `resendWayIn()` (lib/invite.ts)
-picks the right email — a fresh invite for the three who never opened
-one, a password link for the five whose invite a scanner spent. Sending
-mail is Andrew's call; do not fire it unasked.
+Andrew changed both templates and the OTP expiry the same evening (SMTP
+is Gmail, andrew@runfree.co, custom SMTP on, 60 s minimum per user). A
+reset sent to his nexus.us address arrived in one second with the
+token-hash link; opening that link twice on the live site spent nothing,
+and a submitted password signed in. Then: fresh invites to the three who
+had never opened one (5:34 pm ET, old shape — fine, their orgs do not
+scan, and the raised expiry applies at verify time), password links to
+the five whose links the scanner had spent (5:56 pm ET, new shape).
+`docs/auth-email-templates.md` holds the templates as pasted.

@@ -1987,9 +1987,40 @@ What it found, and what changed:
   deleted; the nine repeated Zoom key-date notes were shortened after the
   first so the Key Dates panel is not the same paragraph nine times.
 
-Still open from that pass, for Andrew: the Supabase invite/reset email
-templates could not be checked (Chrome was closed) — `docs/auth-email-
-templates.md` is the wording to paste if they still read "Vision Framers";
-Athena's roster lists Marc Calvert twice (gmail and hotmail); a file called
-"Generic Word Test" sits in the Drive Books folder and shows on every church's
-Books shelf under Other Resources.
+The Supabase invite template was confirmed on the RunFree wording the next
+morning (Andrew read it back; it matches `docs/auth-email-templates.md`).
+Two things noticed and deliberately left alone at Andrew's word (21 Sept):
+Athena's roster lists Marc Calvert twice (gmail and hotmail), and "Generic
+Word Test" in the Drive Books folder is meant to be there.
+
+## One layout for every template (082, 22 Sept 2026)
+
+Andrew: "every single improvement needs to be the exact same across all
+projects and templates. i don't want to customize for every single project."
+081's certification template had its own rail labels, task vocabulary,
+coaching-style session questions, no Vision Frame sheet, no Stack, no
+Execution tab. 082 strips all of it: `ui` holds only `default_highlights`,
+`frame_elements` is null, `has_vision_stack` is true, and Pivvot's 39
+`template_deliverables` were copied across and stamped into both cohorts. A
+cohort project now renders identically to a church project; the only
+difference is the content the template stamps (its prep groups, tool
+checklists and resources).
+
+**The one word that differs is the roster's.** `templates.voice` gained
+`'group'` — "Participants" / "In the room" on the Team panel, "visible to the
+participants" on a session, the organization frame prompts. Andrew: "the
+certification participants sometimes are not only 'organizations.'" Do not
+add another `ui.nav` or `ui.wording` override to make a template look
+different; that is exactly the customization this migration removed. If a
+template genuinely needs a different look, that is a conversation with
+Andrew first.
+
+**The Certification Companion Guide** (Will's orientation document for a
+cohort) is a sixth card on the Certification Hub, opening straight into the
+viewer at `/open/companion/current`. `lib/companion.ts` serves the newest PDF
+sitting directly in `GOOGLE_CERT_FOLDER_ID` — the "Certification Handouts"
+folder ABOVE the module handouts — so a new edition dropped there is live
+with nothing to re-upload. That folder has to be shared with the service
+account separately; sharing the handouts sub-folder does not reach its
+parent, and until it is shared the card 404s with "That file isn't in the
+library".

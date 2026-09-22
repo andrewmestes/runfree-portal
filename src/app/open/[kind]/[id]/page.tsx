@@ -35,6 +35,8 @@ const KINDS: Record<
   guide: { api: (id) => `/api/guide/file/${id}`, back: "/guide", backLabel: "Facilitator's Guide" },
   keynote: { api: (id) => `/api/keynotes/ticket/${id}`, back: "/keynotes", backLabel: "Keynotes" },
   video: { api: (id) => `/api/tool-videos/ticket/${id}`, back: "/videos", backLabel: "Training Videos" },
+  // The hub card links to /open/companion/current; the route resolves it.
+  companion: { api: (id) => `/api/companion/file/${id}`, back: "/certification", backLabel: "Certification Hub" },
 };
 
 type Status = "checking" | "ready" | "missing" | "error" | "denied";

@@ -169,7 +169,7 @@ export type ProjectDetail = {
     /** 067: which Vision Frame rows the Deliverables sheet shows; null is all. */
     frameElements: string[] | null;
     /** 067: prompts and roster labels. */
-    voice: "church" | "organization";
+    voice: "church" | "organization" | "group";
     ui: TemplateUi;
   } | null;
   /** Per-module notes, keyed by section. */
@@ -325,7 +325,7 @@ export async function getProjectDetail(
         is_group: boolean;
         process_kind?: "modules" | "sections" | "frame" | null;
         frame_elements?: string[] | null;
-        voice?: "church" | "organization" | null;
+        voice?: "church" | "organization" | "group" | null;
         ui?: unknown;
       }
     | null;

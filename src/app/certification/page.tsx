@@ -189,6 +189,15 @@ export default function CertificationHubPage() {
             title="Keynote Presentations"
             description="The decks you teach from, in Keynote and PowerPoint."
           />
+          {/* Will's orientation document for a cohort (22 Sept 2026). It
+              opens straight into the viewer; the route serves whatever PDF is
+              newest in the Certification Handouts folder. */}
+          <HubCard
+            href="/open/companion/current"
+            icon={<CompanionIcon />}
+            title="Certification Companion Guide"
+            description="The bird's-eye view of how you'll learn to use Pivvot Vision Framing. Read pages 3–10 before session one."
+          />
         </div>
       </main>
 
@@ -322,6 +331,16 @@ function GuideIcon() {
       <rect x="6" y="3" width="12" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.75" />
       <path d="M9 1.75h6a.75.75 0 01.75.75v2.5H8.25v-2.5A.75.75 0 019 1.75z" fill="currentColor" />
       <path d="M9 11h6M9 14.5h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CompanionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden="true">
+      <path d="M4 5.5A2.5 2.5 0 016.5 3H12v16H6.5A2.5 2.5 0 004 21.5V5.5z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+      <path d="M20 5.5A2.5 2.5 0 0017.5 3H12v16h5.5a2.5 2.5 0 012.5 2.5V5.5z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+      <path d="M7 8h2.5M7 11h2.5M14.5 8H17M14.5 11H17" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
     </svg>
   );
 }

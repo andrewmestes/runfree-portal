@@ -127,11 +127,16 @@ const ORGANIZATION_PROMPTS: Partial<Record<VisionFrameElement, string>> = {
   vision_proper: "Living language that illustrates and anticipates the better future we are building toward.",
 };
 
-export type FrameVoice = "church" | "organization";
+/**
+ * "group" (082) is a certification cohort — people from several churches,
+ * sometimes none. The roster calls them Participants; the frame prompts use
+ * the organization wording, which names no church.
+ */
+export type FrameVoice = "church" | "organization" | "group";
 
 export function framePrompt(element: VisionFrameElement, voice: FrameVoice = "church"): string {
   const base = VISION_FRAME.find((e) => e.key === element)?.prompt ?? "";
-  return voice === "organization" ? (ORGANIZATION_PROMPTS[element] ?? base) : base;
+  return voice !== "church" ? (ORGANIZATION_PROMPTS[element] ?? base) : base;
 }
 
 /**

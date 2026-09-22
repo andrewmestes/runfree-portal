@@ -415,13 +415,13 @@ export default function HelpPage() {
               them.
             </Faq>
             <Faq q="My certification cohort">
-              A cohort being certified has its own project under <em>Your projects</em>.{" "}
-              <strong>Sessions</strong> holds each recording with the full session
-              summary; <strong>The Toolbox</strong> has the six modules, with the tools
-              covered so far ticked and each tool&rsquo;s example chart; the Dashboard
-              lists your practice assignments and what your trainers owe the group; and{" "}
-              <strong>Key Dates</strong> has the session calendar. Before a session, the
-              session itself asks a few questions about what you have practised.
+              A cohort being certified has its own project under <em>Your projects</em>,
+              laid out exactly like a church&rsquo;s. <strong>Sessions</strong> holds
+              each recording with the full session summary; <strong>The Process</strong>{" "}
+              has the six modules, with the tools covered so far ticked and each
+              tool&rsquo;s example chart; the Dashboard lists your practice assignments
+              and what your trainers owe the group; <strong>Key Dates</strong> has the
+              session calendar; and <strong>Team</strong> lists the participants.
             </Faq>
           </Section>
         )}

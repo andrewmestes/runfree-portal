@@ -135,7 +135,7 @@ export type Database = {
           /** Which Vision Frame rows the Deliverables sheet shows; null is all seven. */
           frame_elements: string[] | null;
           /** Prompts and roster labels: a church, or any other organization. */
-          voice: "church" | "organization";
+          voice: "church" | "organization" | "group";
           ui: unknown;
           created_at: string;
         };
@@ -148,7 +148,7 @@ export type Database = {
           is_active?: boolean;
           process_kind?: "modules" | "sections" | "frame";
           frame_elements?: string[] | null;
-          voice?: "church" | "organization";
+          voice?: "church" | "organization" | "group";
           ui?: unknown;
           created_at?: string;
         };

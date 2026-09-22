@@ -2472,7 +2472,7 @@ function ChurchTeamInfo({
   onChanged,
 }: {
   /** A nonprofit has a team, not a church team (067). */
-  voice?: "church" | "organization";
+  voice?: "church" | "organization" | "group";
   id: string;
   contacts: ChurchContact[];
   projectId: string;
@@ -2582,10 +2582,10 @@ function ChurchTeamInfo({
 
           <span className="min-w-0 flex-1">
             <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-runfree-magentaDeep">
-              {voice === "organization" ? "From your organization" : "From your church"}
+              {voice === "group" ? "In the room" : voice === "organization" ? "From your organization" : "From your church"}
             </span>
             <span className="block font-display text-xl font-extrabold tracking-tight text-runfree-ink">
-              {voice === "organization" ? "Your Team" : "Church Team"}
+              {voice === "group" ? "Participants" : voice === "organization" ? "Your Team" : "Church Team"}
             </span>
           </span>
 
@@ -9787,7 +9787,7 @@ function SessionRow({
   /** Who a recap email goes to — the client side of the roster. */
   clientEmails?: string[];
   /** 067: "church team" or "client team" on the publish checkbox. */
-  voice?: "church" | "organization";
+  voice?: "church" | "organization" | "group";
   /** Loom still for the collapsed row. */
   thumb?: string;
   /** Homework this session produced. */
@@ -10138,7 +10138,7 @@ function SessionRow({
                   checked={form.published}
                   onChange={(e) => setForm((f) => ({ ...f, published: e.target.checked }))}
                 />
-                {voice === "organization" ? "Visible to the client team" : "Visible to the church team"}
+                {voice === "group" ? "Visible to the participants" : voice === "organization" ? "Visible to the client team" : "Visible to the church team"}
               </label>
               <div className="flex items-center justify-between gap-3 pt-1">
                 <div className="flex items-center gap-2">
@@ -10186,7 +10186,7 @@ function SessionRow({
                 <div className="flex items-center justify-end gap-3">
                   {!session.published_at && (
                     <span className="text-[11px] text-gray-400">
-                      Draft — not visible to the {voice === "organization" ? "client" : "church"} team
+                      Draft — not visible to the {voice === "group" ? "participants" : voice === "organization" ? "client team" : "church team"}
                     </span>
                   )}
                   <button

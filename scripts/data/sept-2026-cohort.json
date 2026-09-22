@@ -1,0 +1,93 @@
+[
+ {
+  "name": "Jordan Koller",
+  "title": "Executive Pastor",
+  "org": "The Local Church",
+  "city": "Grand Rapids, MI",
+  "email": "jordan@localgr.org"
+ },
+ {
+  "name": "David Mudd",
+  "title": "Lead Pastor",
+  "org": "The Hope Collective",
+  "city": "Lake Zurich, IL",
+  "email": "dave@thehopeco.com"
+ },
+ {
+  "name": "Tom Burks",
+  "title": "Lead Pastor",
+  "org": "Stone Ridge Church",
+  "city": "Yuma, AZ",
+  "email": "tom@stoneridgechurch.com"
+ },
+ {
+  "name": "Bryan Faltynski",
+  "title": "Asst to District Superintendent",
+  "org": "Church Development-Rocky Mountain District",
+  "city": "Billings, MT",
+  "email": "BFaltynski@rmdcma.com"
+ },
+ {
+  "name": "Allan Love",
+  "title": "Senior Church Coach",
+  "org": "Chemistry Staffing",
+  "city": "Jacksonville, FL",
+  "email": "allan.love@chemistrystaffing.com"
+ },
+ {
+  "name": "Jim Johnson",
+  "title": "Lead Pastor",
+  "org": "Preston Trail Community Church",
+  "city": "Frisco, TX",
+  "email": "jjohnson@prestontrail.org"
+ },
+ {
+  "name": "Keith Cowart",
+  "title": "Bishop",
+  "org": "Free Methodist Church",
+  "city": "Indianapolis, IN",
+  "email": "keith.cowart@fmcusa.org"
+ },
+ {
+  "name": "Chris Dotson",
+  "title": "Executive Teaching Pastor",
+  "org": "South Tampa Fellowship",
+  "city": "Tampa FL",
+  "email": "chrisdotson@stfchurch.com"
+ },
+ {
+  "name": "David Robinson",
+  "title": "Director of Church Health",
+  "org": "Churches of God Eastern Regional Conference",
+  "city": "Wormleysburg, PA",
+  "email": "daver@erccog.org"
+ },
+ {
+  "name": "Sean Thome",
+  "title": "Executive Director",
+  "org": "Expand Network",
+  "city": "Portland, OR",
+  "email": "Sean@expandnw.org"
+ },
+ {
+  "name": "Jeff Locaste",
+  "title": "Founder/President",
+  "org": "Patheway Ministries",
+  "city": "WI",
+  "email": "jeff@patheway.org"
+ },
+ {
+  "name": "Paul Purvis",
+  "title": "Lead Pastor",
+  "org": "Mission Hill",
+  "city": "Tampa, FL",
+  "email": "paul@missionhill.org"
+ },
+ {
+  "name": "Richard Rieves",
+  "title": "Executive Director",
+  "org": "EPC Church Planting Community",
+  "city": "TN",
+  "email": "rrieves@epcchurchplanting.com"
+ }
+]

@@ -10,36 +10,106 @@ import AuthShell, {
   SubmitButton,
 } from "@/components/AuthShell";
 
+/**
+ * The same screen serves two arrivals: someone resetting a forgotten
+ * password, and someone just invited setting one for the first time. Only
+ * the wording differs, but telling a brand-new user their "reset link
+ * expired" would be baffling — they never had a password to reset.
+ *
+ * Two link shapes land here, and the difference is the whole story of the
+ * September 2026 cohort (Andrew: "none of the 13 were immediately able to
+ * access the portal off the first email … some got this over and over
+ * every time they tried to reset their password"):
+ *
+ *   Old shape — Supabase's own verify link, which redirects here with the
+ *   session in the URL hash. The token is spent by whoever OPENS the link.
+ *   Corporate mail security opens every link in an email seconds after it
+ *   arrives — auth.sessions showed one Colombian scanner IP "signing in" as
+ *   four different people within forty seconds of the invite going out,
+ *   and again each time three of them asked for a reset — so the real
+ *   person's click finds the token already used. Nothing on this page can
+ *   fix that; it is inherent to the link.
+ *
+ *   New shape — /auth/reset-password?token_hash=…&type=recovery|invite,
+ *   which the email templates emit once they use {{ .TokenHash }}. Opening
+ *   the link spends nothing. The token is only verified when a human
+ *   submits this form with a password, which no scanner does.
+ *
+ * Both are handled, so the code can ship before or after the templates
+ * change and the old shape keeps working for anyone holding an old email.
+ */
+
+type LinkType = "recovery" | "invite";
+
+function readLink(): { tokenHash: string | null; type: LinkType; errorCode: string | null } {
+  const query = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const rawType = query.get("type") || hash.get("type") || "";
+  return {
+    tokenHash: query.get("token_hash"),
+    type: rawType === "invite" ? "invite" : "recovery",
+    // Supabase sends a failed verify here as #error_code=otp_expired… —
+    // the one honest signal that the link was spent before this click.
+    errorCode: hash.get("error_code") || query.get("error_code"),
+  };
+}
+
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState<"checking" | "ok" | "invalid">("checking");
-  /**
-   * The same screen serves two arrivals: someone resetting a forgotten
-   * password, and someone just invited to a project setting one for the
-   * first time. Only the wording differs, but telling a brand-new user
-   * their "reset link expired" would be baffling — they never had a
-   * password to reset.
-   */
   const [isInvite, setIsInvite] = useState(false);
+  const [tokenHash, setTokenHash] = useState<string | null>(null);
+  const [spent, setSpent] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    // Read before the client consumes and clears the hash.
-    if (window.location.hash.includes("type=invite")) setIsInvite(true);
+    const link = readLink();
+    setIsInvite(link.type === "invite");
 
-    // Supabase puts the session in the URL and the client picks it up.
-    // Give it a moment, then confirm we actually have one.
-    const timer = setTimeout(async () => {
+    if (link.tokenHash) {
+      // New shape: nothing to wait for. The form shows at once and the
+      // token is verified on submit.
+      setTokenHash(link.tokenHash);
+      setReady("ok");
+      return;
+    }
+
+    if (link.errorCode) {
+      setSpent(link.errorCode === "otp_expired" || link.errorCode === "access_denied");
+      setReady("invalid");
+      return;
+    }
+
+    // Old shape: the client reads the session out of the hash, which
+    // includes a network round trip to fetch the user. This used to be a
+    // fixed 800 ms timer, which on a phone with two bars was a coin flip —
+    // a perfectly good link reported as invalid. Now it listens for the
+    // session and gives up only after ten seconds.
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      setReady(ok ? "ok" : "invalid");
+    };
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) finish(true);
+    });
+    let attempts = 0;
+    const poll = setInterval(async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      setReady(session ? "ok" : "invalid");
-    }, 800);
+      if (session) return finish(true);
+      if (++attempts >= 40) finish(false);
+    }, 250);
 
-    return () => clearTimeout(timer);
+    return () => {
+      sub.subscription.unsubscribe();
+      clearInterval(poll);
+    };
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -59,6 +129,19 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
+      if (tokenHash) {
+        // Spend the token now, on a human's submit, and only then set the
+        // password on the session it opened.
+        const { error: verifyErr } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: isInvite ? "invite" : "recovery",
+        });
+        if (verifyErr) {
+          setSpent(true);
+          setReady("invalid");
+          return;
+        }
+      }
       await updatePassword(password);
       router.push("/");
     } catch (err) {
@@ -95,9 +178,13 @@ export default function ResetPasswordPage() {
         <div className="space-y-4">
           <FormError
             message={
-              isInvite
-                ? "This invitation link is no longer valid."
-                : "This reset link is invalid or has expired."
+              spent
+                ? isInvite
+                  ? "This invitation link has already been used or has expired."
+                  : "This reset link has already been used or has expired."
+                : isInvite
+                  ? "This invitation link is no longer valid."
+                  : "This reset link is invalid or has expired."
             }
           />
           <p className="text-sm leading-relaxed text-gray-600">
@@ -115,7 +202,7 @@ export default function ResetPasswordPage() {
               </>
             ) : (
               <>
-                Reset links are single-use and expire after an hour.{" "}
+                Reset links are single-use and expire.{" "}
                 <a
                   href="/auth/forgot-password"
                   className="font-medium text-runfree-magentaDeep hover:underline"
@@ -126,6 +213,17 @@ export default function ResetPasswordPage() {
               </>
             )}
           </p>
+          {spent && (
+            <p className="text-sm leading-relaxed text-gray-500">
+              If this keeps happening, your organisation&rsquo;s email security may be
+              opening links before you do. Try the link from a personal email
+              address, or ask{" "}
+              <a href="mailto:andrew@runfree.co" className="font-medium text-runfree-magentaDeep hover:underline">
+                andrew@runfree.co
+              </a>{" "}
+              for help.
+            </p>
+          )}
         </div>
       )}
 

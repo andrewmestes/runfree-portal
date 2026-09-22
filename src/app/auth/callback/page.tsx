@@ -29,6 +29,23 @@ export default function AuthCallbackPage() {
       window.location.replace(`/auth/reset-password${window.location.hash}`);
       return;
     }
+    // The token-hash shape of the same invite (the email templates emit it
+    // once they use {{ .TokenHash }}; see reset-password/page.tsx for why).
+    // Nothing has been spent yet — pass it along untouched.
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("token_hash")) {
+      if (!query.get("type")) query.set("type", "invite");
+      window.location.replace(`/auth/reset-password?${query.toString()}`);
+      return;
+    }
+    // A verify that failed before it got here (link already opened by a
+    // mail scanner, or expired) arrives as #error_code=…; send it where the
+    // message lives rather than spinning for five seconds and saying
+    // "didn't complete".
+    if (window.location.hash.includes("error_code=")) {
+      window.location.replace(`/auth/reset-password${window.location.hash}`);
+      return;
+    }
 
     async function settle() {
       for (let attempt = 0; attempt < 20; attempt++) {

@@ -2126,3 +2126,61 @@ nothing; the list does.
 
 `scripts/invite-cohort.ts` has `--tag` and, in `--hub-only` mode, adds the
 certified row too, so the next cohort is one command.
+
+
+## Mail scanners spent the cohort's links (22 Sept 2026)
+
+Andrew, the evening the September cohort was invited: "none of the 13 were
+immediately able to access the portal off the first email you sent. they
+had to click forget password. Some got in, then some got this [reset link
+is invalid or has expired] over and over every time they tried to reset
+their password" — and "the password reset email took a long time to show
+up for people."
+
+What `auth.sessions` showed: within forty seconds of the 14:09 invite, one
+IP (89.249.56.174, "truview LLC", geolocated to Colombia) created sessions
+for four different people at four different organisations, with a
+different desktop user-agent each time, and a second IP (82.117.83.80,
+Bogotá) did the same for a fifth. At 17:15–17:20 the same first IP
+"signed in" again as three of them, twice each, a minute after each asked
+for a reset. That is an email-security link scanner: it opens every link
+in an inbound message, and a Supabase verify link is spent by whoever
+opens it. The real person's click then lands on `#error_code=otp_expired`.
+The people whose links were eaten: bfaltynski@rmdcma.com,
+paul@missionhill.org, keith.cowart@fmcusa.org (invite AND every reset),
+jjohnson@prestontrail.org, dave@thehopeco.com (invite). Three never
+opened anything: jordan@localgr.org, allan.love@chemistrystaffing.com,
+daver@erccog.org. The slow delivery is the same gateways holding mail
+while they scan it — nothing on our side queues.
+
+Two things were ours to fix, and are:
+
+- `auth/reset-password` now takes the **token-hash shape**,
+  `?token_hash=…&type=recovery|invite`. Opening it spends nothing; the
+  form shows at once and `verifyOtp` runs on submit — a human act no
+  scanner performs. `auth/callback` forwards that shape (and a failed
+  verify's `#error_code`) to it. Proven end to end with links minted by
+  `generateLink`: recovery and invite both sign in, a reused token gets
+  "already been used or has expired". The old hash shape still works.
+- The old shape's check was a fixed 800 ms timer before `getSession()`,
+  and reading the session out of the hash includes a network round trip
+  to fetch the user — on a phone with two bars a good link read as
+  invalid. It now listens for the session and gives up after ten seconds.
+
+What only the Supabase dashboard can do (Andrew's, not ours — the MCP has
+no template or config tools and there is no management token on this
+machine). Authentication → Email Templates: in **Reset Password** and
+**Invite user**, replace the button's `{{ .ConfirmationURL }}` with
+`{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery` and
+`{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite` respectively
+(`RedirectTo` is the portal address our code passes, so it keeps working
+whatever the project's Site URL says). Authentication → Providers → Email:
+**Email OTP expiry** to 86400 so an invite opened the next morning still
+works. Authentication → Emails → SMTP: confirm a custom provider is on.
+Until the templates change, every link sent is the old shape and a
+scanner will keep eating it for those three organisations.
+
+Re-sending, once the templates are changed: `resendWayIn()` (lib/invite.ts)
+picks the right email — a fresh invite for the three who never opened
+one, a password link for the five whose invite a scanner spent. Sending
+mail is Andrew's call; do not fire it unasked.

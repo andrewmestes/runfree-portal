@@ -48,11 +48,13 @@ export default function ForgotPasswordPage() {
       {sent ? (
         <div className="space-y-4">
           <FormNotice
-            message={`If ${email} has an account, a reset link is on its way. The link expires in an hour.`}
+            message={`If ${email} has an account, a reset link is on its way.`}
           />
           <p className="text-sm leading-relaxed text-gray-600">
             Not seeing it after a few minutes? Check your spam folder, and make
             sure you used the same email you were added to the project with.
+            Church and organisation mail systems sometimes hold new mail for a
+            few minutes while they scan it.
           </p>
         </div>
       ) : (

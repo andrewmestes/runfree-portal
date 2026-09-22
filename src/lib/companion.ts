@@ -27,6 +27,8 @@ export type CompanionFile = {
   mimeType: string;
   sizeBytes: number | null;
   modifiedTime: string | null;
+  /** Drive's content hash — the ETag the file route hands the browser. */
+  md5: string | null;
 };
 
 export function isCompanionConfigured(): boolean {
@@ -54,7 +56,7 @@ export async function getCompanionGuide(): Promise<CompanionFile | null> {
 
   const res = await getDriveClient().files.list({
     q: `'${folderId}' in parents and trashed = false`,
-    fields: "files(id,name,mimeType,size,modifiedTime)",
+    fields: "files(id,name,mimeType,size,modifiedTime,md5Checksum)",
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
     pageSize: 100,
@@ -70,7 +72,7 @@ export async function getCompanionGuide(): Promise<CompanionFile | null> {
   if (pdfs.length === 0) {
     const byName = await getDriveClient().files.list({
       q: `name contains 'Companion Guide' and mimeType = 'application/pdf' and trashed = false`,
-      fields: "files(id,name,mimeType,size,modifiedTime)",
+      fields: "files(id,name,mimeType,size,modifiedTime,md5Checksum)",
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
       pageSize: 20,
@@ -89,5 +91,46 @@ export async function getCompanionGuide(): Promise<CompanionFile | null> {
     mimeType: f.mimeType!,
     sizeBytes: f.size ? Number(f.size) : null,
     modifiedTime: f.modifiedTime || null,
+    md5: f.md5Checksum || null,
   };
+}
+
+/**
+ * The lookup, held for a minute. Andrew: "the companion guide takes a while
+ * to load in the cert hub." Each open was four Drive round trips in a row —
+ * the folder listing (empty, see above), the name search, a metadata read,
+ * then the bytes — before the first byte moved. Now the first three happen
+ * once a minute, and a new edition in Drive is still live within that.
+ */
+const TTL_MS = 60_000;
+let cached: { at: number; value: Promise<CompanionFile | null> } | null = null;
+
+export function getCompanionGuideCached(): Promise<CompanionFile | null> {
+  const now = Date.now();
+  if (cached && now - cached.at < TTL_MS) return cached.value;
+  const value = getCompanionGuide().catch((err) => {
+    if (cached?.value === value) cached = null;
+    throw err;
+  });
+  cached = { at: now, value };
+  return value;
+}
+
+/**
+ * The bytes. Held in memory against the content hash: the lookup above
+ * refreshes the hash once a minute, so a new edition in Drive replaces the
+ * copy here within that, and every open in between never touches Drive.
+ * One guide, about a megabyte — a bytes cache is cheaper than a round trip.
+ */
+let bytes: { md5: string; body: ArrayBuffer } | null = null;
+
+export async function readCompanionGuide(file: CompanionFile): Promise<ArrayBuffer> {
+  if (bytes && file.md5 && bytes.md5 === file.md5) return bytes.body;
+  const res = await getDriveClient().files.get(
+    { fileId: file.id, alt: "media", supportsAllDrives: true },
+    { responseType: "arraybuffer" }
+  );
+  const body = res.data as ArrayBuffer;
+  if (file.md5) bytes = { md5: file.md5, body };
+  return body;
 }

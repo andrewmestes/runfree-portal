@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCertificationAccess } from "@/lib/api-auth";
-import { fetchDriveFile } from "@/lib/drive";
-import { getCompanionGuide, isCompanionConfigured } from "@/lib/companion";
+import { getCompanionGuideCached, isCompanionConfigured, readCompanionGuide } from "@/lib/companion";
 
 /**
  * GET /api/companion/file/{id}
@@ -26,18 +25,32 @@ export async function GET(
       return NextResponse.json({ error: "The Companion Guide is not configured on the server" }, { status: 503 });
     }
 
-    const current = await getCompanionGuide();
+    const current = await getCompanionGuideCached();
     if (!current || (id !== "current" && current.id !== id)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const file = await fetchDriveFile(current.id);
-    return new NextResponse(file.body, {
+    // Drive's content hash is the ETag. A repeat open sends it back and gets
+    // a 304 with no bytes; between opens the browser serves its own copy for
+    // five minutes without asking. A new edition changes the hash, so the
+    // guide is never stale by more than that.
+    const etag = current.md5 ? `"${current.md5}"` : null;
+    const cacheHeaders: Record<string, string> = {
+      "Cache-Control": "private, max-age=300, must-revalidate",
+      ...(etag ? { ETag: etag } : {}),
+    };
+    if (etag && req.headers.get("if-none-match") === etag) {
+      return new NextResponse(null, { status: 304, headers: cacheHeaders });
+    }
+
+    const body = await readCompanionGuide(current);
+    return new NextResponse(body, {
       status: 200,
       headers: {
-        "Content-Type": file.mimeType,
-        "Content-Disposition": `inline; filename="${file.filename.replace(/"/g, "")}"`,
-        "Cache-Control": "private, no-cache, must-revalidate",
+        ...cacheHeaders,
+        "Content-Type": current.mimeType,
+        "Content-Disposition": `inline; filename="${current.name.replace(/"/g, "")}"`,
+        "Content-Length": String(body.byteLength),
       },
     });
   } catch (error) {

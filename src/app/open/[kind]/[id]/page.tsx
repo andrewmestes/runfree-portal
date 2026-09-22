@@ -99,16 +99,19 @@ export default function OpenPage() {
         router.replace(`/auth/login?next=${encodeURIComponent(pathname)}`);
         return;
       }
-      if (!(await hasCertificationAccess())) {
+      // Two independent questions, asked together — they used to be two
+      // round trips in a row before the file was even requested.
+      const [allowed, { data: { session } }] = await Promise.all([
+        hasCertificationAccess(),
+        supabase.auth.getSession(),
+      ]);
+      if (!allowed) {
         // Say so, rather than bouncing to the home page. A church member who
         // taps a guide link — or a framer whose access has not been granted
         // yet — landed on their dashboard with no idea why.
         setStatus("denied");
         return;
       }
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
       if (!session) {
         router.replace(`/auth/login?next=${encodeURIComponent(pathname)}`);
         return;

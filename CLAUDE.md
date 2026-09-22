@@ -2025,6 +2025,22 @@ account separately; sharing the handouts sub-folder does not reach its
 parent, and until it is shared the card 404s with "That file isn't in the
 library".
 
+Speed (22 Sept, Andrew: "the companion guide takes a while to load in the
+cert hub"): the lookup is memoised for a minute and the bytes are held in
+memory against Drive's `md5Checksum`, so the route touches Drive once a
+minute at most; the hash is the `ETag`, a matching `If-None-Match` gets a
+304, and `Cache-Control: private, max-age=300` lets the browser keep its
+own copy. The hub pre-warms the route the moment it renders, so the card
+opens from cache. Measured on the dev server: cold 2.7 s, warm ~200 ms,
+revalidate ~200 ms. A new edition in Drive changes the hash and is live
+within the minute. Keep the pre-warm `useEffect` above the early returns
+in `certification/page.tsx` — below them it is a conditional hook and the
+page throws "Rendered more hooks than during the previous render".
+
+Card order on the hub (Andrew, 22 Sept): Digital Facilitator's Guide,
+Certification Companion Guide, Books, Process Handouts, Training Videos,
+Keynote Presentations.
+
 ## Tags on a person (083, 22 Sept 2026)
 
 `profiles.tags text[]` — free-text labels an admin puts on a person. Andrew,

@@ -88,6 +88,29 @@ export default function CertificationHubPage() {
     router.replace("/auth/login");
   }
 
+  // Warm the Companion Guide while the hub is on screen. The file route
+  // answers with a five-minute private cache and an ETag, so this one
+  // low-priority fetch means the card opens from the browser's own copy
+  // instead of waiting on Drive. Fire-and-forget: a failure here costs
+  // nothing, the card still fetches on its own.
+  useEffect(() => {
+    if (status !== "ready") return;
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session || cancelled) return;
+      try {
+        await fetch("/api/companion/file/current", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          priority: "low",
+        } as RequestInit);
+      } catch {
+        // Nothing to do; the card fetches for itself when opened.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [status]);
+
   if (status === "checking") {
     return (
       <div className="grid min-h-screen place-items-center bg-gray-50">
@@ -160,6 +183,24 @@ export default function CertificationHubPage() {
       <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <HubCard
+            href="/guide"
+            icon={<GuideIcon />}
+            title="Digital Facilitator's Guide"
+            description="The complete training playbook in one file, always current."
+          />
+          <HubCard
+            href="/open/companion/current"
+            icon={<CompanionIcon />}
+            title="Certification Companion Guide"
+            description="The bird's-eye view of how you'll learn to use Pivvot Vision Framing. Read pages 3–10 before session one."
+          />
+          <HubCard
+            href="/books"
+            icon={<BooksIcon />}
+            title="Books"
+            description="Visual summaries, chapters, and full downloads of the books behind the process."
+          />
+          <HubCard
             href="/resources"
             icon={<HandoutsIcon />}
             title="Process Handouts"
@@ -172,31 +213,10 @@ export default function CertificationHubPage() {
             description="Walkthroughs and coaching for facilitating each tool."
           />
           <HubCard
-            href="/books"
-            icon={<BooksIcon />}
-            title="Books"
-            description="Visual summaries, chapters, and full downloads of the books behind the process."
-          />
-          <HubCard
-            href="/guide"
-            icon={<GuideIcon />}
-            title="Digital Facilitator's Guide"
-            description="The complete training playbook in one file, always current."
-          />
-          <HubCard
             href="/keynotes"
             icon={<KeynotesIcon />}
             title="Keynote Presentations"
             description="The decks you teach from, in Keynote and PowerPoint."
-          />
-          {/* Will's orientation document for a cohort (22 Sept 2026). It
-              opens straight into the viewer; the route serves whatever PDF is
-              newest in the Certification Handouts folder. */}
-          <HubCard
-            href="/open/companion/current"
-            icon={<CompanionIcon />}
-            title="Certification Companion Guide"
-            description="The bird's-eye view of how you'll learn to use Pivvot Vision Framing. Read pages 3–10 before session one."
           />
         </div>
       </main>

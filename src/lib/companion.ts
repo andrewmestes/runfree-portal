@@ -60,9 +60,23 @@ export async function getCompanionGuide(): Promise<CompanionFile | null> {
     pageSize: 100,
   });
 
-  const pdfs = (res.data.files || []).filter(
+  let pdfs = (res.data.files || []).filter(
     (f) => f.mimeType !== FOLDER_MIME && (f.mimeType === "application/pdf" || /\.pdf$/i.test(f.name || ""))
   );
+  // Andrew shared the FILE rather than the folder (22 Sept), which makes the
+  // folder listing empty while the guide itself is perfectly readable. A file
+  // shared on its own reports no parents, so it cannot be found by folder;
+  // fall back to the one name it will always carry.
+  if (pdfs.length === 0) {
+    const byName = await getDriveClient().files.list({
+      q: `name contains 'Companion Guide' and mimeType = 'application/pdf' and trashed = false`,
+      fields: "files(id,name,mimeType,size,modifiedTime)",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      pageSize: 20,
+    });
+    pdfs = byName.data.files || [];
+  }
   if (pdfs.length === 0) return null;
   pdfs.sort((a, b) => new Date(b.modifiedTime || 0).getTime() - new Date(a.modifiedTime || 0).getTime());
 

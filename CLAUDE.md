@@ -2051,6 +2051,22 @@ id, so "Open the Guide" reads from the browser's own copy. Measured in a
 headless Chrome against the dev server: click to first page drawn 111 ms,
 the fetch served from cache with zero bytes transferred.
 
+**Training Videos has two tabs** (22 Sept). Andrew: "I need to be able to
+distinguish between videos that our certified guys can use to train their
+clients, and the videos that are created to train them as a trainer. the
+tool videos you imported are more internal for the trainer. the original
+list of videos we had on there are the client-facing videos." Every video
+on `/videos` carries an `audience`: the database rows (`/api/videos`, the
+original list) are `clients`, the Drive walkthroughs (`/api/tool-videos`)
+are `facilitators`, and a Drive "0 - Intro" film re-homed into Orientation
+by the fold goes with `clients` since it is the same set of films. The tab
+lives in the URL (`?tab=facilitators`; the client tab is the bare URL) so
+links and Back work. Tab names — "Client Videos" / "Facilitator Training"
+— were my pick; Andrew offered "Process Videos and Training Videos" and
+said he was open to others. The Help FAQ "Which videos can I show a
+client?" and the hub card describe the split. `site-shot.ts` captures
+both tabs (`videos`, `videos-facilitators`).
+
 Card order on the hub (Andrew, 22 Sept): Digital Facilitator's Guide,
 Certification Companion Guide, Books, Process Handouts, Training Videos,
 Keynote Presentations.

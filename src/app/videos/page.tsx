@@ -34,7 +34,23 @@ type Video = {
   sort_order: number;
   /** Resolved and verified server-side; null means show the branded card. */
   thumbnailUrl: string | null;
+  /**
+   * Who the video is for. The database rows are the client-facing teaching
+   * videos a Certified Vision Framer shows the teams they lead; the Process
+   * Tools walkthroughs read from Drive train the facilitator and are not
+   * for clients. Andrew, 22 Sept: "I need to be able to distinguish between
+   * videos that our certified guys can use to train their clients, and the
+   * videos that are created to train them as a trainer."
+   */
+  audience: Audience;
 };
+
+type Audience = "clients" | "facilitators";
+
+const TABS: { key: Audience; label: string; blurb: string }[] = [
+  { key: "clients", label: "Client Videos", blurb: "Teaching videos to show the teams you lead." },
+  { key: "facilitators", label: "Facilitator Training", blurb: "Tool walkthroughs that train you as the facilitator — not for clients." },
+];
 
 type Group = {
   key: string;
@@ -91,6 +107,7 @@ function toolVideosAsVideos(groups: ToolVideoGroup[]): Video[] {
         module: g.name,
         sort_order: 100_000 + g.order * 1000 + i,
         thumbnailUrl: POSTERS.has(v.id) ? `/brand/videos/drive/${v.id}.jpg` : null,
+        audience: "facilitators",
       });
     });
   }
@@ -127,7 +144,9 @@ function foldIntroIntoOrientation(db: Video[], tools: Video[]): Video[] {
       if (!twin.thumbnailUrl && v.thumbnailUrl) twin.thumbnailUrl = v.thumbnailUrl;
       return [];
     }
-    return orientation ? [{ ...v, module: orientation }] : [v];
+    // It joins the client-facing shelf: the Intro folder is the same set
+    // of films as Orientation, which is what a client sees first.
+    return orientation ? [{ ...v, module: orientation, audience: "clients" }] : [v];
   });
 }
 
@@ -138,6 +157,25 @@ export default function VideosPage() {
     "checking" | "loading" | "denied" | "ready" | "error"
   >("checking");
   const [loadError, setLoadError] = useState("");
+  /**
+   * Which shelf is showing. Kept in the URL (?tab=facilitators) so a shared
+   * link, a refresh and the Back button all land on the same shelf.
+   */
+  const [tab, setTab] = useState<Audience>("clients");
+  useEffect(() => {
+    const read = () =>
+      setTab(new URLSearchParams(window.location.search).get("tab") === "facilitators" ? "facilitators" : "clients");
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
+  const goTab = useCallback((next: Audience) => {
+    setTab(next);
+    const url = new URL(window.location.href);
+    if (next === "clients") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", next);
+    window.history.pushState(null, "", url);
+  }, []);
   const [playing, setPlaying] = useState<Video | null>(null);
   /** The ticketed stream address for a Drive video while it plays. */
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
@@ -191,7 +229,9 @@ export default function VideosPage() {
           const toolBody = await toolRes.json();
           tools = toolVideosAsVideos(toolBody.groups || []);
         }
-        const dbVideos: Video[] = res.ok ? body.videos || [] : [];
+        const dbVideos: Video[] = (res.ok ? body.videos || [] : []).map(
+          (v: Omit<Video, "audience">) => ({ ...v, audience: "clients" as const })
+        );
         setVideos([...dbVideos, ...foldIntroIntoOrientation(dbVideos, tools)]);
       }
 
@@ -273,6 +313,7 @@ export default function VideosPage() {
     const byKey = new Map<string, Group>();
 
     for (const v of videos) {
+      if (v.audience !== tab) continue;
       if (
         needle &&
         !v.title.toLowerCase().includes(needle) &&
@@ -312,9 +353,15 @@ export default function VideosPage() {
     return [...byKey.values()].sort(
       (a, b) => position(a) - position(b) || a.rank - b.rank || a.label.localeCompare(b.label)
     );
-  }, [videos, needle]);
+  }, [videos, needle, tab]);
 
   const total = groups.reduce((n, g) => n + g.videos.length, 0);
+  const counts = useMemo(() => {
+    const c: Record<Audience, number> = { clients: 0, facilitators: 0 };
+    for (const v of videos) c[v.audience]++;
+    return c;
+  }, [videos]);
+  const shelf = TABS.find((t) => t.key === tab)!;
 
   if (status === "error") {
     return <AccessError onRetry={() => window.location.reload()} />;
@@ -334,7 +381,7 @@ export default function VideosPage() {
         framer={framer}
         onSignOut={handleSignOut}
         title="Training Videos"
-        subtitle="Walkthroughs and coaching for facilitating the tools"
+        subtitle="Videos to show your clients, and the walkthroughs that train you"
         badge
       />
 
@@ -346,11 +393,56 @@ export default function VideosPage() {
         )}
 
         {videos.length > 0 && (
+          <div
+            role="tablist"
+            aria-label="Who the videos are for"
+            className="mb-8 grid gap-3 sm:grid-cols-2"
+          >
+            {TABS.map((t) => {
+              const active = t.key === tab;
+              return (
+                <button
+                  key={t.key}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => goTab(t.key)}
+                  className={`relative overflow-hidden rounded-2xl border px-5 py-4 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta/40 ${
+                    active
+                      ? "border-transparent bg-white shadow-md ring-1 ring-runfree-magenta/30"
+                      : "border-gray-200 bg-white/60 hover:bg-white hover:shadow-sm"
+                  }`}
+                >
+                  <span
+                    aria-hidden
+                    className={`absolute inset-x-0 top-0 h-1 ${active ? "bg-runfree-grad" : "bg-gray-200"}`}
+                  />
+                  <span className="flex items-center justify-between gap-3">
+                    <span className={`font-display text-base font-bold ${active ? "text-runfree-ink" : "text-gray-600"}`}>
+                      {t.label}
+                    </span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        active ? "bg-runfree-pink text-runfree-magentaDeep" : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {counts[t.key]}
+                    </span>
+                  </span>
+                  <span className={`mt-1 block text-sm ${active ? "text-gray-600" : "text-gray-500"}`}>
+                    {t.blurb}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {videos.length > 0 && (
           <div className="mb-8 flex flex-wrap items-center gap-3">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search videos…"
+              placeholder={`Search ${shelf.label.toLowerCase()}…`}
               className="w-full max-w-sm rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none transition placeholder:text-gray-500 focus:border-runfree-magenta focus:ring-2 focus:ring-runfree-magenta/25"
             />
             <span className="text-sm text-gray-500">
@@ -376,7 +468,9 @@ export default function VideosPage() {
             <p className="font-display text-lg font-semibold text-runfree-ink">
               No matches
             </p>
-            <p className="mt-2 text-sm text-gray-500">Try a different search.</p>
+            <p className="mt-2 text-sm text-gray-500">
+              {needle ? "Try a different search, or the other tab." : `No ${shelf.label.toLowerCase()} yet.`}
+            </p>
           </div>
         ) : (
           <div className="space-y-10">

@@ -210,7 +210,7 @@ export default function CertificationHubPage() {
             href="/videos"
             icon={<VideosIcon />}
             title="Training Videos"
-            description="Walkthroughs and coaching for facilitating each tool."
+            description="Client-facing teaching videos on one tab, the walkthroughs that train you on the other."
           />
           <HubCard
             href="/keynotes"

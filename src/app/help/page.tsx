@@ -399,13 +399,15 @@ export default function HelpPage() {
               showing it &mdash; a .key or .pptx cannot open in a browser &mdash; and
               offers the other format too.
             </Faq>
-            <Faq q="The tool walkthrough videos">
-              <strong>Training Videos</strong> now holds the Process Tools walkthroughs
-              as well as the teaching videos, under the same six module headings. They
-              are streamed from RunFree&rsquo;s Drive through the portal, so they play
-              without a Google account, and a video replaced in Drive is replaced here
-              the same day. <em>Open full screen</em> in the player gives you a page
-              with only the video on it, which is what the guide links to.
+            <Faq q="Which videos can I show a client?">
+              <strong>Training Videos</strong> has two tabs. <em>Client Videos</em> are
+              the teaching videos you show the teams you lead. <em>Facilitator
+              Training</em> holds the Process Tools walkthroughs that train you as the
+              facilitator, under the six module headings; they are for you, not for
+              clients. Both play without a Google account, and a video replaced in
+              Drive is replaced here the same day. <em>Open full screen</em> in the
+              player gives you a page with only the video on it, which is what the
+              guide links to.
             </Faq>
             <Faq q="What is the difference between this and a church project?">
               The certification library is <em>your</em> material as a facilitator — how

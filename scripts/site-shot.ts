@@ -72,7 +72,7 @@ async function main() {
   const P = `/projects/${PROJECT}`;
   const pages: [string, string][] = [["home", "/"], ["my-work", "/my-work"], ["help", "/help"], ["account", "/account"],
     ...(["dashboard","prepare","team","dates","sessions","process","books","deliverables","execution"] as const).map((p) => [`project-${p}`, `${P}?panel=${p}`] as [string, string]),
-    ["videos", "/videos"], ["books", "/books"], ["keynotes", "/keynotes"], ["guide", "/guide"], ["resources", "/resources"], ["certification", "/certification"],
+    ["videos", "/videos"], ["videos-facilitators", "/videos?tab=facilitators"], ["books", "/books"], ["keynotes", "/keynotes"], ["guide", "/guide"], ["resources", "/resources"], ["certification", "/certification"],
     ["open-handout", "/open/handout/1tWQta-q_9X4SgKr-NEPUK-a9uP2dMsFU"], ["open-video", "/open/video/1X0go06NCPcSC7g8Vvff5LRgiE2hd3Iq8"],
     ["privacy", "/privacy"], ["terms", "/terms"], ["forgot", "/auth/forgot-password"],
     ["vision-stack", `${P}/vision-stack`], ["new-project", "/projects/new"], ["admin", "/admin"], ["open-companion", "/open/companion/current"]];

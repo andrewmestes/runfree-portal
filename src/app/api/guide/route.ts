@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCertificationAccess } from "@/lib/api-auth";
-import { supabaseAdmin } from "@/lib/supabase";
-import { getFacilitatorGuide, isDriveConfigured } from "@/lib/guide";
+import { getFacilitatorGuideCached, isDriveConfigured } from "@/lib/guide";
 
 /** GET /api/guide — the current Digital Facilitator's Guide, gated same as the rest. */
 export async function GET(req: NextRequest) {
@@ -16,7 +15,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const file = await getFacilitatorGuide();
+    const file = await getFacilitatorGuideCached();
     return NextResponse.json({ file });
   } catch (error) {
     console.error("Guide lookup failed:", error);

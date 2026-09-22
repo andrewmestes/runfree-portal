@@ -68,8 +68,20 @@ export default function GuidePage() {
         return;
       }
 
-      // Independent questions, asked together. They used to be awaited one
-      // after the other, which meant two full round-trips where one would do.
+      // Everything below is independent, so it all goes out at once: the
+      // framer row, the access check, and the guide lookup itself (the API
+      // gates that on its own, so nothing leaks if access turns out to be
+      // denied). Three questions, one round trip.
+      const lookup = (async () => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return null;
+        const res = await fetch("/api/guide", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        return { ok: res.ok, body: await res.json() };
+      })();
       const [current, allowed] = await Promise.all([
         getCurrentFramer() as Promise<Framer | null>,
         hasCertificationAccess(),
@@ -83,18 +95,12 @@ export default function GuidePage() {
       setStatus("loading");
       setFramer(current);
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        const res = await fetch("/api/guide", {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        const body = await res.json();
-        if (!res.ok) {
-          setLoadError(body.error || "Could not load the guide.");
+      const result = await lookup;
+      if (result) {
+        if (!result.ok) {
+          setLoadError(result.body.error || "Could not load the guide.");
         } else {
-          setFile(body.file);
+          setFile(result.body.file);
         }
       }
 
@@ -105,6 +111,35 @@ export default function GuidePage() {
       setStatus("error");
     });
   }, [router]);
+
+  /**
+   * Warm the guide while the cover is on screen. The file route answers with
+   * a five-minute private cache and an ETag, so this one low-priority fetch
+   * means "Open the Guide" reads 16.6 MB from the browser's own copy instead
+   * of waiting on Drive. Fire-and-forget: if it fails, the preview fetches
+   * for itself exactly as before.
+   */
+  useEffect(() => {
+    if (!file) return;
+    let cancelled = false;
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session || cancelled) return;
+      try {
+        await fetch(`/api/guide/file/${file.id}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          priority: "low",
+        } as RequestInit);
+      } catch {
+        // Nothing to do; the preview fetches for itself when opened.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
 
   /**
    * Navigation is a side effect, so it belongs here rather than in the render

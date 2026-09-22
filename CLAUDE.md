@@ -2037,6 +2037,20 @@ within the minute. Keep the pre-warm `useEffect` above the early returns
 in `certification/page.tsx` — below them it is a conditional hook and the
 page throws "Rendered more hooks than during the previous render".
 
+The Digital Facilitator's Guide got the same treatment the same afternoon
+(Andrew: "it took a long time to load just now"). The September edition is
+25 MB, and every open was a folder listing, a metadata read and the whole
+file streamed through the function with `no-cache` on the way out. Now
+`lib/guide.ts` memoises the lookup for a minute, streams from Drive the
+first time (tee-ing a copy into memory against the md5) and from memory
+after that — always as a stream, in 1 MB pieces, because a buffered
+function response is capped at 4.5 MB and a streamed one is not. The file
+route carries the ETag / 304 / `private, max-age=300` headers, and the
+guide page fires a low-priority fetch of the file as soon as it knows the
+id, so "Open the Guide" reads from the browser's own copy. Measured in a
+headless Chrome against the dev server: click to first page drawn 111 ms,
+the fetch served from cache with zero bytes transferred.
+
 Card order on the hub (Andrew, 22 Sept): Digital Facilitator's Guide,
 Certification Companion Guide, Books, Process Handouts, Training Videos,
 Keynote Presentations.

@@ -20,6 +20,8 @@ export type GuideFile = {
   mimeType: string;
   sizeBytes: number | null;
   modifiedTime: string | null;
+  /** Drive's content hash — the ETag the file route hands the browser. */
+  md5: string | null;
 };
 
 function isDriveConfigured(): boolean {
@@ -56,7 +58,7 @@ export async function getFacilitatorGuide(): Promise<GuideFile | null> {
 
   const res = await drive.files.list({
     q: `'${folderId}' in parents and trashed = false`,
-    fields: "files(id,name,mimeType,size,modifiedTime)",
+    fields: "files(id,name,mimeType,size,modifiedTime,md5Checksum)",
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
     pageSize: 100,
@@ -82,7 +84,85 @@ export async function getFacilitatorGuide(): Promise<GuideFile | null> {
     mimeType: f.mimeType!,
     sizeBytes: f.size ? Number(f.size) : null,
     modifiedTime: f.modifiedTime || null,
+    md5: f.md5Checksum || null,
   };
+}
+
+/**
+ * The lookup, held for a minute. Andrew, 22 Sept: the guide "took a long
+ * time to load just now." Opening it was a folder listing, a metadata read
+ * and then 16.6 MB streamed through the function, every single time, with
+ * the browser told never to keep a copy. The listing now happens once a
+ * minute at most; a new edition dropped in Drive is live within that.
+ */
+const TTL_MS = 60_000;
+let cached: { at: number; value: Promise<GuideFile | null> } | null = null;
+
+export function getFacilitatorGuideCached(): Promise<GuideFile | null> {
+  const now = Date.now();
+  if (cached && now - cached.at < TTL_MS) return cached.value;
+  const value = getFacilitatorGuide().catch((err) => {
+    if (cached?.value === value) cached = null;
+    throw err;
+  });
+  cached = { at: now, value };
+  return value;
+}
+
+/**
+ * The bytes. A warm instance answers from memory, keyed on the content hash
+ * so a new edition replaces the copy the minute the lookup sees it. A cold
+ * one streams from Drive — the browser starts receiving while Drive is still
+ * sending, instead of waiting for the whole file to land here first — and
+ * keeps what went past for the next person.
+ */
+let bytes: { md5: string; body: Buffer } | null = null;
+
+/** A held copy, handed out in 1 MB pieces. Always a stream, never a body —
+ *  the platform caps a buffered function response at 4.5 MB; a streamed one
+ *  it does not (the same reason drive.ts streams everything). */
+function streamFromMemory(body: Buffer): ReadableStream<Uint8Array> {
+  const CHUNK = 1024 * 1024;
+  let at = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (at >= body.byteLength) return controller.close();
+      controller.enqueue(new Uint8Array(body.subarray(at, at + CHUNK)));
+      at += CHUNK;
+    },
+  });
+}
+
+export async function readFacilitatorGuide(
+  file: GuideFile
+): Promise<{ body: ReadableStream<Uint8Array>; length: number | null; cached: boolean }> {
+  if (bytes && file.md5 && bytes.md5 === file.md5) {
+    return { body: streamFromMemory(bytes.body), length: bytes.body.byteLength, cached: true };
+  }
+
+  const res = await getDriveClient().files.get(
+    { fileId: file.id, alt: "media", supportsAllDrives: true },
+    { responseType: "stream" }
+  );
+  const node = res.data as NodeJS.ReadableStream & { destroy?: () => void };
+  const chunks: Buffer[] = [];
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      node.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+        controller.enqueue(new Uint8Array(chunk));
+      });
+      node.on("end", () => {
+        controller.close();
+        if (file.md5) bytes = { md5: file.md5, body: Buffer.concat(chunks) };
+      });
+      node.on("error", (err) => controller.error(err));
+    },
+    cancel() {
+      node.destroy?.();
+    },
+  });
+  return { body, length: file.sizeBytes, cached: false };
 }
 
 export { isDriveConfigured };

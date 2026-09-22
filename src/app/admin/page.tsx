@@ -33,6 +33,8 @@ type Profile = {
   is_owner: boolean;
   certification_access: boolean;
   account_role: AccountRole;
+  /** Free-text labels an admin puts on a person — a cohort, a network, a year (083). */
+  tags: string[];
 };
 
 type Row = Profile & {
@@ -107,6 +109,8 @@ export default function AdminPage() {
   const [status, setStatus] = useState<"checking" | "ready" | "denied" | "error">("checking");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AccountRole | "all">("all");
+  /** A tag chip narrows the list to the people carrying it; null is everyone. */
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   // Permission first: this page exists to answer "who can reach what", and
   // grouping by permission answers it at a glance. Alphabetical is for
   // finding one known person, which is what the search box is for.
@@ -250,12 +254,14 @@ export default function AdminPage() {
     const q = query.trim().toLowerCase();
     const filtered = rows.filter((r) => {
       if (filter !== "all" && r.account_role !== filter) return false;
+      if (tagFilter && !(r.tags ?? []).includes(tagFilter)) return false;
       if (!q) return true;
       // Project names too, so "athena" lists a whole church team at once.
       return (
         r.email.toLowerCase().includes(q) ||
         (r.full_name ?? "").toLowerCase().includes(q) ||
-        r.projectNames.some((n) => n.toLowerCase().includes(q))
+        r.projectNames.some((n) => n.toLowerCase().includes(q)) ||
+        (r.tags ?? []).some((t) => t.toLowerCase().includes(q))
       );
     });
 
@@ -273,7 +279,39 @@ export default function AdminPage() {
       if (sort === "last") return last(a).localeCompare(last(b)) || first(a).localeCompare(first(b));
       return first(a).localeCompare(first(b));
     });
-  }, [rows, query, filter, sort]);
+  }, [rows, query, filter, tagFilter, sort]);
+
+  /** Every tag in use, with how many people carry it — the filter row. */
+  const tagCounts = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const r of rows) for (const t of r.tags ?? []) c.set(t, (c.get(t) ?? 0) + 1);
+    return [...c.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [rows]);
+
+  /**
+   * Add or remove one tag on one person. Andrew, 22 Sept 2026, after a
+   * cohort was invited with no project to group them: "add a tag 'North
+   * Carolina (2026)' … within the admin section." The array is written
+   * whole; two admins tagging the same person at once is not a case worth
+   * a server round trip.
+   */
+  async function setTags(id: string, tags: string[]) {
+    setBusyId(id);
+    try {
+      const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+      const { error } = await supabase.from("profiles").update({ tags: clean }).eq("id", id);
+      if (error) throw error;
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, tags: clean } : r)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not save the tag");
+    } finally {
+      setBusyId(null);
+    }
+  }
+  function addTag(r: Row) {
+    const t = window.prompt("Tag for " + (r.full_name || r.email) + ":", tagFilter ?? "");
+    if (t && t.trim()) void setTags(r.id, [...(r.tags ?? []), t]);
+  }
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -384,6 +422,19 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {tagCounts.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+              Tags
+            </span>
+            {tagCounts.map(([t, n]) => (
+              <FilterChip key={t} on={tagFilter === t} onClick={() => setTagFilter(tagFilter === t ? null : t)}>
+                {t} {n}
+              </FilterChip>
+            ))}
+          </div>
+        )}
+
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
             Sort by
@@ -486,6 +537,35 @@ export default function AdminPage() {
                         +{r.projectNames.length - PROJECT_CHIPS}
                       </span>
                     )}
+                    {/* Tags, in the brand pink so they read as a different
+                        kind of fact from the grey project chips. Each one
+                        removes with its ×; the + prompts for a new one. */}
+                    {(r.tags ?? []).map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 rounded-full bg-runfree-pink px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-runfree-magentaDeep"
+                      >
+                        {t}
+                        <button
+                          type="button"
+                          aria-label={`Remove tag ${t}`}
+                          disabled={busyId === r.id}
+                          onClick={() => void setTags(r.id, (r.tags ?? []).filter((x) => x !== t))}
+                          className="-mr-0.5 rounded-full px-0.5 leading-none text-runfree-magentaDeep/60 hover:text-runfree-magentaDeep disabled:opacity-50"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <button
+                      type="button"
+                      aria-label={`Add a tag for ${r.full_name || r.email}`}
+                      disabled={busyId === r.id}
+                      onClick={() => addTag(r)}
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 ring-1 ring-gray-200 transition hover:text-runfree-magentaDeep hover:ring-runfree-magenta/40 disabled:opacity-50"
+                    >
+                      + tag
+                    </button>
                   </span>
 
                   <select

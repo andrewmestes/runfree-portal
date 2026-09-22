@@ -41,7 +41,7 @@ async function main() {
   const { data: made, error } = await admin.auth.admin.createUser({ email: EMAIL, password: PASSWORD, email_confirm: true, user_metadata: { name: "Site Audit" } });
   if (error) throw error; const uid = made.user.id;
   await admin.from("project_members").upsert({ project_id: PROJECT, profile_id: uid, role: ROLE }, { onConflict: "project_id,profile_id" });
-  await admin.from("profiles").update({ is_staff: ROLE === "admin", account_role: ROLE === "admin" ? "runfree_team" : null }).eq("id", uid);
+  await admin.from("profiles").update({ is_staff: ROLE === "admin", account_role: ROLE === "admin" ? (process.env.ACCOUNT_ROLE ?? "runfree_team") : null }).eq("id", uid);
   const store = new Map<string, string>();
   const shim = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
   const signIn = createClient(URL_, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { storage: shim as never, persistSession: true, autoRefreshToken: false } });

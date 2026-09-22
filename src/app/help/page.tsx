@@ -623,6 +623,15 @@ export default function HelpPage() {
               coaching engagements are organised, since they do not use the six Pivvot
               modules.
             </Faq>
+            <Faq q="Tagging people in Admin">
+              A tag is a label on a person &mdash; a cohort, a network, a year.
+              On <strong>Admin</strong>, every tag in use is a filter chip under the
+              search box; click one to see just those people. Each row shows its
+              tags in pink with an &times; to remove, and <strong>+ tag</strong> to
+              add one. Tags grant nothing and change nothing &mdash; they are how you
+              find a group again later, especially a cohort that is not on a
+              project yet.
+            </Faq>
             <Faq q="Something looks wrong, or I need it to do something it doesn't">
               Use the form below. It reaches Andrew with your name and which project you
               were on attached, so nothing needs re-explaining.

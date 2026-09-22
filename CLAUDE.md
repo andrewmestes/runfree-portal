@@ -2024,3 +2024,23 @@ with nothing to re-upload. That folder has to be shared with the service
 account separately; sharing the handouts sub-folder does not reach its
 parent, and until it is shared the card 404s with "That file isn't in the
 library".
+
+## Tags on a person (083, 22 Sept 2026)
+
+`profiles.tags text[]` — free-text labels an admin puts on a person. Andrew,
+the afternoon the September cohort was invited with hub access and no
+project: "add a tag 'North Carolina (2026)' … within the admin section", then
+"and also tag them as 'certified'". Admin shows every tag in use as a filter
+chip under the search box, each row's tags in pink with an × to remove, and
+"+ tag" to add one; the search box matches tags too. Writes go through
+`manage_profiles` (admins), so the chip editor is admin-only by policy, not
+by hiding it.
+
+"Certified" is NOT a tag. The blue chip has always meant a `certified_framers`
+row (the GHL-synced roster CVF owns), and that is what the Admin "Add people"
+flow writes. The 13 were put on that list the same way the flow does it —
+email and name, no GHL contact — so they carry the chip. A tag grants
+nothing; the list does.
+
+`scripts/invite-cohort.ts` has `--tag` and, in `--hub-only` mode, adds the
+certified row too, so the next cohort is one command.

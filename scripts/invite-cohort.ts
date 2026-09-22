@@ -5,7 +5,11 @@
  * for this list to get added and sent the welcome email in exactly 1 hour?"
  *
  *   ./node_modules/.bin/tsx --env-file=.env.local scripts/invite-cohort.ts \
- *       <project-id> <attendees.json> [--at 2026-09-22T12:53:00-04:00] [--go] [--hub-only]
+ *       <project-id> <attendees.json> [--at 2026-09-22T12:53:00-04:00] [--go] [--hub-only] [--tag "North Carolina (2026)"]
+ *
+ * --tag puts that label on each person's profile (083) so Admin can find the
+ * group again; --hub-only also puts them on the certified list (the blue
+ * Certified chip), as the Admin "Add people" flow does.
  *
  * --hub-only (Andrew, 22 Sept: "let's not add them to the project yet. just
  * give them access to the certification resources hub for now"): invite,
@@ -42,6 +46,7 @@ if (!projectId || !file) {
 }
 const GO = rest.includes("--go");
 const HUB_ONLY = rest.includes("--hub-only");
+const TAG = rest.includes("--tag") ? rest[rest.indexOf("--tag") + 1] : null;
 const at = rest.includes("--at") ? new Date(rest[rest.indexOf("--at") + 1]) : null;
 const ORIGIN = process.env.PORTAL_ORIGIN ?? "https://portal.runfree.co";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -93,8 +98,12 @@ async function main() {
         line += " — invited";
       } else line += " — had a login";
       const keep = prof?.account_role && !["client"].includes(prof.account_role);
-      const { error: uErr } = await supabaseAdmin.from("profiles").update({ ...(keep ? {} : { account_role: "framer" }), certification_access: true }).eq("id", profileId);
-      report.push(uErr ? `${line}; grant failed: ${uErr.message}` : `${line}, hub access granted`);
+      const { data: cur } = await supabaseAdmin.from("profiles").select("tags").eq("id", profileId).maybeSingle();
+      const tags = [...new Set([...(cur?.tags ?? []), ...(TAG ? [TAG] : [])])];
+      const { error: uErr } = await supabaseAdmin.from("profiles").update({ ...(keep ? {} : { account_role: "framer" }), certification_access: true, tags }).eq("id", profileId);
+      const { data: onList } = await supabaseAdmin.from("certified_framers").select("id").ilike("email", email).maybeSingle();
+      if (!onList) await supabaseAdmin.from("certified_framers").insert({ email, name: a.name });
+      report.push(uErr ? `${line}; grant failed: ${uErr.message}` : `${line}, hub access granted, certified${TAG ? `, tagged ${TAG}` : ""}`);
       await sleep(400);
       continue;
     }
@@ -119,6 +128,11 @@ async function main() {
     const { error: mErr } = await supabaseAdmin.from("project_members").insert({ project_id: projectId, profile_id: profileId, role: "viewer", org_role: a.title ?? null });
     if (mErr && mErr.code !== "23505") { report.push(`${line}; member insert failed: ${mErr.message}`); continue; }
     line += ", added as viewer";
+    if (TAG) {
+      const { data: cur } = await supabaseAdmin.from("profiles").select("tags").eq("id", profileId).maybeSingle();
+      if (!(cur?.tags ?? []).includes(TAG)) await supabaseAdmin.from("profiles").update({ tags: [...(cur?.tags ?? []), TAG] }).eq("id", profileId);
+      line += `, tagged ${TAG}`;
+    }
 
     if (!rosterEmails.has(email)) {
       const { error: cErr } = await supabaseAdmin.from("church_contacts").insert({ project_id: projectId, full_name: a.name, email, title: [a.title, a.org, a.city].filter(Boolean).join(" · ") || null, position: position++ });

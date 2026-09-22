@@ -76,6 +76,7 @@ export type Database = {
           is_owner: boolean;
           /** Portal-wide, independent of any project membership — see 006_client_portal_expansion.sql. */
           certification_access: boolean;
+          tags: string[];
           /** Headshot, in the deliverable-images bucket. One face per person, not per project. */
           avatar_path: string | null;
           /** Last time they loaded the portal (056). Coarse, hourly. */
@@ -96,6 +97,7 @@ export type Database = {
           is_staff?: boolean;
           is_owner?: boolean;
           certification_access?: boolean;
+          tags?: string[];
           avatar_path?: string | null;
           created_at?: string;
         };
@@ -113,6 +115,7 @@ export type Database = {
           is_staff?: boolean;
           is_owner?: boolean;
           certification_access?: boolean;
+          tags?: string[];
           avatar_path?: string | null;
           account_role?: AccountRole;
         };

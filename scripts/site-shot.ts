@@ -14,9 +14,10 @@ import { createClient } from "@supabase/supabase-js";
 
 const PROJECT = process.argv[2]; const ROLE = (process.argv[3] ?? "viewer") as "viewer" | "admin"; const PORT = Number(process.argv[4] ?? 9411);
 const BASE = process.env.AUDIT_BASE_URL ?? "http://localhost:3001";
-const SHOTS = `/tmp/runfree-site-shot/${ROLE}`;
+const SHOTS = process.env.SHOT_DIR ?? `/tmp/runfree-site-shot/${ROLE}`;
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const EMAIL = "mobile-audit@example.com"; const PASSWORD = "mobile-audit-only-not-a-real-account-9931!";
+// SHOT_EMAIL lets two runs coexist (each run creates and deletes its own throwaway).
+const EMAIL = process.env.SHOT_EMAIL ?? "mobile-audit@example.com"; const PASSWORD = "mobile-audit-only-not-a-real-account-9931!";
 const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const admin = createClient(URL_, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -41,14 +42,15 @@ async function main() {
   const { data: made, error } = await admin.auth.admin.createUser({ email: EMAIL, password: PASSWORD, email_confirm: true, user_metadata: { name: "Site Audit" } });
   if (error) throw error; const uid = made.user.id;
   await admin.from("project_members").upsert({ project_id: PROJECT, profile_id: uid, role: ROLE }, { onConflict: "project_id,profile_id" });
-  await admin.from("profiles").update({ is_staff: ROLE === "admin", account_role: ROLE === "admin" ? (process.env.ACCOUNT_ROLE ?? "runfree_team") : null }).eq("id", uid);
+  // STAFF=0 with ACCOUNT_ROLE=framer is a plain Certified Vision Framer: certification access, no staff powers.
+  await admin.from("profiles").update({ is_staff: ROLE === "admin" && process.env.STAFF !== "0", account_role: ROLE === "admin" ? (process.env.ACCOUNT_ROLE ?? "runfree_team") : null }).eq("id", uid);
   const store = new Map<string, string>();
   const shim = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
   const signIn = createClient(URL_, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { storage: shim as never, persistSession: true, autoRefreshToken: false } });
   const { error: siErr } = await signIn.auth.signInWithPassword({ email: EMAIL, password: PASSWORD }); if (siErr) throw siErr;
   const [[storeKey, storeVal]] = [...store];
   mkdirSync(SHOTS, { recursive: true });
-  const chrome = spawn(CHROME, ["--headless=new", `--remote-debugging-port=${PORT}`, `--user-data-dir=/tmp/runfree-site-chrome-${ROLE}`, "--no-first-run", "--no-default-browser-check", "--disable-gpu", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
+  const chrome = spawn(CHROME, ["--headless=new", `--remote-debugging-port=${PORT}`, `--user-data-dir=/tmp/runfree-site-chrome-${ROLE}-${PORT}`, "--no-first-run", "--no-default-browser-check", "--disable-gpu", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
   let ws!: WebSocket, id = 0, sessionId: string | null = null; const pending = new Map<number, { res: (v: unknown) => void; rej: (e: Error) => void }>(); const errs: string[] = [];
   const send = (method: string, params: unknown = {}, sid: string | null = sessionId): Promise<unknown> => new Promise((res, rej) => { const n = ++id; pending.set(n, { res, rej }); ws.send(JSON.stringify({ id: n, method, params, ...(sid ? { sessionId: sid } : {}) })); });
   let wsUrl: string | undefined; for (let i = 0; i < 80 && !wsUrl; i++) { try { wsUrl = (await fetch(`http://127.0.0.1:${PORT}/json/version`).then((r) => r.json())).webSocketDebuggerUrl; } catch { await sleep(250); } }

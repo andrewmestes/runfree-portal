@@ -3,7 +3,11 @@ import type { Config } from "tailwindcss";
 // RunFree brand tokens, carried over from the Certified Vision Framers portal
 // unchanged — same brand, same palette.
 export default {
-  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
+  // Relative to this file, not to wherever the dev server was started. A
+  // server launched from the folder above the repo (`next dev <repo-path>`)
+  // found no ./src, emitted no utility classes, and every page rendered
+  // unstyled — the September review's captures lost an evening to it.
+  content: { relative: true, files: ["./src/**/*.{js,ts,jsx,tsx,mdx}"] },
   theme: {
     extend: {
       colors: {

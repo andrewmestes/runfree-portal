@@ -48,3 +48,7 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 .env*
+
+# Personal data and private material never go in this PUBLIC repository.
+scripts/data/
+private/

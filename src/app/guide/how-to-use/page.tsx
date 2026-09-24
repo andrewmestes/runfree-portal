@@ -21,7 +21,7 @@ type Framer = { id: string; email: string; name: string; is_admin: boolean };
  * to use the document." Linked from the Guide page and from Start here.
  *
  * The stills are pages 2, 3, 89 and 90 of the September 2026 edition, at
- * 960px, in private/guide-howto/ — served only to certified framers through /api/guide-howto/{name}. The numbered markers sit just beside
+ * 960px, in private storage — served only to certified framers through /api/guide-howto/{name}. The numbered markers sit just beside
  * (below, or to the left of) what they point at: the tool number, timer,
  * icons, logo and Tool List lines, measured on the stills and checked against
  * the PDF's own link rectangles. They never sit on top of them, so what they

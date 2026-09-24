@@ -20,8 +20,6 @@ const nextConfig: NextConfig = {
   // traceable — so these are named explicitly.
   outputFileTracingIncludes: {
     "/api/projects/[id]/vision-frame": ["./src/lib/pdf/fonts/*.ttf", "./public/brand/runfree-logo-white.png"],
-    // The guide stills on /guide/how-to-use are private (see the route).
-    "/api/guide-howto/[name]": ["./private/guide-howto/*.jpg"],
   },
 };
 

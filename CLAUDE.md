@@ -2232,11 +2232,10 @@ Bogotá) did the same for a fifth. At 17:15–17:20 the same first IP
 for a reset. That is an email-security link scanner: it opens every link
 in an inbound message, and a Supabase verify link is spent by whoever
 opens it. The real person's click then lands on `#error_code=otp_expired`.
-The people whose links were eaten: bfaltynski@rmdcma.com,
-paul@missionhill.org, keith.cowart@fmcusa.org (invite AND every reset),
-jjohnson@prestontrail.org, dave@thehopeco.com (invite). Three never
-opened anything: jordan@localgr.org, allan.love@chemistrystaffing.com,
-daver@erccog.org. The slow delivery is the same gateways holding mail
+Five people's links were eaten (one of them had every reset eaten as
+well), and three never opened anything; who they are is in Supabase, not
+here, because this repository is public.
+The slow delivery is the same gateways holding mail
 while they scan it — nothing on our side queues.
 
 Two things were ours to fix, and are:
@@ -2354,11 +2353,17 @@ every tool", and the front is "what goes up in the room" (fronts often show
 a finished example chart). Re-check those counts against a new edition.
 
 **The stills are private.** They are guide pages 2, 3, 89 and 90 — the back
-of 3.9 is certification-only teaching — so they live in
-`private/guide-howto/`, are served by `/api/guide-howto/{name}` behind
-`requireCertificationAccess` (four names allowlisted), and are listed in
-next.config.ts's `outputFileTracingIncludes`; the page fetches them with
-the session and shows blob URLs. Never put guide pages in `public/` (same
-rule as the Kairos recording covers). A new edition that moves the logo,
+of 3.9 is certification-only teaching — so they live in the private
+`deliverable-images` storage bucket at `site-assets/guide-howto/{name}.jpg`
+and are served by `/api/guide-howto/{name}` (service role, behind
+`requireCertificationAccess`, four names allowlisted); the page fetches them
+with the session and shows blob URLs. **Not in `public/` and not in the repo:
+`andrewmestes/runfree-portal` is a PUBLIC GitHub repository** (checked 24
+Sept) — anything committed is readable by anyone, so private material,
+people's names and email addresses, and guide pages never go in a commit.
+Cohort lists for `scripts/invite-cohort.ts` live outside the repo, in
+`../RunFree Portal private data/` (`scripts/data/` and `private/` are
+gitignored).
+A new edition that moves the logo,
 timer or icons needs new stills and new marker positions; the markers sit
 beside their targets on purpose, never on them.

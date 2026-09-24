@@ -2294,76 +2294,90 @@ schema afterwards finds no row playing either retired Loom. Migration 081
 still seeds B and C — history only; new projects read the template rows.
 If a teaching is ever swapped again, scan project_highlights too.
 
-## Start here: a new framer's first week (24 Sept 2026)
+## Start here: removed (24 Sept 2026)
 
-Andrew picked "a 'Start here' path for new framers" from the September
-review, after the North Carolina cohort arrived with hub access and nothing
-that said where to begin. It shipped as a six-step card on the hub
-(451b8bc). The same day he moved it off: "I don't really want the 'start
-here' to be the main login page, though." It is now its own page,
-`/certification/start-here` (`src/app/certification/start-here/`). The hub
-shows only a slim "New here? … Start here →" line with Hide
-(`StartHereBanner`). Both live in `src/components/StartHere.tsx`.
+A six-step "Start here" card for new framers shipped on the hub (451b8bc),
+then moved to its own page, `/certification/start-here`. Andrew then removed
+it: "let's remove the 'start here' content. I don't see that as very
+helpful. however, the DFG training is critical. let's just have that live on
+the DFG page." `StartHere.tsx`, the page and the hub banner are gone, and so
+is Help's "Start here: your first week". Don't bring it back. Browsers that
+used it may still hold a stale localStorage key, `runfree.startHere.v1`,
+which nothing reads.
 
-Five steps, one link each:
+## The guide tour, and its private stills (24 Sept 2026)
 
-1. Companion Guide pp. 3–10 (`/open/companion/current`).
-2. How to Use the Guide (`/guide/how-to-use`).
-3. Where everything lives (`/videos?tab=facilitators`).
-4. Share a video with a client (`/videos`).
-5. The Preparation Checklist (`/open/handout/<id>`). The id is found by the
-   title `/preparation checklist/i` in `/api/library`. Until the lookup
-   answers, or if nothing matches, the link falls back to `/resources`, so
-   renaming that file breaks the deep link.
+Andrew wanted an interactive walkthrough, not a page of pictures: "make a
+creative slide deck that pops up when opening the 'how it works' … the card
+dims except for where an arrow is pointing me to click, then I click it, it
+leads me to the next menu … highlights the logo to go back, then leads me to
+click another tool, and each step has a pop up text near the arrow … when it
+gets to the back of a teaching card, it describes each section like the big
+idea, the how to, the coach tips, the module name and phrase, the icons and
+what they mean." He had already rejected numbered markers: "there are too
+many numbers competing in the document already".
 
-The Orientation-videos step was dropped on purpose: "omit 'watch orientation
-videos' those are for clients mainly, not vision framers. they already know
-the journey." Do not add it back. The Companion step follows his "just give
-a simple overview of what that is and why it's significant", and every
-clause in it is from the Companion Guide itself (pp. 2–4, 7, 8, 10). Step 4
-says the Video Clips have no Copy link for now (see the `/watch` paragraph
-above); if Andrew makes them public, change that step and Help's "Sharing a
-video with a client" together. Step 5 is a *client* session (the checklist
-is addressed to a church); step 1's "first session" is the cohort's own.
+It is `src/components/GuideTour.tsx`, opened by "How it works — a two-minute
+tour" under "Open the Guide" on `/guide`, or by `/guide?tour=1` (Help links
+that). The old `/guide/how-to-use` explainer is now only a redirect to
+`/guide?tour=1`.
 
-Ticks and Hide are stored in the browser (localStorage
-`runfree.startHere.v1`), not the database. It is a convenience checklist,
-not a record anyone else needs, and a second device starts fresh. Hide is
-permanent for that browser, and nothing brings the hub line back. Help's
-"Start here: your first week" links the page and is the way back, so keep
-that link if the FAQ is ever rewritten.
+How it works:
 
+- Each step is one guide page. Everything except `spots` is dimmed.
+- An arrow runs from the note into the spot.
+- Progress is a bar, with no step numbers.
+- On a `click` step, a pulsing hotspot over the real link moves the tour on,
+  just as the guide's own link would.
+- Next, Back, ←/→ and Esc work everywhere. Nothing advances on its own.
+- On a phone the note docks under the page.
 
-## How to Use the Guide, and private stills (24 Sept 2026)
+The route is menu → Disciple's Journey → 3.9 → front (number, timer, what
+goes up) → back (header, Big Idea, How It Works, Coaching Tips,
+handout/video icons, module and phrase) → logo → Tool List → logo → menu →
+Kingdom Platform → 4.1 → the end. The Tool List step also covers the
+module's name and icon, which open its title slide (p71/p100).
 
-Andrew: "if you can use still shot/thumbnails of the DFG and create a great
-understanding of the digital card idea of 'front and back' … then also the
-menus and inter linking use by clicking the logo. just a simple explainer of
-how to use the document. also, within the DFG page, let's add a link."
-`/guide/how-to-use` is that explainer, linked under "Open the Guide" on
-`/guide`, from Start here, and from Help ("How the Digital Facilitator's
-Guide is laid out"). Every claim on it was checked against the whole
-September PDF, not one example: the logo on every page from 2 to 171 goes
-exactly one level up (tool → its Tool List, Tool List → menu p.2, menu →
-cover); all 78 Tool List lines land on their tool's front; 71 of 78 tools
-are a dark-header front then a light-header back (each module's Pre-work is
-one page, 4.5 has two fronts); every back has Big Idea / How It Works /
-Coaching Tips; the 31 grey icons carry no link. So the page says "almost
-every tool", and the front is "what goes up in the room" (fronts often show
-a finished example chart). Re-check those counts against a new edition.
+The claims were checked against the whole September PDF, not one example:
 
-**The stills are private.** They are guide pages 2, 3, 89 and 90 — the back
-of 3.9 is certification-only teaching — so they live in the private
-`deliverable-images` storage bucket at `site-assets/guide-howto/{name}.jpg`
-and are served by `/api/guide-howto/{name}` (service role, behind
-`requireCertificationAccess`, four names allowlisted); the page fetches them
-with the session and shows blob URLs. **Not in `public/` and not in the repo:
-`andrewmestes/runfree-portal` is a PUBLIC GitHub repository** (checked 24
-Sept) — anything committed is readable by anyone, so private material,
-people's names and email addresses, and guide pages never go in a commit.
-Cohort lists for `scripts/invite-cohort.ts` live outside the repo, in
-`../RunFree Portal private data/` (`scripts/data/` and `private/` are
-gitignored).
-A new edition that moves the logo,
-timer or icons needs new stills and new marker positions; the markers sit
-beside their targets on purpose, never on them.
+- The logo on every page from 2 to 171 goes exactly one level up: tool → its
+  Tool List, Tool List → menu p.2, menu → cover.
+- All 78 Tool List lines land on their tool's front.
+- 71 of 78 tools are a dark-header front, then a light-header back. Each
+  module's Pre-work is one page, and 4.5 has two fronts. So the tour says
+  "almost every tool".
+- Every back has Big Idea, How It Works and Coaching Tips.
+- None of the 31 grey icons has a link.
+
+Re-check those counts against a new edition.
+
+**The stills are private.** They are guide pages 1, 2, 5, 6, 89, 90 and 102.
+The back of 3.9 is certification-only teaching.
+
+- Each is a 1440 × 1080 JPG, rendered at 150 dpi and resized.
+- They live in the private `deliverable-images` bucket at
+  `site-assets/guide-tour/{cover,menu,list-dj,list-kp,front,back,front-kp}.jpg`.
+- `/api/guide-howto/{name}` serves them: service role, behind
+  `requireCertificationAccess`, names allowlisted.
+- The tour fetches them with the session and shows blob URLs.
+- The older `site-assets/guide-howto/*` objects are unused. They are left in
+  place, since nothing permanently deletes data.
+
+The stills never go in `public/` or the repo. **`andrewmestes/runfree-portal`
+is a PUBLIC GitHub repository** (checked 24 Sept), so anything committed is
+readable by anyone. Private material, people's names and email addresses,
+and guide pages never go in a commit. Cohort lists for
+`scripts/invite-cohort.ts` live outside the repo, in
+`../RunFree Portal private data/`. `scripts/data/` and `private/` are
+gitignored.
+
+All geometry in `STEPS` is in the stills' own units: 960 × 720, which is PDF
+points × 1.25 with a top-left origin. It was measured from the PDF's link
+boxes and `pdftotext -bbox`. A new edition that moves the logo, timer,
+icons, list or pictures needs new stills (upload over them, upsert) and new
+numbers.
+
+To check it, `scripts/site-shot.ts` page `guide-tour` captures the first
+screen. Use `REDUCED_MOTION=1` so the arrow is fully drawn. To see every
+step, walk it at 1440 and 390 wide: press Next, or click the hotspot on
+click steps. Use a throwaway framer, and delete it afterwards.

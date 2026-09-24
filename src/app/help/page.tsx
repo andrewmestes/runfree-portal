@@ -383,27 +383,16 @@ export default function HelpPage() {
               there carries the Pivvot mark, so you can always tell which part of the
               portal you are in.
             </Faq>
-            <Faq q="Start here: your first week">
-              New to certification? <a href="/certification/start-here" className="font-semibold text-runfree-magentaDeep hover:underline">Start here</a>{" "}
-              walks you through five steps, each linking to the right place: read the
-              Certification Companion Guide, pages 3&ndash;10; learn how the Digital
-              Facilitator&rsquo;s Guide works; see where everything lives (Handouts by
-              module, Training Videos&rsquo; two tabs, Books, Keynotes); share a video
-              with a client; and open the Preparation Checklist to send a church
-              before your first client session.
-              Tick each one off as you go; your ticks are kept in this browser. The hub
-              shows a small <em>New here?</em> link to it, which <strong>Hide</strong>{" "}
-              removes; this link here always works.
-            </Faq>
             <Faq q="How the Digital Facilitator&rsquo;s Guide is laid out">
               A menu on page 2 opens each module&rsquo;s <em>Tool List</em>. Almost
               every tool has a front (dark header &mdash; the flip chart or visual as it
               goes up in the room) and a back (light header &mdash; Big Idea, How It
               Works, Coaching Tips, and the handout and video icons); each
               module&rsquo;s Pre-work is a single page. The logo in the top-right
-              corner always takes you one level back up. The{" "}
-              <a href="/guide/how-to-use" className="font-semibold text-runfree-magentaDeep hover:underline">How to use the Guide</a>{" "}
-              page shows it with pictures, and the Guide page links to it.
+              corner always takes you one level back up. On the Guide page,{" "}
+              <a href="/guide?tour=1" className="font-semibold text-runfree-magentaDeep hover:underline">How it works</a>{" "}
+              is a two-minute tour that walks you through it on the guide&rsquo;s own pages:
+              you click where you would in the guide, and it explains each part as you go.
             </Faq>
             <Faq q="What is the Certification Companion Guide?">
               Will&rsquo;s orientation to the certification: the bird&rsquo;s-eye view

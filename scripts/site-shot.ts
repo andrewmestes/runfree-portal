@@ -63,6 +63,8 @@ async function main() {
   const { targetId } = (await send("Target.createTarget", { url: "about:blank" }, null)) as { targetId: string };
   ({ sessionId } = (await send("Target.attachToTarget", { targetId, flatten: true }, null)) as { sessionId: string });
   await send("Page.enable"); await send("Runtime.enable");
+  // REDUCED_MOTION=1 captures the settled state of anything that animates in (the guide explainer's arrows).
+  if (process.env.REDUCED_MOTION === "1") await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
   const ev = async (expr: string) => { const r = (await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true })) as { result: { value: unknown }; exceptionDetails?: { text: string } }; if (r.exceptionDetails) throw new Error(r.exceptionDetails.text); return r.result.value; };
   await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: `${BASE}/auth/login` }); await sleep(3000);
@@ -77,7 +79,7 @@ async function main() {
     ["videos", "/videos"], ["videos-facilitators", "/videos?tab=facilitators"], ["books", "/books"], ["keynotes", "/keynotes"], ["guide", "/guide"], ["resources", "/resources"], ["certification", "/certification"],
     ["open-handout", "/open/handout/1tWQta-q_9X4SgKr-NEPUK-a9uP2dMsFU"], ["open-video", "/open/video/1X0go06NCPcSC7g8Vvff5LRgiE2hd3Iq8"],
     ["privacy", "/privacy"], ["terms", "/terms"], ["forgot", "/auth/forgot-password"],
-    ["vision-stack", `${P}/vision-stack`], ["new-project", "/projects/new"], ["admin", "/admin"], ["open-companion", "/open/companion/current"], ["watch", "/watch/cc588bee-c9df-4980-9f5b-a641d8b9d9b8"], ["start-here", "/certification/start-here"], ["guide-howto", "/guide/how-to-use"]];
+    ["vision-stack", `${P}/vision-stack`], ["new-project", "/projects/new"], ["admin", "/admin"], ["open-companion", "/open/companion/current"], ["watch", "/watch/cc588bee-c9df-4980-9f5b-a641d8b9d9b8"], ["guide-tour", "/guide?tour=1"]];
   // PAGES=videos,project-dashboard narrows the run; WIDTHS=1440 skips the phone
   // pass; WAIT=12000 gives slow shelves longer to draw before the audit runs.
   const only = (process.env.PAGES ?? "").split(",").map((x) => x.trim()).filter(Boolean);

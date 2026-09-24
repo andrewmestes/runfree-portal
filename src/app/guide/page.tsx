@@ -11,6 +11,7 @@ import AccessError from "@/components/AccessError";
 import PortalFooter from "@/components/PortalFooter";
 import FilePreview, { PreviewFile } from "@/components/FilePreview";
 import PdfThumbnail from "@/components/PdfThumbnail";
+import GuideTour from "@/components/GuideTour";
 
 type Framer = {
   id: string;
@@ -58,6 +59,19 @@ export default function GuidePage() {
   >("checking");
   const [loadError, setLoadError] = useState("");
   const [preview, setPreview] = useState<PreviewFile | null>(null);
+  /**
+   * "How it works" — the guided tour (components/GuideTour). Andrew: "the DFG
+   * training is critical. let's just have that live on the DFG page." It opens
+   * from the button under Open the Guide, and on arrival from ?tour=1 (Help's
+   * link, and the old /guide/how-to-use address, which redirects here).
+   */
+  const [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tour") !== "1") return;
+    setTourOpen(true);
+    // Read once: a refresh, or a bookmark copied from the bar, opens the Guide page, not the tour again.
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
   const router = useRouter();
 
   useEffect(() => {
@@ -297,13 +311,19 @@ export default function GuidePage() {
                   >
                     Open the Guide
                   </button>
-                  <p className="mt-4 text-sm text-gray-600">
-                    New to the guide?{" "}
-                    <a href="/guide/how-to-use" className="font-semibold text-runfree-magentaDeep hover:underline">
-                      How to use it
-                    </a>{" "}
-                    &mdash; the menu, the front and back of a tool, and the logo links.
-                  </p>
+                  <div className="mt-5">
+                    <button
+                      type="button"
+                      onClick={() => setTourOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink"
+                    >
+                      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        <circle cx="10" cy="10" r="7.5" />
+                        <path d="M8.5 7l4 3-4 3z" fill="currentColor" stroke="none" />
+                      </svg>
+                      How it works &mdash; a two-minute tour
+                    </button>
+                  </div>
                 </>
               ) : (
                 <>
@@ -322,6 +342,8 @@ export default function GuidePage() {
       </div>
 
       <PortalFooter />
+
+      <GuideTour open={tourOpen} onClose={() => setTourOpen(false)} onOpenGuide={openGuide} />
 
       {preview && (
         <FilePreview

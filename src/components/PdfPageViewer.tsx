@@ -13,8 +13,8 @@ import { useEffect, useRef, useState } from "react";
  * PDF is not a scrollable viewer on iOS. Safari lays the document out at its
  * own natural page width and ignores the frame's size — hence the zoom — and
  * it does not propagate scrolling inside the frame, so page two onwards is
- * simply unreachable. The `#toolbar=0&navpanes=0` hints in the iframe URL are
- * Chrome/Acrobat parameters; iOS ignores those too.
+ * simply unreachable. The `#navpanes=0` hint in the iframe URL is a
+ * Chrome/Acrobat parameter; iOS ignores it too.
  *
  * Rendering ourselves fixes both properly rather than working around either:
  * each page is rasterised to exactly the container's width, and the pages are
@@ -189,7 +189,7 @@ export default function PdfPageViewer({
     if (!Array.isArray(explicit)) return;
     const idx =
       typeof explicit[0] === "number" ? explicit[0] : await doc.getPageIndex(explicit[0]);
-    hostRef.current?.querySelector(`[data-page="${idx}"]`)?.scrollIntoView({ block: "start" });
+    goToPage(idx + 1);
   };
 
   /**
@@ -198,11 +198,22 @@ export default function PdfPageViewer({
    * thing to build: in a room, "turn to page 88" meant scrolling a phone
    * past 87 pages. The page counted as current is the one crossing a line a
    * third of the way down the viewport — what a reader thinks of as "the
-   * page I'm on" when two are half visible.
+   * page I'm on" when two are half visible — and at the very end of the
+   * document, the last page.
    */
   const [current, setCurrent] = useState(1);
   const [draft, setDraft] = useState("1");
   const [editing, setEditing] = useState(false);
+  /** Set once the box is typed in, so leaving it commits only a real entry. */
+  const typedRef = useRef(false);
+  /**
+   * The page a jump asked for, and the scroll position it landed on. Near the
+   * end a page cannot always reach the top: on a phone, 171 lands with 171
+   * and 172 both in full view, where the end rule alone read 172 and Next
+   * from 170 skipped 171. Until the reader moves, the counter says the page
+   * they asked for.
+   */
+  const jumpedRef = useRef<{ page: number; top: number } | null>(null);
   useEffect(() => {
     const host = hostRef.current;
     if (!host || !doc) return;
@@ -217,6 +228,19 @@ export default function PdfPageViewer({
           if (li.offsetTop <= line) page = Number(li.dataset.page) + 1;
           else break;
         }
+        // At the end of the document nothing further can reach the line, so the
+        // last page or two never counted ("Page 1 of 2" with page 2 in full view).
+        // Only when the document actually scrolls: one that fits on screen starts at 1.
+        if (
+          items.length > 0 &&
+          host.scrollHeight > host.clientHeight + 2 &&
+          host.scrollTop + host.clientHeight >= host.scrollHeight - 2
+        ) {
+          page = items.length;
+        }
+        const jumped = jumpedRef.current;
+        if (jumped && Math.abs(host.scrollTop - jumped.top) <= 2) page = jumped.page;
+        else jumpedRef.current = null;
         setCurrent(page);
       });
     };
@@ -234,7 +258,11 @@ export default function PdfPageViewer({
   const goToPage = (n: number) => {
     if (!doc) return;
     const page = Math.min(Math.max(1, Math.round(n)), doc.numPages);
-    hostRef.current?.querySelector(`[data-page="${page - 1}"]`)?.scrollIntoView({ block: "start" });
+    const host = hostRef.current;
+    host?.querySelector(`[data-page="${page - 1}"]`)?.scrollIntoView({ block: "start" });
+    // An instant scrollIntoView has already moved scrollTop, so this is
+    // where the jump landed.
+    if (host) jumpedRef.current = { page, top: host.scrollTop };
     setCurrent(page);
   };
 
@@ -254,9 +282,8 @@ export default function PdfPageViewer({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              const n = Number(draft);
-              if (Number.isFinite(n) && n > 0) goToPage(n);
-              else setDraft(String(current));
+              // Leaving the box is what commits it (see onBlur), so Return and
+              // Go just leave it.
               (document.activeElement as HTMLElement | null)?.blur();
             }}
             className="flex items-center gap-1.5"
@@ -269,9 +296,27 @@ export default function PdfPageViewer({
               pattern="[0-9]*"
               enterKeyHint="go"
               value={draft}
-              onFocus={(e) => { setEditing(true); e.currentTarget.select(); }}
-              onBlur={() => setEditing(false)}
-              onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+              onFocus={(e) => {
+                typedRef.current = false;
+                setEditing(true);
+                e.currentTarget.select();
+              }}
+              // iPhone's number pad has no Go or Return key, and its Done
+              // button only blurs, so leaving the box after typing is what
+              // commits it: "88" then Done used to snap back to the page
+              // already showing. Only a typed entry commits — focusing,
+              // scrolling the pages and leaving must not jump back to the
+              // number the box showed on focus.
+              onBlur={() => {
+                const n = Number(draft);
+                if (typedRef.current && draft !== "" && n > 0) goToPage(n);
+                typedRef.current = false;
+                setEditing(false);
+              }}
+              onChange={(e) => {
+                typedRef.current = true;
+                setDraft(e.target.value.replace(/[^0-9]/g, "").slice(0, 4));
+              }}
               className="h-9 w-14 rounded-md border border-gray-300 text-center text-base text-runfree-ink outline-none focus:border-runfree-magenta focus:ring-2 focus:ring-runfree-magenta/25"
             />
             <span>of {doc.numPages}</span>
@@ -287,7 +332,12 @@ export default function PdfPageViewer({
           </button>
         </div>
       )}
-    <div ref={hostRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+    {/* `relative` makes this scroller the pages' offsetParent, so li.offsetTop
+        and scrollTop share one origin. Without it offsetTop was measured from
+        FilePreview's fixed overlay, 140-148px higher, and on a landscape phone
+        the one-third line sat above the view: the counter ran a page behind
+        and Next stuck. */}
+    <div ref={hostRef} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
       {doc && width > 0 ? (
         <ul className="mx-auto flex max-w-3xl flex-col gap-3">
           {Array.from({ length: doc.numPages }, (_, i) => (

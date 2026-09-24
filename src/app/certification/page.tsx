@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import PortalHeader from "@/components/PortalHeader";
 import PortalFooter from "@/components/PortalFooter";
-import StartHere from "@/components/StartHere";
+import { StartHereBanner } from "@/components/StartHere";
 import { supabase } from "@/lib/supabase";
 import { getCurrentProfile, hasCertificationAccess, listMyProjects, loginUrlHere } from "@/lib/auth";
 
@@ -184,7 +184,7 @@ export default function CertificationHubPage() {
       />
 
       <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        <StartHere />
+        <StartHereBanner />
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <HubCard
             href="/guide"

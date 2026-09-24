@@ -297,6 +297,13 @@ export default function GuidePage() {
                   >
                     Open the Guide
                   </button>
+                  <p className="mt-4 text-sm text-gray-600">
+                    New to the guide?{" "}
+                    <a href="/guide/how-to-use" className="font-semibold text-runfree-magentaDeep hover:underline">
+                      How to use it
+                    </a>{" "}
+                    &mdash; the menu, the front and back of a tool, and the logo links.
+                  </p>
                 </>
               ) : (
                 <>

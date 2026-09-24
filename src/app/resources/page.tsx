@@ -65,10 +65,15 @@ export default function ResourcesPage() {
     } = await supabase.auth.getSession();
     if (!session) return;
 
-    const res = await fetch(`/api/library${fresh ? "?fresh=1" : ""}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      // Refresh means "read Drive now", not "the copy the browser kept".
-      ...(fresh ? { cache: "no-store" as RequestCache } : {}),
+    const res = await fetch("/api/library", {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        ...(fresh ? { "X-Library-Fresh": "1" } : {}),
+      },
+      // Refresh walks Drive now, and "reload" also replaces this browser's
+      // stored copy of /api/library. A separate ?fresh=1 address left the old
+      // list stored, so the next visit and the hub's pre-fetch brought it back.
+      ...(fresh ? { cache: "reload" as RequestCache } : {}),
     });
     const body = await res.json();
 

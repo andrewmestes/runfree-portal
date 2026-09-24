@@ -2294,3 +2294,71 @@ all of them to 46ca4a2e; a full scan of every text column in the public
 schema afterwards finds no row playing either retired Loom. Migration 081
 still seeds B and C — history only; new projects read the template rows.
 If a teaching is ever swapped again, scan project_highlights too.
+
+## Start here: a new framer's first week (24 Sept 2026)
+
+Andrew picked "a 'Start here' path for new framers" from the September
+review, after the North Carolina cohort arrived with hub access and nothing
+that said where to begin. It shipped as a six-step card on the hub
+(451b8bc). The same day he moved it off: "I don't really want the 'start
+here' to be the main login page, though." It is now its own page,
+`/certification/start-here` (`src/app/certification/start-here/`). The hub
+shows only a slim "New here? … Start here →" line with Hide
+(`StartHereBanner`). Both live in `src/components/StartHere.tsx`.
+
+Five steps, one link each:
+
+1. Companion Guide pp. 3–10 (`/open/companion/current`).
+2. How to Use the Guide (`/guide/how-to-use`).
+3. Where everything lives (`/videos?tab=facilitators`).
+4. Share a video with a client (`/videos`).
+5. The Preparation Checklist (`/open/handout/<id>`). The id is found by the
+   title `/preparation checklist/i` in `/api/library`. Until the lookup
+   answers, or if nothing matches, the link falls back to `/resources`, so
+   renaming that file breaks the deep link.
+
+The Orientation-videos step was dropped on purpose: "omit 'watch orientation
+videos' those are for clients mainly, not vision framers. they already know
+the journey." Do not add it back. The Companion step follows his "just give
+a simple overview of what that is and why it's significant", and every
+clause in it is from the Companion Guide itself (pp. 2–4, 7, 8, 10). Step 4
+says the Video Clips have no Copy link for now (see the `/watch` paragraph
+above); if Andrew makes them public, change that step and Help's "Sharing a
+video with a client" together. Step 5 is a *client* session (the checklist
+is addressed to a church); step 1's "first session" is the cohort's own.
+
+Ticks and Hide are stored in the browser (localStorage
+`runfree.startHere.v1`), not the database. It is a convenience checklist,
+not a record anyone else needs, and a second device starts fresh. Hide is
+permanent for that browser, and nothing brings the hub line back. Help's
+"Start here: your first week" links the page and is the way back, so keep
+that link if the FAQ is ever rewritten.
+
+
+## How to Use the Guide, and private stills (24 Sept 2026)
+
+Andrew: "if you can use still shot/thumbnails of the DFG and create a great
+understanding of the digital card idea of 'front and back' … then also the
+menus and inter linking use by clicking the logo. just a simple explainer of
+how to use the document. also, within the DFG page, let's add a link."
+`/guide/how-to-use` is that explainer, linked under "Open the Guide" on
+`/guide`, from Start here, and from Help ("How the Digital Facilitator's
+Guide is laid out"). Every claim on it was checked against the whole
+September PDF, not one example: the logo on every page from 2 to 171 goes
+exactly one level up (tool → its Tool List, Tool List → menu p.2, menu →
+cover); all 78 Tool List lines land on their tool's front; 71 of 78 tools
+are a dark-header front then a light-header back (each module's Pre-work is
+one page, 4.5 has two fronts); every back has Big Idea / How It Works /
+Coaching Tips; the 31 grey icons carry no link. So the page says "almost
+every tool", and the front is "what goes up in the room" (fronts often show
+a finished example chart). Re-check those counts against a new edition.
+
+**The stills are private.** They are guide pages 2, 3, 89 and 90 — the back
+of 3.9 is certification-only teaching — so they live in
+`private/guide-howto/`, are served by `/api/guide-howto/{name}` behind
+`requireCertificationAccess` (four names allowlisted), and are listed in
+next.config.ts's `outputFileTracingIncludes`; the page fetches them with
+the session and shows blob URLs. Never put guide pages in `public/` (same
+rule as the Kairos recording covers). A new edition that moves the logo,
+timer or icons needs new stills and new marker positions; the markers sit
+beside their targets on purpose, never on them.

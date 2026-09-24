@@ -481,6 +481,22 @@ export default function VideosPage() {
     for (const v of videos) c[v.audience]++;
     return c;
   }, [videos]);
+  /**
+   * Each module's client videos, whatever a search has left on screen. "Copy
+   * this module's videos" sends the list under the module's name as a
+   * client's pre-work, so it is the whole module: searching "vision" had
+   * copied one of Horizon Storyline's three under the full heading. Keyed
+   * the same way as `groups`.
+   */
+  const clientModules = useMemo(() => {
+    const byKey = new Map<string, Video[]>();
+    for (const v of videos) {
+      if (v.audience !== "clients") continue;
+      const key = v.module?.trim() || "General";
+      byKey.set(key, [...(byKey.get(key) ?? []), v]);
+    }
+    return byKey;
+  }, [videos]);
   const shelf = TABS.find((t) => t.key === tab)!;
 
   if (status === "error") {
@@ -647,9 +663,14 @@ export default function VideosPage() {
                   <span className="rounded-full bg-runfree-indigo px-2.5 py-0.5 text-xs font-semibold text-runfree-navy">
                     {group.videos.length}
                   </span>
-                  {tab === "clients" && group.videos.some(isShareable) && (
-                    <CopyModuleButton label={group.label} videos={group.videos} className="ml-auto" />
-                  )}
+                  {tab === "clients" &&
+                    (clientModules.get(group.key) ?? []).some(isShareable) && (
+                      <CopyModuleButton
+                        label={group.label}
+                        videos={clientModules.get(group.key) ?? []}
+                        className="ml-auto"
+                      />
+                    )}
                 </header>
 
                 {/* Four across on wide screens: at three, twenty videos ran to
@@ -779,13 +800,6 @@ export default function VideosPage() {
 }
 
 /**
- * "Copy link for a client." Andrew: "if a certified vision framer needs to
- * share a video link with a client, what's the best way to make that
- * accessible?" One press puts the public /watch address on the clipboard
- * and says so for two seconds. Compact on the card (an icon pill over the
- * thumbnail), spelled out in the player.
- */
-/**
  * "Copy this module's videos": one tap puts a ready-to-send list on the
  * clipboard — the module, then each client video with its length and its
  * public /watch link — to paste into an email or text as pre-work. Andrew
@@ -831,7 +845,13 @@ function CopyModuleButton({
     <button
       type="button"
       onClick={copy}
-      title={`Copy all ${count} of this module's client videos as a list you can send — each link opens without a sign-in`}
+      // Disciple's Journey and Vision Frame have one client video each, and
+      // read "Copy all 1 of this module's client videos".
+      title={
+        count === 1
+          ? "Copy this module's client video, ready to send — the link opens without a sign-in"
+          : `Copy all ${count} of this module's client videos as a list you can send — each link opens without a sign-in`
+      }
       aria-label={copied ? "List copied" : `Copy ${label} videos as a list for a client`}
       className={`${className} inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm transition sm:text-sm ${
         copied ? "bg-runfree-magenta text-white" : "bg-runfree-pink text-runfree-magentaDeep hover:bg-runfree-magenta hover:text-white"
@@ -857,6 +877,13 @@ function CopyModuleButton({
   );
 }
 
+/**
+ * "Copy link for a client." Andrew: "if a certified vision framer needs to
+ * share a video link with a client, what's the best way to make that
+ * accessible?" One press puts the public /watch address on the clipboard
+ * and says so for two seconds. Compact on the card (an icon pill over the
+ * thumbnail), spelled out in the player.
+ */
 function CopyLinkButton({
   getUrl,
   className = "",

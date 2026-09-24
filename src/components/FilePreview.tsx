@@ -15,6 +15,11 @@ import PdfPageViewer from "./PdfPageViewer";
  * iPadOS reports itself as "Macintosh", so the touch-point count is what
  * separates an iPad from a Mac. A narrow screen also qualifies regardless of
  * engine, because a full-page PDF in a 375px frame is unreadable anywhere.
+ *
+ * And Safari on a Mac: its inline PDF has no page number and no go-to-page
+ * box, so "turn to page 88" had no answer there (see PdfPageViewer). The
+ * price is the native viewer's text search and selection, which the canvas
+ * path does not have.
  */
 function useCanvasPdf(): boolean {
   const [canvas, setCanvas] = useState(false);
@@ -29,8 +34,13 @@ function useCanvasPdf(): boolean {
     // an Android tablet or landscape phone is wider than the phone breakpoint.
     const android = /Android/.test(ua);
 
+    // Safari on a Mac shows an embedded PDF with a zoom / Open in Preview strip
+    // only: no page number, no go-to-page box, and it ignores the #… hints. It is
+    // the engine an iPad runs, which already reads the canvas path.
+    const safari = navigator.vendor === "Apple Computer, Inc.";
+
     const mq = window.matchMedia("(max-width: 767px)");
-    const decide = () => setCanvas(iOS || android || mq.matches);
+    const decide = () => setCanvas(iOS || android || safari || mq.matches);
     decide();
     mq.addEventListener("change", decide);
     return () => mq.removeEventListener("change", decide);
@@ -211,7 +221,9 @@ export default function FilePreview({
                 // The browser's own toolbar stays on: it is the page number
                 // and go-to-page box a framer needs to say "turn to page 88"
                 // in a room. It had been hidden, which left desktop with no
-                // way to tell or choose the page at all.
+                // way to tell or choose the page at all. (Chrome, Edge and
+                // Firefox; Safari has no such toolbar and reads the canvas
+                // path, see useCanvasPdf.)
                 src={`${blobUrl}#navpanes=0`}
                 title={file.title}
                 className="h-full w-full border-0"

@@ -3,6 +3,9 @@ import { requireCertificationAccess } from "@/lib/api-auth";
 import { isDriveConfigured } from "@/lib/drive";
 import { listToolVideos } from "@/lib/tool-videos";
 
+/** A cold Drive walk took 13 s in testing, which can outrun the default limit; 60 matches the other Drive routes. */
+export const maxDuration = 60;
+
 /**
  * GET /api/tool-videos
  *
@@ -33,6 +36,7 @@ export async function GET(req: NextRequest) {
           label: v.label,
           mimeType: v.mimeType,
           sizeBytes: v.sizeBytes,
+          durationMs: v.durationMs ?? null,
         })),
       })),
     });

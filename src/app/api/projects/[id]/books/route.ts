@@ -12,18 +12,7 @@ import { listBooksLibrary, isDriveConfigured } from "@/lib/books";
  * access, which a church client does not have and should not need — the books
  * are the reading behind the process they are paying for. Membership of the
  * project is the right question here, so this asks that instead.
- *
- * Cached, unlike the project handouts route beside it, and the difference is
- * deliberate. Handouts come from the project's TEMPLATE folder, so caching
- * them across projects would bake in an assumption that stops being true the
- * first time a template gets its own folder. The books folder is a single
- * global env var: every caller reads byte-identical content by construction,
- * so there is no per-project variance for a cache to leak.
  */
-type Cached = { at: number; payload: unknown };
-let cache: Cached | null = null;
-const TTL_MS = 60_000;
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -40,14 +29,8 @@ export async function GET(
   }
 
   try {
-    if (cache && Date.now() - cache.at < TTL_MS) {
-      return NextResponse.json({ ...(cache.payload as object), configured: true, cached: true });
-    }
-
     const library = await listBooksLibrary();
-    cache = { at: Date.now(), payload: library };
-
-    return NextResponse.json({ ...library, configured: true, cached: false });
+    return NextResponse.json({ ...library, configured: true });
   } catch (error) {
     console.error("Project books listing failed:", error);
     return NextResponse.json({ error: "Could not read the books library" }, { status: 502 });

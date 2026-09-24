@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireProjectAccess } from "@/lib/api-auth";
+import { contentDisposition } from "@/lib/content-disposition";
 import { fetchDriveFile } from "@/lib/drive";
 import { listBooksLibrary, isDriveConfigured } from "@/lib/books";
 
@@ -53,7 +54,7 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": file.mimeType,
-        "Content-Disposition": `inline; filename="${file.filename.replace(/"/g, "")}"`,
+        "Content-Disposition": contentDisposition("inline", file.filename),
         "Cache-Control": "private, no-cache, must-revalidate",
       },
     });

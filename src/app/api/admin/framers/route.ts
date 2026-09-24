@@ -8,17 +8,26 @@ import {
 } from "@/lib/ghl";
 import { inviteFramer, type InviteOutcome, syncCertificationRole } from "@/lib/invite";
 
-/** Turn a GHL result into something an admin can act on, or null if silent. */
-function ghlNotice(result: GhlTagResult, email: string): string | null {
+/**
+ * Turn a GHL result into something an admin can act on, or null if silent.
+ *
+ * `removing` words it for DELETE: "Portal access is set" after taking someone
+ * off the list reads as if the removal hadn't happened.
+ */
+function ghlNotice(result: GhlTagResult, email: string, removing = false): string | null {
   switch (result.status) {
     case "disabled":
       return null; // Integration isn't set up; saying so on every add is noise.
     case "tagged":
       return null; // Worked — the success message already covers it.
     case "not_found":
-      return `No GoHighLevel contact matches ${email}, so no tag was applied.`;
+      return removing
+        ? `No GoHighLevel contact matches ${email}, so no certified tag was taken off. If they're in GoHighLevel under another address, remove the tag there.`
+        : `No GoHighLevel contact matches ${email}, so no tag was applied.`;
     case "failed":
-      return `Portal access is set, but GoHighLevel tagging failed: ${result.message}`;
+      return removing
+        ? `They're off the certified list, but removing their GoHighLevel certified tag failed: ${result.message}`
+        : `Portal access is set, but GoHighLevel tagging failed: ${result.message}`;
   }
 }
 
@@ -326,6 +335,6 @@ export async function DELETE(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     ghl: ghl.status,
-    warning: target?.email ? ghlNotice(ghl, target.email) : null,
+    warning: target?.email ? ghlNotice(ghl, target.email, true) : null,
   });
 }

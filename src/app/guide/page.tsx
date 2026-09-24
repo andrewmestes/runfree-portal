@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, getCurrentUser, hasCertificationAccess, logout } from "@/lib/auth";
+import { getCurrentFramer, getCurrentUser, hasCertificationAccess, loginUrlHere, logout } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
@@ -64,7 +64,7 @@ export default function GuidePage() {
     async function init() {
       const user = await getCurrentUser();
       if (!user) {
-        router.replace("/auth/login");
+        router.replace(loginUrlHere());
         return;
       }
 
@@ -191,6 +191,16 @@ export default function GuidePage() {
     );
   }, []);
 
+  /**
+   * The viewer's header says what the card says, "Digital Facilitator's
+   * Guide · September 2026", not the Drive filename the folder sorts by.
+   * Shared by the button and the cover: on a phone the button sits at the
+   * fold (Safari's toolbar hides it), so the cover is the thing a thumb finds.
+   */
+  const openGuide = () => {
+    if (file) setPreview({ ...file, num: null, label: editionTitle(file.title) });
+  };
+
   if (status === "error") {
     return <AccessError onRetry={() => window.location.reload()} />;
   }
@@ -226,7 +236,7 @@ export default function GuidePage() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-runfree-navy/30 via-runfree-navy/60 to-runfree-navy" />
 
-        <div className="relative mx-auto max-w-2xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+        <div className="relative mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-24 lg:px-8">
           {loadError && (
             <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {loadError}
@@ -235,7 +245,7 @@ export default function GuidePage() {
 
           <div className="overflow-hidden rounded-2xl bg-white/95 shadow-2xl ring-1 ring-white/20 backdrop-blur-sm">
             <div className="h-1.5 bg-runfree-grad" />
-            <div className="p-8 text-center sm:p-10">
+            <div className="p-6 text-center sm:p-10">
               {file ? (
                 <>
                   {/* The guide's own title slide — a 168-page playbook deserves
@@ -246,7 +256,12 @@ export default function GuidePage() {
                       the guide's own designed cover (rather than the generic
                       badge-on-navy placeholder) means that permanent fallback
                       looks intentional instead of like a broken feature. */}
-                  <span className="mx-auto mb-6 block w-full max-w-sm overflow-hidden rounded-xl shadow-xl ring-1 ring-black/10 sm:max-w-md">
+                  <button
+                    type="button"
+                    onClick={openGuide}
+                    aria-label="Open the Guide"
+                    className="mx-auto mb-4 block w-full max-w-sm overflow-hidden rounded-xl sm:mb-6 shadow-xl ring-1 ring-black/10 transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-runfree-magenta sm:max-w-md"
+                  >
                     <PdfThumbnail
                       fileId={file.id}
                       fetchBytes={fetchPdfBytes}
@@ -264,11 +279,11 @@ export default function GuidePage() {
                         />
                       }
                     />
-                  </span>
+                  </button>
                   <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
                     The complete training playbook
                   </p>
-                  <h2 className="mt-2 font-display text-2xl font-bold text-runfree-ink">
+                  <h2 className="mt-2 font-display text-xl font-bold text-runfree-ink sm:text-2xl">
                     {editionTitle(file.title)}
                   </h2>
                   {file.modifiedTime && (
@@ -277,10 +292,8 @@ export default function GuidePage() {
                     </p>
                   )}
                   <button
-                    onClick={() =>
-                      setPreview({ ...file, num: null, label: file.title })
-                    }
-                    className="mt-6 rounded-lg bg-runfree-grad px-8 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                    onClick={openGuide}
+                    className="mt-4 rounded-lg bg-runfree-grad px-8 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:mt-6"
                   >
                     Open the Guide
                   </button>

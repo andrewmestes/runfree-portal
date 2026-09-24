@@ -35,7 +35,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ modules: cache.payload, cached: true });
     }
 
-    const modules = await listPortalLibrary();
+    // `fresh` reaches the Drive memo too, or Refresh would get its listing.
+    const modules = await listPortalLibrary({ fresh });
     cache = { at: Date.now(), payload: modules };
 
     return NextResponse.json({ modules, cached: false });

@@ -9,6 +9,7 @@ import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
 import AccessError from "@/components/AccessError";
+import { useCertificationAccessState } from "@/lib/useCertificationAccess";
 
 type Profile = {
   id: string;
@@ -49,6 +50,10 @@ export default function HelpPage() {
    * engagement; a church client gets the reverse.
    */
   const [hasProjects, setHasProjects] = useState(false);
+  // The same rule the hub and the certification APIs use, so this section
+  // shows exactly when Certification in the top bar will open.
+  const certState = useCertificationAccessState();
+  const certAccess = certState ?? false;
 
   const load = useCallback(async () => {
     try {
@@ -88,20 +93,26 @@ export default function HelpPage() {
     router.replace("/auth/login");
   }
 
-  if (status === "checking") return <PageLoader label="Loading help…" />;
+  // Waits for the access answer too: the back link below depends on it.
+  if (status === "checking" || (status === "ready" && certState === null)) return <PageLoader label="Loading help…" />;
   if (status === "error") return <AccessError onRetry={load} />;
   if (!profile) return null;
+
+  // A framer with no projects has no list to go back to: "/" sends them on to
+  // the hub, and "← Your projects" reads as something broken — the reason the
+  // hub hides that link in the same case. Same rule as the home redirect.
+  const backToProjects = hasProjects || profile.is_staff || !certAccess;
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <PortalHeader
         profile={profile}
         onSignOut={handleSignOut}
-        backHref="/"
-        backLabel="Your projects"
+        backHref={backToProjects ? "/" : "/certification"}
+        backLabel={backToProjects ? "Your projects" : "Certification hub"}
         title="Help"
         subtitle="How this works, and how to reach a person."
-        certificationAccess={profile.certification_access || profile.is_staff}
+        certificationAccess={certAccess}
       />
 
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
@@ -362,29 +373,44 @@ export default function HelpPage() {
         )}
 
         {/* The certification half, for anyone who can reach it. */}
-        {(profile.certification_access || profile.is_staff) && (
+        {certAccess && (
           <Section title="Your certification resources">
             <Faq q="Where is the certification material?">
-              <strong>Certification</strong> in the top bar opens the Certified Vision
-              Framer Hub. Five cards: Process Handouts, Training Videos, Books,
-              the Digital Facilitator&rsquo;s Guide, and Keynote Presentations. Every
-              page there carries the Pivvot mark, so you can always tell which part of
-              the portal you are in.
+              <strong>Certification</strong> in the top bar (in the ☰ menu on a phone)
+              opens the Certified Vision Framer Hub. Six cards: the Digital
+              Facilitator&rsquo;s Guide, the Certification Companion Guide, Books,
+              Process Handouts, Training Videos and Keynote Presentations. Every page
+              there carries the Pivvot mark, so you can always tell which part of the
+              portal you are in.
+            </Faq>
+            <Faq q="What is the Certification Companion Guide?">
+              Will&rsquo;s orientation to the certification: the bird&rsquo;s-eye view
+              of how you will learn to use Pivvot Vision Framing. If you are in a cohort,
+              read pages 3&ndash;10 before session one. The card opens it straight into
+              the viewer with a <strong>Download</strong> button, and{" "}
+              <strong>Close</strong> brings you back to the hub. It is read live from
+              Drive, so when Andrew replaces it with a new edition, the card opens the
+              new one.
             </Faq>
             <Faq q="Finding one particular handout">
               Open <strong>Process Handouts</strong>. The icons across the top are the
-              six tools — click one to see only its sheets. There is also a search box
+              six tools — click one to see only its sheets. The Vision Frame Field
+              Guide, Additional Handouts and Combined Handouts are the pills just below
+              them. There is also a search box
               that looks across every module at once, which is usually faster if you
               know part of the name.
             </Faq>
             <Faq q="Reading and downloading">
               Clicking a handout opens it inside the portal with a{" "}
               <strong>Download</strong> button, so you can read it without leaving the
-              page. Each module also has one combined PDF containing all of its sheets —
-              useful for printing a full workbook in one go.
+              page. <strong>Download all</strong>, at the top of each module with more
+              than one sheet, saves every sheet in that module as one .zip, and your
+              browser shows the progress. For the whole workbook in a single
+              file, open <em>Combined Handouts</em>: the Pivvot Notebook, every handout
+              from every module.
             </Faq>
             <Faq q="The material changed and I am seeing the old version">
-              The handouts are read live from Google Drive, so an updated file appears
+              The handouts and books are read live from Google Drive, so an updated file appears
               for everyone as soon as it is replaced there. If something still looks
               stale a little later, reload the page — and if it is still wrong, tell
               Andrew, who can force a fresh read from Drive.
@@ -394,31 +420,46 @@ export default function HelpPage() {
               Google Drive. Clicking one checks that you are signed in and certified,
               then opens that one file straight away &mdash; no shelf, no search. If
               you are signed out it takes you to sign in and comes straight back to
-              the file. The same link on a phone opens the same way, so it works from
-              the front of a room. A keynote icon downloads the deck instead of
-              showing it &mdash; a .key or .pptx cannot open in a browser &mdash; and
-              offers the other format too.
+              the file &mdash; even if you have to reset your password on the way, as
+              long as you open the reset email in the same browser. Every
+              certification page does the same. The same link on a phone opens the same way, so it works from
+              the front of a room. A keynote icon opens the slides as a PDF right in
+              the portal, on any device with nothing to install. The Keynote and
+              PowerPoint files are one click away in its header. If a deck has no PDF
+              yet, the download starts instead. If a link says the file didn&rsquo;t
+              open, that is usually a passing hiccup at Google Drive &mdash;{" "}
+              <strong>Try again</strong> on that screen. &ldquo;Isn&rsquo;t in the
+              library&rdquo; means the file itself has moved; the current version is
+              on the shelf the button takes you to.
             </Faq>
             <Faq q="Which videos can I show a client?">
               <strong>Training Videos</strong> has two tabs. <em>Client Videos</em> are
-              the teaching videos you show the teams you lead, plus the clips the
-              guide&rsquo;s text links to (the movie clips, the Carey Nieuwhof
-              interview). <em>Facilitator
+              the teaching videos you show the teams you lead, plus the films under{" "}
+              <em>Video Clips</em> that the guide&rsquo;s text links to (the movie
+              clips, the Carey Nieuwhof interview). <em>Facilitator
               Training</em> holds the Process Tools walkthroughs that train you as the
-              facilitator, under the six module headings; they are for you, not for
-              clients. Both play without a Google account, and a video replaced in
-              Drive is replaced here the same day. <em>Open full screen</em> in the
-              player gives you a page with only the video on it, which is what the
-              guide links to.
+              facilitator, under the six module headings; they are for you. About ten
+              of them are the same film as a Client Video; those cards say{" "}
+              <em>Also a client video</em> and have a <strong>Copy link</strong>. Both
+              tabs play without a Google account, and a video replaced in Drive is
+              replaced here the same day. On a walkthrough or a clip,{" "}
+              <em>Open full screen</em> in the player gives you a page with only the
+              video on it, which is the page the guide&rsquo;s video icons open. Its
+              link back goes to the tab that video lives on. A
+              teaching video offers <em>Open original</em> instead, which opens it on
+              Loom.
             </Faq>
             <Faq q="Sharing a video with a client">
-              Every video on the <em>Client Videos</em> tab has a <strong>Copy
+              Every teaching video on the <em>Client Videos</em> tab has a <strong>Copy
               link</strong> button, on the card and in the player. It copies an
               address like portal.runfree.co/watch/… that opens the video on a plain
               RunFree page with no sign-in, so a board member or a pastor you are
-              still talking with can watch it straight from a text or an email. The
-              facilitator walkthroughs never get one of these links; neither, for
-              now, do the movie clips.
+              still talking with can watch it straight from a text or an email. A
+              facilitator walkthrough gets one only when it is the same film as a
+              Client Video, and the link opens that client copy. The films under{" "}
+              <em>Video Clips</em> do not, for now, so play those in the room. If a
+              video is later taken down or moved, a link you already sent opens a
+              RunFree page asking them for a fresh one; copy it again from the tab.
             </Faq>
             <Faq q="What is the difference between this and a church project?">
               The certification library is <em>your</em> material as a facilitator — how
@@ -428,13 +469,20 @@ export default function HelpPage() {
               them.
             </Faq>
             <Faq q="My certification cohort">
-              A cohort being certified has its own project under <em>Your projects</em>,
-              laid out exactly like a church&rsquo;s. <strong>Sessions</strong> holds
-              each recording with the full session summary; <strong>The Process</strong>{" "}
-              has the six modules, with the tools covered so far ticked and each
-              tool&rsquo;s example chart; the Dashboard lists your practice assignments
-              and what your trainers owe the group; <strong>Key Dates</strong> has the
-              session calendar; and <strong>Team</strong> lists the participants.
+              If your cohort has a project of its own, it appears under{" "}
+              <em>Your projects</em> and is laid out exactly like a church&rsquo;s:{" "}
+              <strong>Sessions</strong> holds each recording with the full session
+              summary; <strong>The Process</strong> has the six modules, with the tools
+              covered in session ticked off as you go; the Dashboard lists your
+              practice assignments and what your trainers owe the group;{" "}
+              <strong>Key Dates</strong> has the session calendar; and{" "}
+              <strong>Team</strong> lists the participants.
+              <br />
+              <br />
+              If you don&rsquo;t see one, you haven&rsquo;t been added to a cohort
+              project, and everything for the course is on the{" "}
+              <strong>Certification</strong> hub, starting with the Certification
+              Companion Guide.
             </Faq>
           </Section>
         )}
@@ -618,11 +666,17 @@ export default function HelpPage() {
             </Faq>
             <Faq q="Where the certification material lives">
               <strong>Certification</strong> in the top bar opens the Certified Vision
-              Framer Hub — Process Handouts, Training Videos, Books, Keynote Presentations and the
-              Digital Facilitator&rsquo;s Guide. It is a separate section from your
+              Framer Hub — the Digital Facilitator&rsquo;s Guide, the Certification
+              Companion Guide, Books, Process Handouts, Training Videos and Keynote
+              Presentations. It is a separate section from your
               projects, and the pages there carry the Pivvot mark so you can tell at a
               glance which side of the portal you are on. <em>Your projects</em> under
-              the logo brings you back.
+              the logo brings you back. The Companion Guide is read live from its PDF
+              in the <em>Certification Handouts</em> folder on Drive. For a new
+              edition, replace that file in place (Drive&rsquo;s <em>Manage
+              versions</em>, then <em>Upload new version</em>) and it is live within
+              the minute. A new file dropped beside it is not picked up: the portal
+              was given that one file, not the folder.
               <br />
               <br />
               That material is for facilitators. What a church sees inside its own
@@ -803,7 +857,7 @@ function FeedbackForm({
               type="button"
               onClick={() => setKind(k.value)}
               aria-pressed={kind === k.value}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition max-sm:min-h-[44px] ${
                 kind === k.value
                   ? "bg-runfree-grad text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"

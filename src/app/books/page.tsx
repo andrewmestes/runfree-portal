@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, getCurrentUser, hasCertificationAccess, logout } from "@/lib/auth";
+import { getCurrentFramer, getCurrentUser, hasCertificationAccess, isPortalAdmin, loginUrlHere, logout } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
@@ -67,6 +67,8 @@ export default function BooksPage() {
   const [coverFailed, setCoverFailed] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  /** Staff only, as on Handouts: re-reading Drive is ours to do, not a framer's. */
+  const [canRefresh, setCanRefresh] = useState(false);
   const router = useRouter();
 
   const load = useCallback(async (fresh = false) => {
@@ -99,7 +101,7 @@ export default function BooksPage() {
     async function init() {
       const user = await getCurrentUser();
       if (!user) {
-        router.replace("/auth/login");
+        router.replace(loginUrlHere());
         return;
       }
 
@@ -118,6 +120,7 @@ export default function BooksPage() {
       setStatus("loading");
 
       setFramer(current);
+      setCanRefresh(await isPortalAdmin());
       await load();
       setStatus("ready");
     }
@@ -224,7 +227,7 @@ export default function BooksPage() {
           onSelect={setActiveId}
           onOpen={setPreview}
           fetchBytes={fetchPdfBytes}
-          onRefresh={handleRefresh}
+          onRefresh={canRefresh ? handleRefresh : undefined}
           refreshing={refreshing}
         />
       </main>

@@ -37,10 +37,18 @@ export default function ModuleNav({
   modules,
   active,
   onSelect,
+  fallbackHeading,
 }: {
   modules: NavModule[];
   active: string;
   onSelect: (section: string) => void;
+  /**
+   * What the heading slot says when no process tool is chosen. The
+   * certification handouts page selects its reference pills (and "all") from
+   * outside the rail, and without this the reserved slot sat empty above the
+   * icons. The project page passes nothing, so it does not change.
+   */
+  fallbackHeading?: { eyebrow: string; title: string } | null;
 }) {
   const process = [...modules].sort((a, b) => a.order - b.order);
 
@@ -63,7 +71,7 @@ export default function ModuleNav({
           the heading for what you had chosen. Keyed on the module so it
           re-animates on each change. */}
       <div className="mb-7 flex min-h-[68px] items-center justify-center px-4">
-        {meta && activeModule && (
+        {meta && activeModule ? (
           <div key={activeModule.section} className="animate-rise text-center">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
               {meta.stage}
@@ -72,7 +80,16 @@ export default function ModuleNav({
               {meta.mantra}
             </p>
           </div>
-        )}
+        ) : fallbackHeading ? (
+          <div key={fallbackHeading.title} className="animate-rise text-center">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-magentaDeep">
+              {fallbackHeading.eyebrow}
+            </p>
+            <p className="mt-1 font-display text-2xl font-extrabold tracking-tight text-runfree-ink sm:text-3xl">
+              {fallbackHeading.title}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div className="relative">

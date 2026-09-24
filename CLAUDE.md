@@ -167,24 +167,53 @@ certification-flavored email. See `BRIEF.md`, "Invitation emails need solving
 separately" — the fix is `generateLink()` + a portal-branded send, gated on
 having `RESEND_API_KEY` (not yet configured).
 
-## Certification access is checked two different ways, client and server
+## Certification access: one rule, client and server
 
-`hasCertificationAccess()` (client, `src/lib/auth.ts`) passes on `is_owner`,
-an allowed `account_role`, `profiles.certification_access`, **or** a
-`certified_framers` row.
+There is one rule: an allowed `account_role` (`admin` | `runfree_team` |
+`framer` | `framer_subscribed`) **or** a `certified_framers` row. Nothing
+else — not `is_owner`, not `profiles.certification_access`.
 
-`requireCertificationAccess()` (server, `src/lib/api-auth.ts`) — which every
-`/api/books`, `/api/library`, `/api/guide`, `/api/videos` and `/api/keynotes`
-route uses — accepts only an allowed `account_role`
-(`admin` | `runfree_team` | `framer` | `framer_subscribed`) **or** a
-`certified_framers` row. It ignores `is_owner` and `certification_access`.
+`requireCertificationAccess()` (server, `src/lib/api-auth.ts`) applies it for
+every `/api/books`, `/api/library`, `/api/guide`, `/api/videos`,
+`/api/keynotes`, `/api/tool-videos` and `/api/companion` route, with three
+ticket exceptions: `/api/tool-videos/file` accepts only a ticket (four
+hours), and `/api/keynotes/file` and `/api/library/module/{id}/zip` accept a
+ticket or the session (fifteen minutes). Each ticket is minted only by a
+route that runs `requireCertificationAccess` (`/api/tool-videos/ticket`,
+`/api/keynotes/ticket`, `/api/library/module/{id}/ticket`), but the file
+route does not re-check the person, so taking someone off the roster
+closes those three only once their outstanding tickets expire.
+`hasCertificationAccess()` (client, `src/lib/auth.ts`) is a copy of the same
+rule, and everything client-side asks it: the five shelves, `/open`, the
+hub at `/certification`, the home page's redirect of a project-less framer
+to the hub, and — through `useCertificationAccess()` in
+`src/lib/useCertificationAccess.ts` — the header's Certification link, the
+project sidebar's link and the certification section of Help. If you change
+the rule, change both functions together.
 
-So a profile with `certification_access: true` and no `account_role` renders
-the page and then gets 403 from its own API — the page shows "No certification
-access on this account" under a working header. Every one of the nine real
-profiles has an allowed `account_role`, so this does not bite in production,
-but it will bite **any throwaway test account** unless you set `account_role`
-as well. That cost a debugging round on the keynotes page.
+It used to be three rules. The client accepted `is_owner` and
+`certification_access` too, and the hub, header link, home redirect and Help
+read `certification_access || is_staff` directly. So a framer set to Project
+Member in Admin (the 031 trigger then clears `certification_access`) but still
+on the certified list was told "This area is for Certified Vision Framers" by
+the hub while every shelf, guide link and API still opened for them; and a
+profile with the flag but no allowed role rendered a page that then got 403
+from its own API. `/open` now shows its "This link is for Certified Vision
+Framers" screen on a 403 rather than the generic "That didn't open", in case
+the two ever drift again.
+
+Because a `certified_framers` row alone grants access, demoting someone to
+Project Member does not revoke the library by itself. Admin's role dropdown
+therefore asks, when the person is on the list, whether to remove their
+roster row too (`DELETE /api/admin/framers`, which also takes their
+GoHighLevel certified tag off, and says so when it couldn't); Cancel changes
+nothing. Admin reads the roster through `GET /api/admin/framers`, not
+`supabase.from("certified_framers")`: that table's RLS shows every row only
+to a caller whose own row has `is_admin`, so a Site Admin by `account_role`
+alone would see nobody as listed and the question would never be asked.
+Throwaway test
+accounts still need an allowed `account_role` or a roster row — the flag on
+its own opens nothing.
 
 ## "Multiple GoTrueClient instances" console warning is expected, not a bug
 
@@ -1507,6 +1536,11 @@ Signed out → `/auth/login?next=…`, and the login page honours `next` for
 email and for Google (stashed in sessionStorage across the OAuth round trip;
 `safeNext` allows only a same-site path). The Canva relinking itself has to
 be done by hand — the Canva connector refuses to edit a 174-page design.
+The certification shelves send a signed-out visit to `/auth/login?next=…` too
+(`loginUrlHere`), and a password reset on the way carries `next` in
+localStorage (`runfree.resetNext`, two-hour expiry), because the reset email
+opens a new tab and the templates append `?token_hash=` to `{{ .RedirectTo }}`
+literally, so the link itself can't carry it.
 
 **The Process Tools videos stay in Drive and stream through the portal.**
 `GOOGLE_TOOL_VIDEOS_FOLDER_ID` ("Pivvot Vision Framing > Training (Videos &
@@ -1515,8 +1549,10 @@ live, like the handouts. `lib/tool-videos.ts` explains the two things that
 differ from a handout:
 
 - **A video tag cannot send a session header**, so `/api/tool-videos/ticket/{id}`
-  (bearer-gated, checks the folder) mints a fifteen-minute HMAC ticket for
-  one file and one person, and `/api/tool-videos/file/{id}?t=…` checks only
+  (bearer-gated, checks the folder) mints a four-hour HMAC ticket (keynote
+  download tickets stay fifteen minutes); a player that hits an expired
+  ticket re-mints once and resumes where it was. The ticket is for one file
+  and one person, and `/api/tool-videos/file/{id}?t=…` checks only
   the ticket. Reusing a ticket on another file, or altering one, is a 401.
 - **The file route passes the browser's Range header through** to Drive
   (`fetchDriveFileRange`) and forwards 206 / Content-Range / Content-Length.
@@ -1535,7 +1571,12 @@ sort_order alone cannot place a Drive-only module.
 **Boundary checks walk up, they do not list.** `fileInsideFolder(id, root)`
 follows the file's parents to the root (three or four small calls) instead
 of listing the whole tree (a dozen calls, ten seconds cold). The handout
-file route and the video ticket use it; books and keynotes still list. The
+file route and the video ticket use it; books and keynotes still list, but
+each listing is memoised for 60 s (`listBooksLibrary`, `listPresentations`,
+and the handout library's `listPortalLibrary`, which "Download all"'s ticket
+and zip both read — it was two whole-Drive lists per download), so a page
+and the file routes behind it pay for one walk a minute. `fresh` walks
+anyway and replaces the memo, so Refresh is not served the old list. The
 handout route starts the walk and the fetch together and cancels the stream
 if the walk says no.
 
@@ -1554,6 +1595,14 @@ formats, the file route accepts a ticket or a bearer and passes Range and
 Content-Length through, and both `/open/keynote` and the Keynotes page hand
 the browser a ticketed URL so it downloads the file itself with the real
 name and its own progress bar — nothing is buffered as a blob in the page.
+
+Superseded once the decks got PDF exports (beside the .key from 8 Sept, in a
+`pdfs/` subfolder from 18 Sept): `/open/keynote` now shows the slides in
+FilePreview with Keynote and PowerPoint buttons in its header, and downloads
+straight away only when a deck has no PDF. The PDF is fetched with the
+session at its plain `/api/keynotes/file/{id}`, not the ticketed URL, so the
+Drive md5 ETag and a five-minute browser cache make a repeat open cheap; the
+.key and .pptx buttons keep their tickets.
 
 After the guide is relinked, the per-file "anyone with the link" sharing on
 the tool videos comes off — that switch is the real gate. The relink sheet
@@ -2022,8 +2071,13 @@ sitting directly in `GOOGLE_CERT_FOLDER_ID` — the "Certification Handouts"
 folder ABOVE the module handouts — so a new edition dropped there is live
 with nothing to re-upload. That folder has to be shared with the service
 account separately; sharing the handouts sub-folder does not reach its
-parent, and until it is shared the card 404s with "That file isn't in the
-library".
+parent. As of 24 Sept it is not: Andrew shared the guide file itself, so
+the folder lists empty and `getCompanionGuide` falls back to a name search
+for "Companion Guide", which finds only files shared one by one. Until the
+folder is shared (Viewer), a new edition has to replace that file in place
+(Drive's Manage versions); a new file dropped in the folder is never seen.
+The staff Help FAQ "Where the certification material lives" says so; once
+the folder is shared, it can say "drop it in the folder" again.
 
 Speed (22 Sept, Andrew: "the companion guide takes a while to load in the
 cert hub"): the lookup is memoised for a minute and the bytes are held in
@@ -2063,15 +2117,45 @@ by the fold goes with `clients` since it is the same set of films. The
 unnumbered "Video Clips" folder is `clients` too — the films the guide's
 text links to, the movie clips and the Carey Nieuwhof interview, which a
 facilitator plays for the room (Andrew, later that day: "those are also
-client facing videos"); three of them also sit in the Crowd Cloud folder
-under the same name, and `dropClipTwins` hides that copy so the client
-shelf keeps them without showing them twice. The tab
+client facing videos"); three of them also sit in the Crowd Cloud folder,
+two under the same name and the Carey interview without "with Carey
+Nieuwhof", and `dropClipTwins` hides that copy so the client shelf keeps
+them without showing them twice. It matches equal-or-prefix on the
+normalised title, so a module copy whose name is the start of a clip's
+counts as the same film. These shelf rules (`isClipsFolder`, `isClipTwin`,
+`isIntroFolder`) live in `src/lib/video-shelf.ts`, and `/open/video`'s back
+link reads them too, so the full-screen page names the tab the film is
+actually on: the ticket route answers `shelf`, and for an unnumbered film
+in a module folder (null there, since only the whole listing can say
+whether it is a clip) the page fetches `/api/tool-videos` once the player
+is up and corrects the link. Change a rule there, not in one page.
+The tab
 lives in the URL (`?tab=facilitators`; the client tab is the bare URL) so
 links and Back work. Tab names — "Client Videos" / "Facilitator Training"
 — were my pick; Andrew offered "Process Videos and Training Videos" and
 said he was open to others. The Help FAQ "Which videos can I show a
 client?" and the hub card describe the split. `site-shot.ts` captures
 both tabs (`videos`, `videos-facilitators`).
+
+**Some walkthroughs are also client videos** (23 Sept, not yet seen by
+Andrew). Eleven Drive walkthroughs are the Loom teaching videos from the
+client list under their module-folder names, matched by running time:
+1.3, 1.4, 1.10, 1.11, 1.13, 2.0, 2.1, 2.2, 2.9, 3.3 and 6.4 (1.3 Vision
+Frame Overview is Vision Frame Overview Teaching; 6.4 Horizon Story Tool is
+the God Dreams Preparation Video). Labelled "for the trainer", they told a
+framer not to share a film the Client Videos tab tells them to share.
+`src/lib/video-twins.json` maps each Drive file id to the `training_videos`
+row it duplicates. That card stays on Facilitator Training but says "Also a
+client video", and its Copy link opens that row's `/watch/{id}`, never the
+Drive file. A twin whose row is unpublished or does not embed loses the
+link. The tab's blurb says those cards can be shared, and the Help FAQ
+that they carry a Copy link. A new
+twin needs its ids added to the JSON by hand, and so does a walkthrough
+re-uploaded to Drive rather than replaced in place (Manage versions): the
+new file has a new id and silently loses its twin link. This softens Andrew's 22 Sept
+line that the walkthroughs are "more internal for the trainer", so it is
+his call: if he wants every walkthrough kept private, empty the JSON and
+take the sentence out of the blurb and the FAQ.
 
 Numbered Drive files sort by `fileOrder()` in `drive.ts` — whole number
 times a thousand plus the decimal part — so 1.9 comes before 1.10. The old
@@ -2087,10 +2171,12 @@ to view at any time." A public server-rendered page — no sign-in, no way
 into the portal — for one `training_videos` row: RunFree and Pivvot marks,
 the embed, the title and description, "Shared with you by a Certified
 Vision Framer." It carries og tags (the Loom still as og:image) so the link
-previews in a text or an email. Every card on the Client Videos tab and
-the player header have a "Copy link" button (`CopyLinkButton`, a sibling
-of the card button, never inside it) that puts that address on the
-clipboard. What is NOT public: the facilitator walkthroughs (never), and
+previews in a text or an email. Every card on the Client Videos tab, each
+walkthrough twin on Facilitator Training (above; its link is the client
+row's), and the player header have a "Copy link" button (`CopyLinkButton`,
+a sibling of the card button, never inside it) that puts that address on
+the clipboard. What is NOT public: the facilitator walkthroughs as Drive
+files (never — a twin shares its client row, not itself), and
 the Drive clips (for now) — four of the seven are third-party films
 (Mr. Holland's Opus, Smoke, the Coca-Cola ad, Made to Stick) and I asked
 Andrew which of the seven he wants on a public address before opening any;
@@ -2173,8 +2259,11 @@ machine). Authentication → Email Templates: in **Reset Password** and
 **Invite user**, replace the button's `{{ .ConfirmationURL }}` with
 `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery` and
 `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite` respectively
-(`RedirectTo` is the portal address our code passes, so it keeps working
-whatever the project's Site URL says). Authentication → Providers → Email:
+(`RedirectTo` is the portal address our code passes; a send with none, or
+one not on the redirect allowlist — the dashboard's Invite user and Send
+password recovery, a Vercel preview URL — gets the Site URL instead, and
+src/app/page.tsx forwards a ?token_hash link that lands there to
+/auth/reset-password). Authentication → Providers → Email:
 **Email OTP expiry** to 86400 so an invite opened the next morning still
 works. Authentication → Emails → SMTP: confirm a custom provider is on.
 Until the templates change, every link sent is the old shape and a

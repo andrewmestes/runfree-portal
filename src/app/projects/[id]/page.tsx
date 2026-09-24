@@ -112,6 +112,7 @@ import AssignedSteps from "@/components/AssignedSteps";
 import { useMyActionSteps } from "@/lib/my-steps";
 import type { BooksLibrary } from "@/lib/books";
 import { useOwedCount } from "@/lib/useOwedCount";
+import { useCertificationAccess } from "@/lib/useCertificationAccess";
 
 type Profile = {
   id: string;
@@ -948,6 +949,10 @@ export default function ProjectDetailPage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  // Whether the header offers Certification — by the rule the hub itself
+  // applies, so the link never leads to "This area is for Certified Vision
+  // Framers".
+  const certAccess = useCertificationAccess();
 
   /**
    * Which panel is showing. Kept in the URL (?panel=prepare) so a coach can
@@ -1942,7 +1947,7 @@ export default function ProjectDetailPage() {
         backHref={undefined}
         title=""
         showTitleBlock={false}
-        certificationAccess={profile.certification_access || profile.is_staff}
+        certificationAccess={certAccess}
         chromeInSidebar
         onMenuClick={() => setNavOpen(true)}
       />
@@ -3348,6 +3353,7 @@ function ProjectSidebar({
     .sort((a, b) => churchNameOf(a.name).localeCompare(churchNameOf(b.name)));
 
   const owed = useOwedCount(!!profile.is_staff);
+  const certAccess = useCertificationAccess();
 
   // Escape closes the drawer, the same as tapping away from it — and while
   // it is open the page behind does not scroll. Without the lock, dragging
@@ -3434,7 +3440,7 @@ function ProjectSidebar({
         {/* Only in the drawer. On desktop the header carries this as a pill,
             and below `sm` the header hides its chrome entirely — so without
             this line Certification is unreachable on a phone. */}
-        {(profile.certification_access || profile.is_staff) && (
+        {certAccess && (
           <a
             href="/certification"
             className="block rounded-lg px-3.5 py-1.5 lg:py-1 text-[11px] font-bold uppercase tracking-wider text-runfree-pink outline-none transition hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 lg:hidden"

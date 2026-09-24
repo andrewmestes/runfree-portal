@@ -6,6 +6,7 @@ import {
   fileInsideFolder,
   isDriveConfigured,
 } from "@/lib/drive";
+import { contentDisposition } from "@/lib/content-disposition";
 
 /**
  * GET /api/library/file/{driveId}
@@ -50,14 +51,36 @@ export async function GET(
     // The walk and the fetch start together — each is a second or so of
     // sequential Google calls, and nothing is sent until the walk says yes.
     // A file the walk rejects has its stream cancelled unread.
+    //
+    // "Not in the library" and "Drive didn't answer" are kept apart. Both
+    // used to be a 404, which /open words as "the link may be out of date" —
+    // so a facilitator hit by a passing Drive hiccup at the front of a room
+    // concluded the guide link was broken instead of trying again.
+    const fetching = fetchDriveFile(driveId).catch((err) => {
+      console.error("Handout fetch failed:", err);
+      return null;
+    });
     const [known, fetched] = await Promise.all([
-      fileInsideFolder(driveId, process.env.GOOGLE_DRIVE_FOLDER_ID!),
-      fetchDriveFile(driveId).catch(() => null),
+      fileInsideFolder(driveId, process.env.GOOGLE_DRIVE_FOLDER_ID!).catch(
+        async (err) => {
+          // The walk failed rather than said no; let go of the file too.
+          const f = await fetching;
+          if (f) void f.body.cancel().catch(() => {});
+          throw err;
+        }
+      ),
+      fetching,
     ]);
 
-    if (!known || !fetched) {
+    if (!known) {
       if (fetched) void fetched.body.cancel().catch(() => {});
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (!fetched) {
+      return NextResponse.json(
+        { error: "Drive did not send the file. Try again in a moment." },
+        { status: 502 }
+      );
     }
 
     const file = fetched;
@@ -66,10 +89,7 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": file.mimeType,
-        "Content-Disposition": `inline; filename="${file.filename.replace(
-          /"/g,
-          ""
-        )}"`,
+        "Content-Disposition": contentDisposition("inline", file.filename),
         "Cache-Control": "private, no-cache, must-revalidate",
       },
     });

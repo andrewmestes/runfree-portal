@@ -36,8 +36,12 @@ denominations open every link in a message seconds after it arrives, which
 is how the September cohort's invites and resets all read "expired" (see
 CLAUDE.md, "Mail scanners spent the cohort's links"). The token-hash link
 lands on the portal's own page, which spends the token only when a human
-submits a password. `RedirectTo` is the portal address the code passes, so
-the link is right whatever the project's Site URL says.
+submits a password. `RedirectTo` is the portal address the code passes. A
+send that passes none, or one not on the redirect allowlist, gets the Site
+URL (https://portal.runfree.co) instead. That covers the dashboard's Invite
+user and Send password recovery, and a send from a Vercel preview URL. The
+home page (src/app/page.tsx) forwards a ?token_hash link that lands there to
+/auth/reset-password.
 
 Also, in Authentication → Providers → Email, set **Email OTP expiry** to
 `86400` (24 hours) so an invite opened the next morning still works.

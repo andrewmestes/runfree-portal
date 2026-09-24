@@ -8,9 +8,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * in a page's memory as a blob first).
  *
  * A ticket names one file and one person, is signed with a server secret,
- * and dies after fifteen minutes — long enough to watch or download, useless
- * to pass around. The route that mints it does the access check; the file
- * route only verifies the ticket.
+ * and dies after fifteen minutes by default — long enough to start a
+ * download, useless to pass around. A video ticket is minted for longer
+ * (see the tool-videos ticket route): the `<video>` tag re-asks the same
+ * URL for every slice of the film, so the ticket has to outlive the
+ * watching, pauses included, not just the first byte. The expiry is inside
+ * the signed ticket, so verifying needs no TTL. The route that mints it
+ * does the access check; the file route only verifies the ticket.
  */
 
 const TICKET_TTL_MS = 15 * 60_000;
@@ -25,9 +29,13 @@ function sign(fileId: string, userId: string, exp: number): string {
   return createHmac("sha256", secret()).update(`${fileId}|${userId}|${exp}`).digest("base64url");
 }
 
-/** A ticket for one file, one person, fifteen minutes. */
-export function mintTicket(fileId: string, userId: string): { ticket: string; expiresAt: number } {
-  const exp = Date.now() + TICKET_TTL_MS;
+/** A ticket for one file, one person, fifteen minutes unless the caller asks for longer. */
+export function mintTicket(
+  fileId: string,
+  userId: string,
+  ttlMs = TICKET_TTL_MS
+): { ticket: string; expiresAt: number } {
+  const exp = Date.now() + ttlMs;
   const ticket = `${exp}.${Buffer.from(userId).toString("base64url")}.${sign(fileId, userId, exp)}`;
   return { ticket, expiresAt: exp };
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, getCurrentUser, hasCertificationAccess, logout } from "@/lib/auth";
+import { getCurrentFramer, getCurrentUser, hasCertificationAccess, loginUrlHere, logout } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
@@ -40,13 +40,19 @@ export default function KeynotesPage() {
   const [loadError, setLoadError] = useState("");
   /** Drive id currently downloading — these files are big enough to need a state. */
   const [busy, setBusy] = useState<string | null>(null);
+  /**
+   * A failed download, shown on the card it came from. It used to go to the
+   * banner at the top of the page, a screen and a half above the third deck's
+   * buttons on a phone, and nothing cleared it after a retry that worked.
+   */
+  const [dlError, setDlError] = useState<{ id: string; message: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     async function init() {
       const user = await getCurrentUser();
       if (!user) {
-        router.replace("/auth/login");
+        router.replace(loginUrlHere());
         return;
       }
       const [current, allowed] = await Promise.all([
@@ -94,18 +100,26 @@ export default function KeynotesPage() {
   /**
    * Download through the gated endpoint.
    *
-   * A plain `<a href>` cannot carry the bearer token, so the bytes come back
-   * through fetch and are handed to the browser as an object URL. These decks
-   * run to ~47MB, which is why there is a visible pending state — without one
-   * the button looks dead for several seconds on a slow connection.
+   * A plain `<a href>` cannot carry the bearer token, so the page trades the
+   * session for a ticketed URL and hands that to the browser. The browser
+   * then shows nothing until the file's headers arrive — 2.5 s warm and up
+   * to 8 s cold in testing, for a 33–47 MB deck — so the button holds "Starting
+   * download…" for ten seconds after the hand-off. Going back to idle the
+   * moment the URL was assigned left it looking dead, which is how a framer
+   * ends up downloading the same deck twice. A failure clears it at once.
    */
   async function download(f: Format) {
+    setDlError(null);
     setBusy(f.id);
+    let handedOff = false;
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        setDlError({ id: f.id, message: "Your sign-in has expired. Reload the page and try again." });
+        return;
+      }
 
       // A ticketed URL (lib/file-ticket.ts) lets the browser run the
       // download itself — its own progress bar, no 47 MB blob held in the
@@ -114,20 +128,22 @@ export default function KeynotesPage() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) {
-        setLoadError("That file could not be downloaded. Try again in a moment.");
+        setDlError({ id: f.id, message: "That file could not be downloaded. Try again in a moment." });
         return;
       }
       const body = await res.json();
       if (!body.requested?.url) {
-        setLoadError("That file could not be downloaded. Try again in a moment.");
+        setDlError({ id: f.id, message: "That file could not be downloaded. Try again in a moment." });
         return;
       }
       window.location.assign(body.requested.url);
+      handedOff = true;
+      setTimeout(() => setBusy((b) => (b === f.id ? null : b)), 10_000);
     } catch (err) {
       console.error("Keynote download failed:", err);
-      setLoadError("That file could not be downloaded. Try again in a moment.");
+      setDlError({ id: f.id, message: "That file could not be downloaded. Try again in a moment." });
     } finally {
-      setBusy(null);
+      if (!handedOff) setBusy(null);
     }
   }
 
@@ -144,7 +160,7 @@ export default function KeynotesPage() {
         framer={framer}
         onSignOut={handleSignOut}
         title="Keynote Presentations"
-        subtitle="The decks you teach from, in Keynote and PowerPoint"
+        subtitle="The decks you teach from: view the slides here, or download them for Keynote or PowerPoint"
         badge
       />
 
@@ -211,17 +227,17 @@ export default function KeynotesPage() {
                       busy={busy}
                       onDownload={download}
                     />
+                    {dlError && (dlError.id === d.keynote?.id || dlError.id === d.powerpoint?.id) && (
+                      <p role="alert" className="text-xs text-red-700">
+                        {dlError.message}
+                      </p>
+                    )}
                   </div>
                 </div>
               </article>
             ))}
           </div>
         )}
-
-        <p className="mt-6 text-xs leading-relaxed text-gray-400">
-          These mirror Drive directly — a new version there is the current version
-          here, with nothing to re-upload.
-        </p>
       </main>
 
       <PortalFooter />
@@ -272,7 +288,7 @@ function FormatButton({
         <span className="text-[11px] text-gray-500">{hint}</span>
       </span>
       <span className="ml-3 shrink-0 text-xs font-semibold text-runfree-magentaDeep">
-        {isBusy ? "Preparing…" : `Download ${prettySize(file.sizeBytes)}`}
+        {isBusy ? "Starting download…" : `Download ${prettySize(file.sizeBytes)}`}
       </span>
     </button>
   );

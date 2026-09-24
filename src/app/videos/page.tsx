@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, getCurrentUser, hasCertificationAccess, logout } from "@/lib/auth";
+import { getCurrentFramer, getCurrentUser, hasCertificationAccess, loginUrlHere, logout } from "@/lib/auth";
 import { parseVideoUrl, splitVideoMeta } from "@/lib/video";
+import { resumeWithFreshTicket } from "@/lib/tool-videos-client";
 import { isProcessModule, stripModuleNumber } from "@/lib/modules";
+import { isClipTwin, isClipsFolder, isIntroFolder } from "@/lib/video-shelf";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import { useFocusTrap } from "@/lib/useFocusTrap";
@@ -22,7 +24,15 @@ type Framer = {
 
 type Video = {
   id: string;
+  /** The whole title, number included; what the search box matches. */
   title: string;
+  /**
+   * A walkthrough's "1.2", drawn apart from the label the way FilePreview
+   * draws a handout's number. Joined as plain text, "1.2 3 Kinds of Change"
+   * and "2.6 3 Kinds of Words" read as one number. Null for database rows.
+   */
+  num: string | null;
+  label: string;
   /**
    * A Loom/YouTube/Vimeo link for the training videos in the database, or
    * `drive:<fileId>` for a Process Tools video streamed from Drive through
@@ -37,19 +47,30 @@ type Video = {
   /**
    * Who the video is for. The database rows are the client-facing teaching
    * videos a Certified Vision Framer shows the teams they lead; the Process
-   * Tools walkthroughs read from Drive train the facilitator and are not
-   * for clients. Andrew, 22 Sept: "I need to be able to distinguish between
-   * videos that our certified guys can use to train their clients, and the
-   * videos that are created to train them as a trainer."
+   * Tools walkthroughs read from Drive train the facilitator. Andrew, 22
+   * Sept: "I need to be able to distinguish between videos that our
+   * certified guys can use to train their clients, and the videos that are
+   * created to train them as a trainer."
    */
   audience: Audience;
+  /**
+   * For a walkthrough that is the same film as a client row, that row's id
+   * (lib/video-twins.json). About ten of the Drive walkthroughs are the Loom
+   * teaching videos under their module-folder names, matched by running
+   * time: 1.3 Vision Frame Overview is Vision Frame Overview Teaching, 6.4
+   * Horizon Story Tool is the God Dreams Preparation Video. Labelling those
+   * "not for clients" told a framer not to share a film the Client Videos
+   * tab tells them to share, so the card says it is both and its Copy link
+   * opens the client copy.
+   */
+  twinOf?: string | null;
 };
 
 type Audience = "clients" | "facilitators";
 
 const TABS: { key: Audience; label: string; blurb: string }[] = [
   { key: "clients", label: "Client Videos", blurb: "Teaching videos and the guide's clips, for the teams you lead." },
-  { key: "facilitators", label: "Facilitator Training", blurb: "Tool walkthroughs that train you as the facilitator — not for clients." },
+  { key: "facilitators", label: "Facilitator Training", blurb: "Walkthroughs that train you as the facilitator. Cards marked “Also a client video” are the same film as on Client Videos and can be shared." },
 ];
 
 type Group = {
@@ -78,26 +99,66 @@ function leadingNumber(name: string): number {
 import DRIVE_POSTERS from "@/lib/drive-posters.json";
 const POSTERS = new Set<string>(DRIVE_POSTERS as string[]);
 
+/** Drive file id -> the training_videos row it duplicates. See Video.twinOf. */
+import VIDEO_TWINS from "@/lib/video-twins.json";
+const TWINS = VIDEO_TWINS as Record<string, string>;
+
 const DRIVE_PREFIX = "drive:";
 const isDriveVideo = (v: Video) => v.url.startsWith(DRIVE_PREFIX);
 const driveId = (v: Video) => v.url.slice(DRIVE_PREFIX.length);
 
 /**
- * The public address a framer hands a client — /watch/{id}, no sign-in —
- * or null where there is none. Only the client shelf's database videos
- * get one: the facilitator walkthroughs are never public, and the Drive
- * clips stream behind a ticket (see app/watch/[id]/page.tsx for why).
+ * /watch/{id} serves only a row whose address embeds (loadVideo in
+ * app/watch/[id]/page.tsx). A database row pointed at anything else would
+ * still have copied a link, and the client would have opened a 404.
  */
-const shareUrl = (v: Video) =>
-  v.audience === "clients" && !isDriveVideo(v) ? `${window.location.origin}/watch/${v.id}` : null;
-const isShareable = (v: Video) => v.audience === "clients" && !isDriveVideo(v);
+const embeds = (v: Video) => Boolean(parseVideoUrl(v.url).embedUrl);
+
+/**
+ * The public address a framer hands a client — /watch/{id}, no sign-in —
+ * or null where there is none. The client shelf's database videos get one,
+ * and so does a walkthrough that is the same film as one of them (twinOf):
+ * its link opens that client row, never the Drive file. Every other
+ * walkthrough stays private, and the Drive clips stream behind a ticket
+ * (see app/watch/[id]/page.tsx for why). shareId is the one predicate: the
+ * button shows exactly when there is an address to copy.
+ */
+const shareId = (v: Video) =>
+  v.twinOf ? v.twinOf : v.audience === "clients" && !isDriveVideo(v) && embeds(v) ? v.id : null;
+const isShareable = (v: Video) => shareId(v) !== null;
+const shareUrl = (v: Video) => {
+  const id = shareId(v);
+  return id ? `${window.location.origin}/watch/${id}` : null;
+};
 
 type ToolVideoGroup = {
   id: string;
   name: string;
   order: number;
-  videos: { id: string; title: string; num: string | null; label: string; sizeBytes: number | null }[];
+  videos: {
+    id: string;
+    title: string;
+    num: string | null;
+    label: string;
+    sizeBytes: number | null;
+    durationMs: number | null;
+  }[];
 };
+
+/**
+ * The Video Clips folder is a client shelf; every numbered module folder
+ * trains the facilitator. The rules (isClipsFolder, isClipTwin,
+ * isIntroFolder) are in lib/video-shelf.ts, which /open/video's back link
+ * reads too.
+ *
+ * A module copy of a clip (isClipTwin) is dropped and the Video Clips copy
+ * stands for it — otherwise the client shelf would lose it to the
+ * facilitator shelf, or show it twice.
+ */
+function dropClipTwins(tools: Video[]): Video[] {
+  const clips = tools.filter((v) => v.audience === "clients").map((v) => v.title);
+  return tools.filter((v) => v.audience === "clients" || !isClipTwin(v.title, clips));
+}
 
 /**
  * The Process Tools Videos folder as Video rows. They fall in behind the
@@ -105,30 +166,6 @@ type ToolVideoGroup = {
  * screen assigns), so a module heading holds both and the walkthrough order
  * is the folder's own.
  */
-/**
- * The unnumbered "Video Clips" folder holds the films the guide's text links
- * to — the movie clips, the Carey Nieuwhof interview — which a facilitator
- * plays for the room. Andrew, 22 Sept: "the linked movie clips or carey
- * nieuhoeff video, the ones that were linked in the text of the digital
- * facilitator's guide. those are also client facing videos." So that folder
- * is a client shelf; every numbered module folder trains the facilitator.
- */
-const isClipsFolder = (g: ToolVideoGroup) =>
-  g.order === Number.MAX_SAFE_INTEGER && /clip/i.test(g.name);
-
-const normTitle = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
-/**
- * Three of those clips also sit inside the Crowd Cloud folder under the
- * same name. Same film, so the copy under the module heading is dropped
- * and the Video Clips one stands for it — otherwise the client shelf would
- * lose them to the facilitator shelf, or show them twice.
- */
-function dropClipTwins(tools: Video[]): Video[] {
-  const clips = new Set(tools.filter((v) => v.audience === "clients").map((v) => normTitle(v.title)));
-  return tools.filter((v) => v.audience === "clients" || !clips.has(normTitle(v.title)));
-}
-
 function toolVideosAsVideos(groups: ToolVideoGroup[]): Video[] {
   const out: Video[] = [];
   for (const g of groups) {
@@ -136,12 +173,22 @@ function toolVideosAsVideos(groups: ToolVideoGroup[]): Video[] {
       out.push({
         id: `drive-${v.id}`,
         title: v.num ? `${v.num} ${v.label}` : v.label,
+        num: v.num,
+        label: v.label,
         url: `${DRIVE_PREFIX}${v.id}`,
-        description: null,
+        // Written the way the Loom rows are ("Under 3 min", "18 min") so
+        // splitVideoMeta reads it as the card's runtime badge. Drive knows
+        // the length; these cards used to show none.
+        description: v.durationMs
+          ? v.durationMs < 300_000
+            ? `Under ${Math.ceil(v.durationMs / 60_000)} min`
+            : `${Math.round(v.durationMs / 60_000)} min`
+          : null,
         module: g.name,
         sort_order: 100_000 + g.order * 1000 + i,
         thumbnailUrl: POSTERS.has(v.id) ? `/brand/videos/drive/${v.id}.jpg` : null,
         audience: isClipsFolder(g) ? "clients" : "facilitators",
+        twinOf: TWINS[v.id] ?? null,
       });
     });
   }
@@ -169,7 +216,7 @@ function foldIntroIntoOrientation(db: Video[], tools: Video[]): Video[] {
   };
   const orientation = db.find((v) => /orientation/i.test(v.module || ""))?.module ?? null;
   return tools.flatMap((v) => {
-    if (!/^intro$/i.test(stripModuleNumber(v.module || ""))) return [v];
+    if (!isIntroFolder(v.module || "")) return [v];
     const twin = db.find((d) => same(d.title, v.title));
     if (twin) {
       // Same film. The curated row keeps its place; if it has no still of
@@ -191,6 +238,13 @@ export default function VideosPage() {
     "checking" | "loading" | "denied" | "ready" | "error"
   >("checking");
   const [loadError, setLoadError] = useState("");
+  /**
+   * The Drive listing failed. It used to fail silently: the Facilitator
+   * Training tab read "No facilitator training yet" and the Video Clips
+   * vanished from Client Videos, which looked like nothing was there rather
+   * than something had not loaded.
+   */
+  const [toolsFailed, setToolsFailed] = useState(false);
   /**
    * Which shelf is showing. Kept in the URL (?tab=facilitators) so a shared
    * link, a refresh and the Back button all land on the same shelf.
@@ -214,6 +268,20 @@ export default function VideosPage() {
   /** The ticketed stream address for a Drive video while it plays. */
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
+  /**
+   * The Drive card whose ticket failed. The failure used to go into
+   * loadError, which sits at the top of the page, off-screen for a card
+   * further down: the "Opening…" badge just vanished and nothing happened.
+   * So it is said on the card that was tapped.
+   */
+  const [openFailed, setOpenFailed] = useState<string | null>(null);
+  /**
+   * Counts taps and closes. A cold ticket can take five seconds, and in that
+   * time the framer may tap another card, open a Loom video or close the
+   * player; a ticket that comes back after that is stale and must not open
+   * or switch the player.
+   */
+  const latest = useRef(0);
   const playerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const router = useRouter();
@@ -223,7 +291,7 @@ export default function VideosPage() {
       const user = await getCurrentUser();
 
       if (!user) {
-        router.replace("/auth/login");
+        router.replace(loginUrlHere());
         return;
       }
 
@@ -259,13 +327,17 @@ export default function VideosPage() {
           setLoadError(body.error || "Could not load the videos.");
         }
         let tools: Video[] = [];
-        if (toolRes && toolRes.ok) {
-          const toolBody = await toolRes.json();
-          tools = dropClipTwins(toolVideosAsVideos(toolBody.groups || []));
-        }
+        const toolBody = toolRes && toolRes.ok ? await toolRes.json().catch(() => null) : null;
+        if (toolBody) tools = dropClipTwins(toolVideosAsVideos(toolBody.groups || []));
+        else setToolsFailed(true);
         const dbVideos: Video[] = (res.ok ? body.videos || [] : []).map(
-          (v: Omit<Video, "audience">) => ({ ...v, audience: "clients" as const })
+          (v: Omit<Video, "audience" | "num" | "label">) => ({ ...v, num: null, label: v.title, audience: "clients" as const })
         );
+        // A twin whose client row is unpublished (or did not load, or does
+        // not embed) would copy a /watch link that 404s for the client, so
+        // it goes without.
+        const dbIds = new Set(dbVideos.filter(embeds).map((v) => v.id));
+        tools = tools.map((v) => (v.twinOf && !dbIds.has(v.twinOf) ? { ...v, twinOf: null } : v));
         setVideos([...dbVideos, ...foldIntroIntoOrientation(dbVideos, tools)]);
       }
 
@@ -291,6 +363,7 @@ export default function VideosPage() {
   }, [status, router]);
 
   const closePlayer = useCallback(() => {
+    latest.current++;
     setPlaying(null);
     setStreamUrl(null);
   }, []);
@@ -302,6 +375,10 @@ export default function VideosPage() {
    * for a short-lived address first. See lib/tool-videos.ts.
    */
   const play = useCallback(async (v: Video) => {
+    // Before the Loom branch, so picking a Loom video also retires a Drive
+    // ticket still on its way.
+    const req = ++latest.current;
+    setOpenFailed(null);
     if (!isDriveVideo(v)) {
       const parsed = parseVideoUrl(v.url);
       if (parsed.embedUrl) setPlaying(v);
@@ -313,19 +390,28 @@ export default function VideosPage() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        if (req === latest.current) setOpenFailed(v.id);
+        return;
+      }
       const res = await fetch(`/api/tool-videos/ticket/${driveId(v)}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) {
-        setLoadError("That video could not be opened. Try again in a moment.");
+        if (req === latest.current) setOpenFailed(v.id);
         return;
       }
       const body = await res.json();
+      if (req !== latest.current) return;
       setStreamUrl(body.url);
       setPlaying(v);
+    } catch {
+      // A dropped connection rejects the fetch; it used to go unhandled.
+      if (req === latest.current) setOpenFailed(v.id);
     } finally {
-      setOpening(null);
+      // Only this card's badge: after two quick taps, the first ticket to
+      // land must not clear the "Opening…" on the second.
+      setOpening((cur) => (cur === v.id ? null : cur));
     }
   }, []);
 
@@ -425,6 +511,16 @@ export default function VideosPage() {
             {loadError}
           </div>
         )}
+        {toolsFailed && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span>
+              The videos stored in Google Drive didn’t load, so the Facilitator Training walkthroughs and the Video Clips are missing.
+            </span>
+            <button onClick={() => window.location.reload()} className="font-semibold underline">
+              Try again
+            </button>
+          </div>
+        )}
 
         {videos.length > 0 && (
           <div
@@ -499,12 +595,20 @@ export default function VideosPage() {
           </div>
         ) : groups.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-16 text-center">
+            {/* "No matches" only when someone searched; an empty shelf with
+                no search is headed as what it is. */}
             <p className="font-display text-lg font-semibold text-runfree-ink">
-              No matches
+              {needle
+                ? "No matches"
+                : `No ${tab === "clients" ? "client videos" : "facilitator training videos"} yet`}
             </p>
-            <p className="mt-2 text-sm text-gray-500">
-              {needle ? "Try a different search, or the other tab." : `No ${shelf.label.toLowerCase()} yet.`}
-            </p>
+            {(needle || (toolsFailed && tab === "facilitators")) && (
+              <p className="mt-2 text-sm text-gray-500">
+                {needle
+                  ? "Try a different search, or the other tab."
+                  : "These come from Google Drive, which didn’t answer. Try again in a moment."}
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-10">
@@ -556,6 +660,7 @@ export default function VideosPage() {
                         moduleOrder={group.order}
                         index={i}
                         busy={opening === v.id}
+                        openFailed={openFailed === v.id}
                         onPlay={() => void play(v)}
                       />
                       {/* A sibling, not a child: a button inside the card's
@@ -593,14 +698,26 @@ export default function VideosPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="h-1.5 bg-runfree-grad" />
-            <div className="flex items-center justify-between gap-3 bg-white px-5 py-3">
+            {/* On a phone the title takes its own line and the controls sit
+                under it. In one row, Copy link + Open original + Close was
+                wider than a 390px screen: the title collapsed to nothing and
+                Close was cut to its first letter. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 bg-white px-4 py-3 sm:flex-nowrap sm:px-5">
               <h3
                 id="player-title"
-                className="min-w-0 truncate font-display text-base font-semibold text-runfree-ink"
+                className="min-w-0 basis-full truncate font-display text-base font-semibold text-runfree-ink sm:basis-auto"
               >
-                {playing.title}
+                {/* The real space is what a screen reader and the clipboard
+                    get. With margin alone, "1.2" and "3 Kinds of Change" were
+                    announced as "1.23 Kinds of Change". */}
+                {playing.num && (
+                  <>
+                    <span className="mr-1 tabular-nums text-runfree-magentaDeep">{playing.num}</span>{" "}
+                  </>
+                )}
+                {playing.label}
               </h3>
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex w-full items-center gap-3 sm:w-auto sm:shrink-0">
                 {isShareable(playing) && <CopyLinkButton getUrl={() => shareUrl(playing)!} />}
                 {isDriveVideo(playing) ? (
                   <a
@@ -623,7 +740,7 @@ export default function VideosPage() {
                 )}
                 <button
                   onClick={closePlayer}
-                  className="rounded-lg px-3 py-1 text-sm font-medium text-gray-500 transition hover:text-runfree-magentaDeep"
+                  className="ml-auto rounded-lg px-3 py-1 text-sm font-medium text-gray-500 transition hover:text-runfree-magentaDeep sm:ml-0 max-sm:min-h-[44px]"
                 >
                   Close
                 </button>
@@ -638,6 +755,7 @@ export default function VideosPage() {
                   autoPlay
                   playsInline
                   preload="metadata"
+                  onError={(e) => void resumeWithFreshTicket(e.currentTarget, driveId(playing))}
                   className="h-full w-full bg-black"
                 />
               ) : (
@@ -709,6 +827,7 @@ function CopyLinkButton({
       onClick={copy}
       title="Copy a link you can send to a client — it opens without a sign-in"
       aria-label={copied ? "Link copied" : "Copy link for a client"}
+      data-tap={compact ? "grow" : undefined}
       className={`${className} inline-flex items-center gap-1.5 rounded-full font-semibold shadow-sm transition ${
         compact
           ? `px-2.5 py-1 text-[11px] backdrop-blur-sm ${
@@ -720,7 +839,16 @@ function CopyLinkButton({
       }`}
     >
       {icon}
-      {copied ? "Copied" : compact ? "Copy link" : "Copy link for a client"}
+      {copied ? (
+        "Copied"
+      ) : compact ? (
+        "Copy link"
+      ) : (
+        <>
+          <span className="sm:hidden">Copy link</span>
+          <span className="hidden sm:inline">Copy link for a client</span>
+        </>
+      )}
     </button>
   );
 }
@@ -730,12 +858,15 @@ function VideoCard({
   moduleOrder,
   index,
   busy = false,
+  openFailed = false,
   onPlay,
 }: {
   video: Video;
   moduleOrder: number;
   index: number;
   busy?: boolean;
+  /** Its Drive ticket failed; tapping again calls play(), which clears it. */
+  openFailed?: boolean;
   onPlay: () => void;
 }) {
   const [failed, setFailed] = useState(false);
@@ -747,7 +878,7 @@ function VideoCard({
       onClick={onPlay}
       aria-busy={busy}
       style={{ "--delay": `${Math.min(index, 8) * 45}ms` } as React.CSSProperties}
-      className="animate-rise group flex flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-gray-200 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:ring-runfree-magenta/30"
+      className="animate-rise group flex h-full w-full flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-gray-200 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:ring-runfree-magenta/30"
     >
       <div className="relative aspect-video overflow-hidden bg-runfree-sunset">
         {showThumb ? (
@@ -800,14 +931,28 @@ function VideoCard({
             Opening…
           </span>
         )}
+        {openFailed && !busy && (
+          <span className="absolute bottom-2 left-2 rounded bg-red-600/90 px-1.5 py-0.5 text-xs font-semibold text-white">
+            Didn’t open. Tap to try again
+          </span>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col p-4">
         <h3 className="font-display text-[15px] font-semibold leading-snug text-runfree-ink">
-          {video.title}
+          {/* A real space, not just margin — see the player title. */}
+          {video.num && (
+            <>
+              <span className="mr-1 tabular-nums text-runfree-magentaDeep">{video.num}</span>{" "}
+            </>
+          )}
+          {video.label}
         </h3>
         {subtitle && (
           <p className="mt-1.5 text-sm leading-snug text-gray-500">{subtitle}</p>
+        )}
+        {video.twinOf && (
+          <p className="mt-1.5 text-sm leading-snug text-runfree-magentaDeep">Also a client video</p>
         )}
       </div>
     </button>

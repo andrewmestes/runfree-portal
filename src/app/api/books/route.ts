@@ -7,13 +7,14 @@ import { listBooksLibrary, isDriveConfigured } from "@/lib/books";
  * GET /api/books
  *
  * Same shape as /api/library: a live read of the Books folder in Drive,
- * gated the same way, briefly cached so a burst of page loads doesn't hammer
- * the Drive API. Pass ?fresh=1 to bypass the cache.
+ * gated the same way. The listing is held for a minute in lib/books, so a
+ * burst of page loads doesn't hammer the Drive API. Pass ?fresh=1 to re-read
+ * Drive.
+ *
+ * No cache of its own. It used to keep one on top of the library's, so
+ * ?fresh=1 skipped this one and was then handed the library's minute-old
+ * listing, and a Drive change could take two minutes to appear.
  */
-
-type Cached = { at: number; payload: unknown };
-let cache: Cached | null = null;
-const TTL_MS = 60_000;
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,15 +29,9 @@ export async function GET(req: NextRequest) {
     }
 
     const fresh = req.nextUrl.searchParams.get("fresh") === "1";
+    const library = await listBooksLibrary({ fresh });
 
-    if (!fresh && cache && Date.now() - cache.at < TTL_MS) {
-      return NextResponse.json({ ...(cache.payload as object), cached: true });
-    }
-
-    const library = await listBooksLibrary();
-    cache = { at: Date.now(), payload: library };
-
-    return NextResponse.json({ ...library, cached: false });
+    return NextResponse.json(library);
   } catch (error) {
     console.error("Books listing failed:", error);
     return NextResponse.json(

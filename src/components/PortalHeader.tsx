@@ -292,7 +292,7 @@ export default function PortalHeader({
                         {person?.full_name || "Your account"}
                       </span>
                       <span className="block text-[11px] text-gray-500">
-                        View and edit your details
+                        Your details and password
                       </span>
                     </a>
                     <button
@@ -463,6 +463,21 @@ export default function PortalHeader({
         {showTitleBlock && (
         <div className="flex flex-wrap items-center justify-between gap-6 py-6 sm:py-7">
           <div className="min-w-0">
+            {/* The same mark again, for a phone. The one on the right is
+                `hidden` below `sm`, and so is the bar's Certification link, so
+                on a 390px screen nothing said which half of the portal you
+                were in. Andrew: "it needs to very clearly distinguish that
+                this is a different section that somebody is in." Above the
+                title rather than beside it: a 390px row has no room for both. */}
+            {badge && (
+              <Image
+                src="/brand/pivvot-badge-white.svg"
+                alt="Pivvot Vision Framing"
+                width={280}
+                height={280}
+                className="-ml-1 mb-1 h-11 w-auto opacity-95 sm:hidden"
+              />
+            )}
             {eyebrow && (
               <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-runfree-pink">
                 {eyebrow}

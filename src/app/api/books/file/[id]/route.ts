@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCertificationAccess } from "@/lib/api-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { fetchDriveFile } from "@/lib/drive";
-import { listBooksLibrary, isDriveConfigured } from "@/lib/books";
+import { listBooksLibrary, isDriveConfigured, type BookFile } from "@/lib/books";
+import { contentDisposition } from "@/lib/content-disposition";
 
 /**
  * GET /api/books/file/{driveId}
@@ -34,26 +35,34 @@ export async function GET(
     // `extras` onto the shelf: the allowlist stopped containing its id, so a
     // file that had always been readable started 404ing. Any new bucket on
     // BooksLibrary has to be added here too.
-    const known = new Set(
-      [...library.books, ...library.standalone].flatMap((b) =>
-        [b.fullBook, b.visualSummary, ...b.chapters, ...b.other]
-          .filter(Boolean)
-          .map((f) => f!.id)
-      )
-    );
-    library.extras.forEach((f) => known.add(f.id));
+    const known = new Map<string, BookFile>();
+    for (const b of [...library.books, ...library.standalone]) {
+      for (const f of [b.fullBook, b.visualSummary, ...b.chapters, ...b.other]) {
+        if (f) known.set(f.id, f);
+      }
+    }
+    library.extras.forEach((f) => known.set(f.id, f));
 
-    if (!known.has(id)) {
+    const entry = known.get(id);
+    if (!entry) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     const file = await fetchDriveFile(id);
+    // Named by the library's title, not the Drive filename. /open/book takes
+    // its header from this, so it read "Problem_Statement_Deck" and
+    // "Ch13_Values" where the shelf now says "Problem Statement Deck" and
+    // "Church Unique - Chapter 13 - Values". The extension is still the
+    // file's own, which covers a Google Doc exported as .pdf. The header
+    // helper makes it safe to send whatever the title holds.
+    const ext = file.filename.match(/\.[a-z0-9]{1,5}$/i)?.[0] ?? "";
+    const filename = `${entry.title.trim() || "Document"}${ext}`;
 
     return new NextResponse(file.body, {
       status: 200,
       headers: {
         "Content-Type": file.mimeType,
-        "Content-Disposition": `inline; filename="${file.filename.replace(/"/g, "")}"`,
+        "Content-Disposition": contentDisposition("inline", filename),
         "Cache-Control": "private, no-cache, must-revalidate",
       },
     });

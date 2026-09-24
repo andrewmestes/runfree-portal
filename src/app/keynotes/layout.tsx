@@ -6,7 +6,7 @@ import type { Metadata } from "next";
  */
 export const metadata: Metadata = {
   title: "Keynote Presentations · RunFree Portal",
-  description: "Teaching decks in Keynote and PowerPoint.",
+  description: "Teaching decks: view the slides, or download them for Keynote or PowerPoint.",
 };
 
 export default function KeynotesLayout({ children }: { children: React.ReactNode }) {

@@ -51,10 +51,12 @@ export type KeynoteFormat = {
   mimeType: string;
   sizeBytes: number | null;
   modifiedTime: string | null;
+  /** Drive's content hash — the file route's ETag. Null for Google-native files. */
+  md5: string | null;
 };
 
 export type Presentation = {
-  /** Base name with the extension stripped — the deck's title. */
+  /** Base name without the extension or a trailing "- RunFree" — the deck's title. */
   title: string;
   /** Stable key for React and for ordering. */
   slug: string;
@@ -95,6 +97,17 @@ function baseName(name: string): string {
 }
 
 /**
+ * The title a framer reads. Drive names one deck "Top 10 Reasons for Radical
+ * Simplicity - RunFree"; on the card the "- RunFree" wrapped onto a line of
+ * its own and headed the viewer too. Every deck here is RunFree's, so the
+ * suffix says nothing. Only the title drops it — the join key and slug still
+ * come from the filename, so pairing is unchanged.
+ */
+function displayTitle(name: string): string {
+  return baseName(name).replace(/\s*[-–—]\s*RunFree\s*$/i, "").trim();
+}
+
+/**
  * The join key.
  *
  * Deliberately forgiving: a deck exported to PowerPoint often picks up a
@@ -117,6 +130,7 @@ function toFormat(f: {
   mimeType?: string | null;
   size?: string | null;
   modifiedTime?: string | null;
+  md5Checksum?: string | null;
 }): KeynoteFormat {
   return {
     id: f.id!,
@@ -124,6 +138,7 @@ function toFormat(f: {
     mimeType: f.mimeType || "application/octet-stream",
     sizeBytes: f.size ? Number(f.size) : null,
     modifiedTime: f.modifiedTime || null,
+    md5: f.md5Checksum || null,
   };
 }
 
@@ -131,7 +146,7 @@ async function listChildren(folderId: string) {
   const drive = getDriveClient();
   const res = await drive.files.list({
     q: `'${folderId}' in parents and trashed = false`,
-    fields: "files(id,name,mimeType,size,modifiedTime)",
+    fields: "files(id,name,mimeType,size,modifiedTime,md5Checksum)",
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
     orderBy: "name",
@@ -154,8 +169,31 @@ function serviceAccountEmail(): string {
   }
 }
 
+/**
+ * The listing, held for a minute — the same memo as `listBooksLibrary`.
+ *
+ * The page, the ticket and the file route each walked the folder afresh
+ * (three Drive lists, 1.4–4.3 s), so "View the slides" paid for the walk
+ * twice before the first byte of the PDF. Sixty seconds still shows a deck
+ * dropped into Drive on the next visit.
+ */
+const LISTING_TTL_MS = 60_000;
+let listingCache: { at: number; value: Promise<Presentation[]> } | null = null;
+
+export function listPresentations(): Promise<Presentation[]> {
+  const now = Date.now();
+  if (listingCache && now - listingCache.at < LISTING_TTL_MS) return listingCache.value;
+  const value = listPresentationsUncached().catch((err) => {
+    // A failed walk must not be served for a minute.
+    if (listingCache?.value === value) listingCache = null;
+    throw err;
+  });
+  listingCache = { at: now, value };
+  return value;
+}
+
 /** Every presentation in the folder, each with whichever formats exist. */
-export async function listPresentations(): Promise<Presentation[]> {
+async function listPresentationsUncached(): Promise<Presentation[]> {
   const folderId = process.env.GOOGLE_KEYNOTES_FOLDER_ID;
   if (!folderId) throw new Error("GOOGLE_KEYNOTES_FOLDER_ID is not set");
 
@@ -187,11 +225,10 @@ export async function listPresentations(): Promise<Presentation[]> {
     );
     return hit?.id ? await listChildren(hit.id) : [];
   };
-  const ppts = await subfolder(POWERPOINT_SUBFOLDER);
   // The exports landed in their own folder rather than beside each .key, which
   // is the tidier shape and the one Andrew used. Both are read, so a PDF sits
-  // wherever it was put.
-  const pdfs = await subfolder(PDF_SUBFOLDER);
+  // wherever it was put. The two lists are independent, so they run together.
+  const [ppts, pdfs] = await Promise.all([subfolder(POWERPOINT_SUBFOLDER), subfolder(PDF_SUBFOLDER)]);
 
   const decks = new Map<string, Presentation>();
 
@@ -217,7 +254,7 @@ export async function listPresentations(): Promise<Presentation[]> {
       return;
     }
     decks.set(key, {
-      title: baseName(f.name),
+      title: displayTitle(f.name),
       slug: key.replace(/ /g, "-"),
       keynote: slot === "keynote" ? toFormat(f) : null,
       powerpoint: slot === "powerpoint" ? toFormat(f) : null,
@@ -235,20 +272,19 @@ export async function listPresentations(): Promise<Presentation[]> {
 }
 
 /**
- * Every Drive id this feature is allowed to serve.
+ * One file of one deck, by Drive id — or null if it is not in this folder.
  *
  * The download route checks against this rather than trusting its path
  * parameter — the same guard `/api/books/file` uses, and for the same reason:
  * without it, an authenticated framer could read any file the service account
- * can see, which is the whole shared drive.
+ * can see, which is the whole shared drive. The same memoised listing that
+ * proves the id belongs here also carries the file's hash for the ETag.
  */
-export async function listPresentationFileIds(): Promise<Set<string>> {
-  const decks = await listPresentations();
-  const ids = new Set<string>();
-  for (const d of decks) {
-    if (d.keynote) ids.add(d.keynote.id);
-    if (d.powerpoint) ids.add(d.powerpoint.id);
-    if (d.pdf) ids.add(d.pdf.id);
+export async function findPresentationFile(id: string): Promise<KeynoteFormat | null> {
+  for (const d of await listPresentations()) {
+    for (const f of [d.keynote, d.powerpoint, d.pdf]) {
+      if (f?.id === id) return f;
+    }
   }
-  return ids;
+  return null;
 }

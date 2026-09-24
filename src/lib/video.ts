@@ -25,7 +25,13 @@ export function parseVideoUrl(input: string): ParsedVideo {
   if (loom) {
     return {
       provider: "loom",
-      embedUrl: `https://www.loom.com/embed/${loom[1]}`,
+      // Hide Loom's own title bar. Both players already show our title above
+      // or below the frame, and Loom's bar showed the recording's original
+      // name ("Upper Room - Lower Room // Overview - Will Mancini (8/17/21)"),
+      // its view count and an open-in-Loom button on the public /watch page.
+      // That contradicted the heading a client was reading. watchUrl stays the
+      // plain share link because "Open original" still needs it.
+      embedUrl: `https://www.loom.com/embed/${loom[1]}?hideEmbedTopBar=true&hide_owner=true&hide_share=true&hide_title=true`,
       watchUrl: `https://www.loom.com/share/${loom[1]}`,
       // Deliberately null: a Loom thumbnail URL cannot be derived from the
       // share id. Workspace-restricted recordings 403 every guessable

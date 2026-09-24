@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { resetPassword } from "@/lib/auth";
+import { useEffect, useState } from "react";
+import { rememberResetNext, resetPassword, safeNext } from "@/lib/auth";
 import AuthShell, {
   Field,
   FormError,
@@ -14,6 +14,16 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  /**
+   * The page a guide link or shelf was headed for, handed on by the sign-in
+   * page. The reset email opens in a new tab, so it is kept in localStorage
+   * (rememberResetNext) for reset-password to pick up — the reset link itself
+   * can't carry it, because the templates append ?token_hash= to it literally.
+   */
+  const [next, setNext] = useState("/");
+  useEffect(() => {
+    setNext(safeNext(new URLSearchParams(window.location.search).get("next")));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,6 +32,7 @@ export default function ForgotPasswordPage() {
 
     try {
       await resetPassword(email);
+      rememberResetNext(next);
       setSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send the email");
@@ -37,7 +48,7 @@ export default function ForgotPasswordPage() {
       footer={
         <p>
           <a
-            href="/auth/login"
+            href={next === "/" ? "/auth/login" : `/auth/login?next=${encodeURIComponent(next)}`}
             className="font-medium text-runfree-magentaDeep hover:underline"
           >
             Back to sign in
@@ -52,9 +63,9 @@ export default function ForgotPasswordPage() {
           />
           <p className="text-sm leading-relaxed text-gray-600">
             Not seeing it after a few minutes? Check your spam folder, and make
-            sure you used the same email you were added to the project with.
-            Church and organisation mail systems sometimes hold new mail for a
-            few minutes while they scan it.
+            sure you used the email your invitation came to. Church and
+            organization mail systems sometimes hold new mail for a few minutes
+            while they scan it.
           </p>
         </div>
       ) : (

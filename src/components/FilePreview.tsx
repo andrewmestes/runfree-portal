@@ -142,8 +142,15 @@ export default function FilePreview({
       >
         <div className="h-1.5 shrink-0 bg-runfree-grad" />
 
-        <header className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
-          <div className="min-w-0 flex-1">
+        {/* With extra actions (a deck's Keynote and PowerPoint links) a phone
+            gave the title about 4px, so "12 Vision Templates" read as "1" and
+            the framer couldn't tell which deck had opened. There the title
+            takes its own row and the buttons wrap beneath it; from sm up it
+            is one row as before. */}
+        <header
+          className={`flex shrink-0 items-center gap-2 border-b border-gray-100 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3${actions ? " flex-wrap sm:flex-nowrap" : ""}`}
+        >
+          <div className={actions ? "min-w-0 flex-1 basis-full sm:basis-auto" : "min-w-0 flex-1"}>
             <h2
               id="preview-title"
               className="truncate font-display text-sm font-bold text-runfree-ink sm:text-base"
@@ -159,7 +166,7 @@ export default function FilePreview({
 
           <a
             href={blobUrl || undefined}
-            download={`${file.title}.${ext}`}
+            download={`${file.title.replace(/\.+$/, "")}.${ext}`}
             className={`shrink-0 rounded-lg bg-runfree-grad px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 sm:px-4 sm:text-sm ${
               blobUrl ? "" : "pointer-events-none opacity-40"
             }`}
@@ -170,7 +177,7 @@ export default function FilePreview({
           <button
             onClick={onClose}
             aria-label="Close preview"
-            className="shrink-0 rounded-lg px-2 py-2 text-xs font-medium text-gray-500 transition hover:text-runfree-magentaDeep sm:px-3 sm:text-sm"
+            className="shrink-0 rounded-lg px-2 py-2 text-xs font-medium text-gray-500 transition hover:text-runfree-magentaDeep sm:px-3 sm:text-sm max-sm:min-h-[44px]"
           >
             Close
           </button>

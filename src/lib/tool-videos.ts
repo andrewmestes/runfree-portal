@@ -24,8 +24,9 @@ import { describeDriveFile, fileInsideFolder, fileOrder, listDriveFolder, type D
  *    short-lived ticket with its session (`/api/tool-videos/ticket/{id}`),
  *    and the file route accepts the ticket in the query string instead. A
  *    ticket names one file and one person, is signed with a server secret,
- *    and dies after fifteen minutes — long enough to watch, useless to pass
- *    around.
+ *    and dies after four hours — long enough to finish a paused film in a
+ *    session, useless to pass around. A player that does outlive it re-mints
+ *    once and carries on (`resumeWithFreshTicket` in tool-videos-client.ts).
  * 2. **The file route honours Range**, or seeking would not work. See
  *    `fetchDriveFileRange`.
  */
@@ -87,7 +88,9 @@ export async function findToolVideo(id: string): Promise<ToolVideo | null> {
   const meta = await fileInsideFolder(id, folderId());
   if (!meta || !meta.mimeType.startsWith("video/")) return null;
 
-  const group = meta.folders[0] ?? { id: folderId(), name: "" };
+  // The top-level module folder, the one listDriveFolder groups by. folders
+  // runs from the file's own folder upward, so [0] named a nested subfolder.
+  const group = meta.folders[meta.folders.length - 1] ?? { id: folderId(), name: "" };
   const groupOrder = (() => {
     const m = group.name.match(/^\s*(\d+)/);
     return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;

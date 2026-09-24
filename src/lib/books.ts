@@ -64,9 +64,30 @@ const CHAPTER_OVERRIDES: Record<string, { num: string; label: string }> = {
   futurechurchpart3: { num: "3", label: "Part 3" },
 };
 
-/** Relabel a specific book+chapter-number combo once it's been parsed. */
+/**
+ * Relabel a specific book+chapter-number combo once it's been parsed.
+ *
+ * Most of these are the Drive filenames' own typos and run-together words,
+ * which the shelf, the preview header and the downloaded file all printed
+ * verbatim: "Introducing the Horizong Storyline", "Transfor,ing Your Picture
+ * Idea", "VisionFrame". Keyed by chapter number rather than filename so the
+ * fix survives a re-upload. Once a file is renamed in Drive (its id, and so
+ * every link to it, survives the rename) its row here can simply go.
+ */
 const CHAPTER_LABEL_OVERRIDES: Record<string, Record<string, string>> = {
-  goddreams: { "7-10": "The 12 Templates" },
+  goddreams: {
+    "5": "Introducing the Horizon Storyline",
+    "7-10": "The 12 Templates",
+    "13": "Transforming Your Picture Idea",
+    "15": "Leading the Long-Range Vision",
+  },
+  churchunique: {
+    "5": "Clarity Good News",
+    "11": "Vision Frame",
+    "16": "Vision Proper, Part 1",
+    "17": "Vision Proper, Part 2",
+  },
+  younique: { "8": "Bull's-Eye" },
 };
 
 export type BookFile = {
@@ -133,6 +154,20 @@ function normalize(s: string): string {
 
 function stripExt(name: string): string {
   return name.replace(/\.[a-z0-9]{1,5}$/i, "");
+}
+
+/**
+ * A filename made readable: underscores to spaces, and Drive's copy suffix
+ * dropped — " (1)", or the "-1" a re-upload leaves ("The 6 Word Sprint by
+ * Will Mancini-1"). One pass, so "Chapter 7-10 (1)" loses only the " (1)",
+ * and the "-1" form needs a letter before it, so "7-10" is never touched.
+ */
+function tidy(s: string): string {
+  return s
+    .replace(/_/g, " ")
+    .replace(/(?:\s*\(\d+\)|(?<=[a-z])-\d+)$/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function amazonSearchUrl(query: string): string {
@@ -213,7 +248,7 @@ function parseChapterNumLabel(filename: string): { num: string | null; label: st
     return { num: chPrefix[1], label: chPrefix[2].replace(/_/g, " ").trim() };
   }
 
-  return { num: null, label: stripped.trim() };
+  return { num: null, label: tidy(stripped) };
 }
 
 function toBookFile(
@@ -225,7 +260,7 @@ function toBookFile(
   return {
     id: f.id,
     name: f.name,
-    title: stripExt(f.name).trim(),
+    title: tidy(stripExt(f.name)),
     num: overrideNum !== undefined ? overrideNum : parsed.num,
     label: overrideLabel ?? parsed.label,
     mimeType: f.mimeType,
@@ -242,13 +277,18 @@ function toBookFile(
  * so the covers arrived long after the shelf. Sixty seconds is short enough
  * that a file dropped into Drive shows up on the next visit and long enough
  * that one page load pays for the walk once.
+ *
+ * `fresh` walks Drive regardless and puts the new walk in the memo. Refresh
+ * used to bypass only the route's own cache and then land here, so the
+ * button returned this minute-old listing without touching Drive. Replacing
+ * the memo means the file routes and the project mirror see it too.
  */
 const LIBRARY_TTL_MS = 60_000;
 let libraryCache: { at: number; value: Promise<BooksLibrary> } | null = null;
 
-export function listBooksLibrary(): Promise<BooksLibrary> {
+export function listBooksLibrary(opts: { fresh?: boolean } = {}): Promise<BooksLibrary> {
   const now = Date.now();
-  if (libraryCache && now - libraryCache.at < LIBRARY_TTL_MS) return libraryCache.value;
+  if (!opts.fresh && libraryCache && now - libraryCache.at < LIBRARY_TTL_MS) return libraryCache.value;
   const value = listBooksLibraryUncached().catch((err) => {
     // A failed walk must not be served for a minute.
     if (libraryCache?.value === value) libraryCache = null;
@@ -351,9 +391,20 @@ async function listBooksLibraryUncached(): Promise<BooksLibrary> {
 
       if (isChapterFile(f.name, parentFolder?.name ?? null)) {
         const bookFile = toBookFile(f);
-        const relabel =
-          bookFile.num && CHAPTER_LABEL_OVERRIDES[def.key]?.[bookFile.num];
-        chapters.push(relabel ? { ...bookFile, label: relabel } : bookFile);
+        const label =
+          (bookFile.num && CHAPTER_LABEL_OVERRIDES[def.key]?.[bookFile.num]) ||
+          bookFile.label;
+        // The title is what a download is saved as, so it is built from the
+        // cleaned-up label rather than the filename: "God Dreams - Chapter 13
+        // - Transforming Your Picture Idea.pdf", "Church Unique - Chapter 13 -
+        // Values.pdf", not "...Transfor,ing Your Picture Idea" or "Ch13_Values".
+        chapters.push({
+          ...bookFile,
+          label,
+          title: bookFile.num
+            ? `${def.name} - Chapter ${bookFile.num} - ${label}`
+            : bookFile.title,
+        });
       } else if (isFullBookCandidate(f.name, def.key)) {
         fullBookCandidates.push(f);
       } else {
@@ -391,7 +442,16 @@ async function listBooksLibraryUncached(): Promise<BooksLibrary> {
       name: def.name,
       amazonUrl: amazonSearchUrl(def.amazonQuery),
       fullBook,
-      visualSummary: summaryMatch ? toBookFile(summaryMatch) : null,
+      // Named after the shelf, not the file: the summaries are filed as
+      // "Church_Unique_Visual_Summary_UpdatedRFInfo", "GodDreams_VisualSummary"
+      // and "Future Church Visual Summary v4.0", and the card printed each as is.
+      visualSummary: summaryMatch
+        ? {
+            ...toBookFile(summaryMatch),
+            title: `${def.name} Visual Summary`,
+            label: `${def.name} Visual Summary`,
+          }
+        : null,
       chapters,
       other: other.sort((a, b) => a.title.localeCompare(b.title)),
     };
@@ -445,7 +505,10 @@ async function listBooksLibraryUncached(): Promise<BooksLibrary> {
         id: def.id,
         name: def.name,
         amazonUrl: amazonSearchUrl(def.amazonQuery),
-        fullBook: toBookFile(f),
+        // The book's name, not its file's: the card read
+        // "Innovating-Discipleship-complete". That filename stays as it is in
+        // Drive — it is the STANDALONE_BOOKS key.
+        fullBook: { ...toBookFile(f), title: def.name, label: def.name },
         visualSummary: null,
         chapters: [],
         other: [],

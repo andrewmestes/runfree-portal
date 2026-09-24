@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireProjectAccess } from "@/lib/api-auth";
+import { contentDisposition } from "@/lib/content-disposition";
 import { fetchDriveFile, isDriveConfigured, listTemplateHandouts } from "@/lib/drive";
 
 /**
@@ -82,7 +83,7 @@ export async function GET(
         "Content-Type": file.mimeType,
         // inline so a PDF opens in the browser's viewer rather than landing
         // in Downloads — a church team reads these during a session.
-        "Content-Disposition": `inline; filename="${file.filename.replace(/"/g, "")}"`,
+        "Content-Disposition": contentDisposition("inline", file.filename),
         // Private: the URL is only meaningful to someone who passed the check
         // above, and a shared cache must never hold it.
         "Cache-Control": "private, max-age=300",

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentFramer, getCurrentUser, hasCertificationAccess, isPortalAdmin, logout } from "@/lib/auth";
+import { getCurrentFramer, getCurrentUser, hasCertificationAccess, isPortalAdmin, loginUrlHere, logout } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
 import PageLoader from "@/components/PageLoader";
 import AccessError from "@/components/AccessError";
@@ -93,7 +93,7 @@ export default function ResourcesPage() {
     async function init() {
       const user = await getCurrentUser();
       if (!user) {
-        router.replace("/auth/login");
+        router.replace(loginUrlHere());
         return;
       }
 
@@ -170,34 +170,60 @@ export default function ResourcesPage() {
     []
   );
 
-  /** Zip a whole module, streamed from the gated endpoint. */
+  const listRef = useRef<HTMLDivElement>(null);
+  /**
+   * On a phone the icons, pills and search fill the first screen, so a tap
+   * changed a list nobody could see: after choosing Horizon Storyline the
+   * list heading sat at 784px of an 844px viewport, and the only visible
+   * response was the icon lifting. Same pattern as VisionStackExplorer.choose.
+   */
+  const revealList = useCallback(() => {
+    if (window.matchMedia("(min-width: 640px)").matches) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.requestAnimationFrame(() =>
+      listRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" })
+    );
+  }, []);
+
+  /**
+   * Zip a whole module. The page only asks for a ticket (lib/file-ticket.ts);
+   * the browser fetches the zip itself from the ticketed URL, so the download
+   * shows in the browser's own progress and never sits in the page as a blob
+   * — Combined Handouts is 50 MB, too much to hold in a phone's memory with
+   * only "Zipping…" on the button. Same hand-off as the keynote downloads.
+   *
+   * And the same hold: the browser shows nothing until the zip's headers
+   * arrive, 2.5–3.7 s after the ticket in testing, so the button keeps
+   * "Starting download…" for ten seconds after the hand-off. Going idle the
+   * moment the URL was assigned left it looking dead, and a second tap
+   * starts a second 50 MB zip. A failure clears it at once.
+   */
   async function downloadModule(mod: PortalModule) {
     setZipping(mod.id);
+    let handedOff = false;
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) return;
 
-      const res = await fetch(`/api/library/module/${mod.id}/zip`, {
+      const res = await fetch(`/api/library/module/${mod.id}/ticket`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      if (!res.ok) {
+      const url = res.ok ? (await res.json()).url : null;
+      if (!url) {
         setLoadError("Could not build that download. Try again.");
         return;
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${mod.name}.zip`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      // The zip's own Content-Disposition names the file.
+      window.location.assign(url);
+      handedOff = true;
+      setTimeout(() => setZipping((z) => (z === mod.id ? null : z)), 10_000);
     } catch {
       setLoadError("Could not build that download. Try again.");
     } finally {
-      setZipping(null);
+      if (!handedOff) setZipping(null);
     }
   }
 
@@ -210,6 +236,11 @@ export default function ResourcesPage() {
   const processModules = modules.filter((m) => isProcessModule(m.order));
   const extraModules = modules.filter((m) => !isProcessModule(m.order));
   const isFieldGuide = (name: string) => /field guide/i.test(name);
+
+  // ModuleNav's heading slot only knows the six process tools, so choosing a
+  // pill — or nothing — left about 96px of blank space above the icons.
+  // Search spans every module, so it reads as "All handouts" too.
+  const selectedExtra = !needle ? extraModules.find((m) => m.id === active) : undefined;
 
   // Search spans every module; the icon nav only narrows when not searching.
   const visible = modules
@@ -302,10 +333,20 @@ export default function ResourcesPage() {
             count: m.files.length,
           }))}
           active={needle ? "" : active}
+          fallbackHeading={
+            selectedExtra
+              ? { eyebrow: "Reference", title: stripModuleNumber(selectedExtra.name) }
+              : !active || needle
+                ? { eyebrow: "Every module", title: "All handouts" }
+                : null
+          }
           onSelect={(id) => {
-            // Clicking the selected module again clears the filter.
-            setActive((prev) => (prev === id ? "" : id));
+            // Clicking the selected module again clears the filter. Only a
+            // new selection scrolls; clearing one has nothing new to show.
+            const next = active === id ? "" : id;
+            setActive(next);
             setQuery("");
+            if (next) revealList();
           }}
         />
 
@@ -314,23 +355,32 @@ export default function ResourcesPage() {
             {extraModules.map((m) => {
               const lead = isFieldGuide(m.name);
               const on = !needle && active === m.id;
+              // Selection is tested first. The Field Guide used to wear the
+              // gradient whatever was chosen, so it never looked selected
+              // when it was, and looked selected beside Funnel Fusion when it
+              // was not. Now every chosen pill takes the one filled look
+              // (the fill ModuleNav gives a chosen non-process entry), and
+              // the Field Guide leads with a stronger ring and "Start here",
+              // the project page's words for it.
               return (
                 <li key={m.id}>
                   <button
                     onClick={() => {
-                      setActive((prev) => (prev === m.id ? "" : m.id));
+                      const next = active === m.id ? "" : m.id;
+                      setActive(next);
                       setQuery("");
+                      if (next) revealList();
                     }}
                     aria-pressed={on}
                     className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-runfree-magenta focus-visible:ring-offset-1 max-sm:min-h-[44px] ${
-                      lead
-                        ? "bg-runfree-grad text-white hover:opacity-95"
-                        : on
-                          ? "bg-runfree-pink text-runfree-magentaDeep ring-1 ring-runfree-magenta/40"
+                      on
+                        ? "bg-runfree-grad text-white ring-2 ring-runfree-magenta/40 ring-offset-2"
+                        : lead
+                          ? "bg-white text-runfree-magentaDeep ring-2 ring-runfree-magenta/50 hover:bg-runfree-pink/40"
                           : "bg-white text-gray-600 ring-1 ring-gray-200 hover:text-runfree-ink hover:ring-runfree-magenta/40"
                     }`}
                   >
-                    <span className={lead ? "text-white" : "text-runfree-magentaDeep"}>
+                    <span className={on ? "text-white" : "text-runfree-magentaDeep"}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <path d="M14 3v5h5" />
                         <path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z" />
@@ -338,7 +388,7 @@ export default function ResourcesPage() {
                     </span>
                     {stripModuleNumber(m.name)}
                     <span className="text-[10px] font-bold tabular-nums opacity-70">
-                      {m.files.length}
+                      {lead ? "Start here" : m.files.length}
                     </span>
                   </button>
                 </li>
@@ -374,97 +424,117 @@ export default function ResourcesPage() {
           )}
         </div>
 
-        {visible.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-16 text-center">
-            <p className="font-display text-lg font-semibold text-runfree-ink">
-              {modules.length === 0 ? "Nothing here yet" : "No matches"}
-            </p>
-            <p className="mt-2 text-sm text-gray-500">
-              {modules.length === 0
-                ? "Files added to the shared Drive folder appear here automatically."
-                : "Try a different search."}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {visible.map((mod, mi) => (
-              <section
-                key={mod.id}
-                style={{ "--delay": `${mi * 60}ms` } as React.CSSProperties}
-                className="animate-rise overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200"
-              >
-                <div className="h-1 bg-runfree-grad" />
+        {/* The scroll target for revealList. PortalHeader is not sticky, so
+            nothing covers the top and no extra offset is needed. */}
+        <div ref={listRef} className="scroll-mt-4">
+          {visible.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-gray-300 bg-white py-16 text-center">
+              <p className="font-display text-lg font-semibold text-runfree-ink">
+                {modules.length === 0 ? "Nothing here yet" : "No matches"}
+              </p>
+              <p className="mt-2 text-sm text-gray-500">
+                {modules.length === 0
+                  ? "Files added to the shared Drive folder appear here automatically."
+                  : "Try a different search."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {visible.map((mod, mi) => (
+                <section
+                  key={mod.id}
+                  style={{ "--delay": `${mi * 60}ms` } as React.CSSProperties}
+                  className="animate-rise overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200"
+                >
+                  <div className="h-1 bg-runfree-grad" />
 
-                <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100 px-5 py-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      {/* The folder is "1 - Funnel Fusion"; the rail above
-                          already says which module this is, so the card
-                          reads "Funnel Fusion" like every other heading. */}
-                      <h2 className="font-display text-lg font-bold text-runfree-ink">
-                        {stripModuleNumber(mod.name)}
-                      </h2>
-                      <span className="rounded-full bg-runfree-indigo px-2.5 py-0.5 text-xs font-semibold text-runfree-navy">
-                        {mod.files.length}
-                      </span>
+                  <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100 px-5 py-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        {/* The folder is "1 - Funnel Fusion"; the rail above
+                            already says which module this is, so the card
+                            reads "Funnel Fusion" like every other heading. */}
+                        <h2 className="font-display text-lg font-bold text-runfree-ink">
+                          {stripModuleNumber(mod.name)}
+                        </h2>
+                        <span className="rounded-full bg-runfree-indigo px-2.5 py-0.5 text-xs font-semibold text-runfree-navy">
+                          {mod.files.length}
+                        </span>
+                      </div>
+                      {/^combined handouts$/i.test(mod.name) && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Every handout from every module, combined into one
+                          file — the Pivvot Notebook.
+                        </p>
+                      )}
                     </div>
-                    {/^combined handouts$/i.test(mod.name) && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        Every handout from every module, combined into one
-                        file — the Pivvot Notebook.
-                      </p>
-                    )}
-                  </div>
 
-                  <button
-                    onClick={() => downloadModule(mod)}
-                    disabled={zipping === mod.id}
-                    className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-magentaDeep hover:ring-runfree-magenta/40 disabled:opacity-50"
-                  >
-                    {zipping === mod.id ? "Zipping…" : "Download all"}
-                  </button>
-                </header>
-
-                <ul className="divide-y divide-gray-100">
-                  {mod.files.map((file) => (
-                    <li key={file.id}>
+                    {/* A zip of one file is just a slower way to get that
+                        file. Counted on the whole module, not the search
+                        results, because the zip is always the whole module. */}
+                    {(modules.find((m) => m.id === mod.id)?.files.length ?? 0) > 1 && (
                       <button
-                        onClick={() => setPreview(file)}
-                        className="group flex w-full items-center gap-4 px-5 py-3 text-left transition hover:bg-runfree-pink/40"
+                        onClick={() => downloadModule(mod)}
+                        disabled={zipping === mod.id}
+                        className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200 transition hover:text-runfree-magentaDeep hover:ring-runfree-magenta/40 disabled:opacity-50 max-sm:min-h-[44px]"
                       >
-                        <span
-                          className={`w-10 shrink-0 font-display text-sm font-bold tabular-nums ${
-                            file.num
-                              ? "text-runfree-magentaDeep"
-                              : "text-transparent"
-                          }`}
-                        >
-                          {file.num || "—"}
-                        </span>
-
-                        <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-runfree-ink">
-                          {file.label}
-                        </span>
-
-                        <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">
-                          {prettySize(file.sizeBytes)}
-                        </span>
-
-                        {/* Visible on touch, revealed on hover elsewhere. A
-                            chip that only appears under a pointer never
-                            appears on a phone, and the whole row looked
-                            inert. */}
-                        <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
-                          Preview
-                        </span>
+                        {zipping === mod.id ? "Starting download…" : "Download all"}
                       </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )}
+                    )}
+                  </header>
+
+                  <ul className="divide-y divide-gray-100">
+                    {mod.files.map((file) => (
+                      <li key={file.id}>
+                        <button
+                          onClick={() => setPreview(file)}
+                          className="group flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-runfree-pink/40 sm:gap-4"
+                        >
+                          <span
+                            className={`w-8 shrink-0 font-display text-sm font-bold tabular-nums sm:w-10 ${
+                              file.num
+                                ? "text-runfree-magentaDeep"
+                                : "text-transparent"
+                            }`}
+                          >
+                            {file.num || "—"}
+                          </span>
+
+                          <span className="min-w-0 flex-1 line-clamp-2 break-words text-[15px] font-medium text-runfree-ink">
+                            {file.label}
+                          </span>
+
+                          <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">
+                            {prettySize(file.sizeBytes)}
+                          </span>
+
+                          {/* Visible on touch, revealed on hover elsewhere. A
+                              chip that only appears under a pointer never
+                              appears on a phone, and the whole row looked
+                              inert.
+
+                              Below sm the chip gives way to a chevron. At 390px
+                              it kept about 70px, leaving the title 174px, and
+                              half of Funnel Fusion's titles were cut to one
+                              line — "04 The Horizon Storyline Overview" and
+                              "04.1 … - Definitions" read as the same sheet. The
+                              chevron still says "this row opens"; the whole
+                              row stays the tap target. */}
+                          <span className="hidden shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition sm:inline-block [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
+                            Preview
+                          </span>
+                          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-runfree-magentaDeep sm:hidden">
+                            <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.17 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          )}
+        </div>
       </main>
 
       <PortalFooter />

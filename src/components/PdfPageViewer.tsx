@@ -29,13 +29,40 @@ import { useEffect, useRef, useState } from "react";
 type PdfDoc = {
   numPages: number;
   getPage: (n: number) => Promise<{
-    getViewport: (o: { scale: number }) => { width: number; height: number };
+    getViewport: (o: { scale: number }) => {
+      width: number;
+      height: number;
+      // pdfjs-dist 6 has only the point form; convertToViewportRectangle is gone.
+      convertToViewportPoint: (x: number, y: number) => number[];
+    };
     render: (o: Record<string, unknown>) => { promise: Promise<void> };
+    getAnnotations: (o?: { intent?: string }) => Promise<
+      { subtype?: string; rect: number[]; url?: string; dest?: string | unknown[] | null }[]
+    >;
+    cleanup: () => boolean;
   }>;
+  getDestination: (id: string) => Promise<unknown[] | null>;
+  getPageIndex: (ref: unknown) => Promise<number>;
+};
+
+/** A link box over a drawn page, in percent of the page so it stays aligned
+ *  when a rotation rescales the image. `url` leaves the document; `dest` is a
+ *  jump to another page of it. */
+type PageLink = {
+  left: number;
+  top: number;
+  w: number;
+  h: number;
+  url?: string;
+  dest?: string | unknown[];
 };
 
 /** Retina, but capped: a 3x canvas of an A4 page is a lot of pixels to hold. */
 const MAX_DPR = 2;
+
+/** Height/width of US Letter portrait: the placeholder shape when the
+ *  document's own could not be read. */
+const LETTER_RATIO = 11 / 8.5;
 
 /**
  * pdf.js has hung in production in this app before — PdfThumbnail carries the
@@ -66,9 +93,35 @@ export default function PdfPageViewer({
   const hostRef = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [width, setWidth] = useState(0);
+  /**
+   * Page one's height/width, which every undrawn page borrows as its
+   * placeholder shape. A guessed shape lurches the reader once jumpTo lands
+   * past pages that have not drawn: scrolling back up draws each one, and
+   * the guide's pages are all 4:3 landscape, so every Letter-shaped
+   * placeholder above shrank by 186px on a phone (418px on an iPad) and
+   * dragged the page being read down with it. Scroll anchoring cannot hold
+   * it, because the shrinking page is itself the anchor, and iOS Safari has
+   * no scroll anchoring at all.
+   */
+  const [docRatio, setDocRatio] = useState(LETTER_RATIO);
+  // FilePreview passes a fresh arrow on every render. As an effect dependency
+  // that re-parsed the whole document each time the page behind re-rendered —
+  // and now that cleanup destroys the document, it would pull it out from
+  // under the pages still on screen.
+  const onFailRef = useRef(onFail);
+  onFailRef.current = onFail;
 
   useEffect(() => {
     let cancelled = false;
+    /**
+     * Every getDocument without a shared worker port starts its own Web
+     * Worker, and only destroy() ends it. Never calling it left one worker,
+     * and every page it had decoded, alive per preview opened — on the phones
+     * this viewer exists for, until iOS's canvas budget ran out and pages
+     * silently stayed placeholders. Destroying on cleanup also stops a parse
+     * still running when the preview is closed.
+     */
+    let task: { destroy: () => Promise<void> } | null = null;
 
     (async () => {
       // The caller already holds an authorised blob; read it back as bytes
@@ -77,21 +130,38 @@ export default function PdfPageViewer({
       if (cancelled) return;
 
       const pdfjs = await import("pdfjs-dist");
+      if (cancelled) return;
       pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.min.mjs";
+      const loading = pdfjs.getDocument({ data: bytes });
+      task = loading;
       const loaded = (await withTimeout(
-        pdfjs.getDocument({ data: bytes }).promise,
+        loading.promise,
         PARSE_TIMEOUT_MS
       )) as unknown as PdfDoc;
       if (cancelled) return;
+      // Only the page's size, not a render, so this is one worker round trip.
+      // Its own guard: a document whose first page will not report its size
+      // still reads, with Letter placeholders as before.
+      let ratio = LETTER_RATIO;
+      try {
+        const first = await withTimeout(loaded.getPage(1), PARSE_TIMEOUT_MS);
+        const v = first.getViewport({ scale: 1 });
+        if (v.width > 0 && v.height > 0) ratio = v.height / v.width;
+      } catch {
+        // Keep Letter.
+      }
+      if (cancelled) return;
+      setDocRatio(ratio);
       setDoc(loaded);
     })().catch(() => {
-      if (!cancelled) onFail?.();
+      if (!cancelled) onFailRef.current?.();
     });
 
     return () => {
       cancelled = true;
+      void task?.destroy();
     };
-  }, [blobUrl, onFail]);
+  }, [blobUrl]);
 
   // Measure once the column exists. Rotating the phone rescales the bitmaps
   // via CSS rather than re-rendering them — slightly softer, and far cheaper
@@ -106,13 +176,40 @@ export default function PdfPageViewer({
     return () => ro.disconnect();
   }, [doc]);
 
+  /**
+   * A jump inside the document — the guide's contents page and its
+   * cross-references (456 of them across 171 pages). Without this, reaching
+   * Module 6 on a phone meant scrolling past 147 pages. The target's
+   * placeholder already reserves its height, so the jump lands on the right
+   * page before that page has drawn.
+   */
+  const jumpTo = async (dest: string | unknown[]) => {
+    if (!doc) return;
+    const explicit = typeof dest === "string" ? await doc.getDestination(dest) : dest;
+    if (!Array.isArray(explicit)) return;
+    const idx =
+      typeof explicit[0] === "number" ? explicit[0] : await doc.getPageIndex(explicit[0]);
+    hostRef.current?.querySelector(`[data-page="${idx}"]`)?.scrollIntoView({ block: "start" });
+  };
+
   return (
     <div ref={hostRef} className="h-full overflow-y-auto overscroll-contain bg-gray-100 px-3 py-3">
       {doc && width > 0 ? (
         <ul className="mx-auto flex max-w-3xl flex-col gap-3">
           {Array.from({ length: doc.numPages }, (_, i) => (
-            <li key={i}>
-              <PdfPage doc={doc} index={i} width={width - 24} page={i + 1} total={doc.numPages} />
+            <li key={i} data-page={i}>
+              <PdfPage
+                doc={doc}
+                index={i}
+                width={width - 24}
+                page={i + 1}
+                total={doc.numPages}
+                initialRatio={docRatio}
+                onJump={(dest) => {
+                  // A link that will not resolve just does nothing.
+                  jumpTo(dest).catch(() => {});
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -136,19 +233,32 @@ function PdfPage({
   width,
   page,
   total,
+  initialRatio,
+  onJump,
 }: {
   doc: PdfDoc;
   index: number;
   width: number;
   page: number;
   total: number;
+  /** Page one's shape, until this page reports its own. */
+  initialRatio: number;
+  onJump: (dest: string | unknown[]) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [src, setSrc] = useState<string | null>(null);
-  /** Height/width. US Letter until the real page reports otherwise, so the
-   *  placeholder reserves close to the right space and the scrollbar does not
-   *  lurch as pages arrive. */
-  const [ratio, setRatio] = useState(11 / 8.5);
+  /**
+   * The page is a flat picture, so its links have to be put back on top of
+   * it. Without them every handout and video icon in the Digital
+   * Facilitator's Guide was dead on a phone or tablet — the 208 links to
+   * /open/… that Help promises work "from the front of a room".
+   */
+  const [links, setLinks] = useState<PageLink[]>([]);
+  /** Height/width. Page one's until this page reports its own, so the
+   *  placeholder reserves the right space and the reader does not lurch as
+   *  pages above them arrive. The per-page read stays for documents that mix
+   *  page sizes. */
+  const [ratio, setRatio] = useState(initialRatio);
 
   useEffect(() => {
     const el = ref.current;
@@ -174,11 +284,47 @@ function PdfPage({
           canvas.width = Math.round(viewport.width);
           canvas.height = Math.round(viewport.height);
           const ctx = canvas.getContext("2d");
-          if (!ctx) return;
+          if (!ctx) {
+            canvas.width = 0;
+            canvas.height = 0;
+            return;
+          }
 
           await p.render({ canvas, canvasContext: ctx, viewport }).promise;
+          // The picture is all that is kept. iOS caps the canvas memory a tab
+          // may hold, and a detached canvas still counts against it until it
+          // is zeroed; once the cap is hit getContext returns null and pages
+          // silently stay placeholders. So release the bitmap, and pdf.js's
+          // decoded page data, as soon as the JPEG exists.
+          const url = canvas.toDataURL("image/jpeg", 0.85);
+          canvas.width = 0;
+          canvas.height = 0;
+
+          // Separately guarded: a malformed annotation must not blank a page
+          // that has already drawn.
+          const found: PageLink[] = [];
+          try {
+            for (const a of await p.getAnnotations({ intent: "display" })) {
+              if (a.subtype !== "Link" || (!a.url && !a.dest) || a.rect?.length !== 4) continue;
+              const [x1, y1] = base.convertToViewportPoint(a.rect[0], a.rect[1]);
+              const [x2, y2] = base.convertToViewportPoint(a.rect[2], a.rect[3]);
+              found.push({
+                left: (Math.min(x1, x2) / base.width) * 100,
+                top: (Math.min(y1, y2) / base.height) * 100,
+                w: (Math.abs(x2 - x1) / base.width) * 100,
+                h: (Math.abs(y2 - y1) / base.height) * 100,
+                url: a.url,
+                dest: a.dest ?? undefined,
+              });
+            }
+          } catch {
+            // No links on this page, rather than no page.
+          }
+          p.cleanup();
+
           if (cancelled) return;
-          setSrc(canvas.toDataURL("image/jpeg", 0.85));
+          setLinks(found);
+          setSrc(url);
         })().catch(() => {
           // One page failing is not the document failing; it keeps its
           // placeholder and the rest still read.
@@ -202,8 +348,40 @@ function PdfPage({
       style={{ aspectRatio: src ? undefined : `1 / ${ratio}` }}
     >
       {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={`Page ${page} of ${total}`} className="block h-auto w-full" />
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={`Page ${page} of ${total}`} className="block h-auto w-full" />
+          {links.map((l, i) => {
+            const style = {
+              position: "absolute" as const,
+              left: `${l.left}%`,
+              top: `${l.top}%`,
+              width: `${l.w}%`,
+              height: `${l.h}%`,
+            };
+            const cls = "rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-runfree-magentaDeep";
+            return l.url ? (
+              <a
+                key={i}
+                href={l.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open link"
+                className={cls}
+                style={style}
+              />
+            ) : (
+              <button
+                key={i}
+                type="button"
+                aria-label="Go to section"
+                className={cls}
+                style={style}
+                onClick={() => l.dest && onJump(l.dest)}
+              />
+            );
+          })}
+        </>
       ) : (
         <div className="absolute inset-0 grid place-items-center">
           <span className="text-xs font-medium text-gray-400">

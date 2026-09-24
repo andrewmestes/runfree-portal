@@ -234,4 +234,12 @@
     position: absolute;
     inset: -12px -8px;
   }
+  /* The card's Copy link pill is absolute, so the rules above skip it (they
+     would overwrite its position); it opts in here and anchors its own
+     ::after. The grid's 20px gap keeps the larger area off the next card. */
+  button[data-tap="grow"]::after {
+    content: "";
+    position: absolute;
+    inset: -10px -6px;
+  }
 }

@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getCurrentFramer, getCurrentProfile, getCurrentUser, logout, updatePassword } from "@/lib/auth";
 import PortalHeader from "@/components/PortalHeader";
+import PortalFooter from "@/components/PortalFooter";
 import AccessError from "@/components/AccessError";
 import { Field, FormError, FormNotice } from "@/components/AuthShell";
+import { useCertificationAccess } from "@/lib/useCertificationAccess";
 
 type Framer = {
   id: string;
@@ -51,6 +53,10 @@ export default function AccountPage() {
   const [fatal, setFatal] = useState(false);
   /** Google users have no password to change. */
   const [isPasswordUser, setIsPasswordUser] = useState(true);
+  // The Certification pill every other page a framer sees carries. Asked
+  // through the one shared rule (hasCertificationAccess), not the profile's
+  // certification_access flag, so the pill shows exactly when the hub opens.
+  const certAccess = useCertificationAccess();
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -162,6 +168,7 @@ export default function AccountPage() {
         title="Your account"
         backHref="/"
         backLabel="Home"
+        certificationAccess={certAccess}
       />
 
       <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:px-8">
@@ -242,6 +249,8 @@ export default function AccountPage() {
           with your records.
         </p>
       </main>
+
+      <PortalFooter />
     </div>
   );
 }

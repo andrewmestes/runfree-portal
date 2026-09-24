@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { Readable } from "node:stream";
+import { splitLeadingNumber } from "./file-number";
 
 /**
  * Google Drive access via a service account.
@@ -210,6 +211,11 @@ export type DriveFileInFolder = {
  * room, so the boundary check for one file goes this way. A file that is
  * not inside the folder is exactly as invisible as before: the parent chain
  * never reaches the root, and the answer is null.
+ *
+ * Only Drive's 404 means "not here". Anything else — a timeout, a 5xx, a
+ * rate limit (which Drive also sends as a 403, so a 403 is not "gone") — is
+ * thrown, so the caller can say "try again" rather than "the link may be out
+ * of date".
  */
 export async function fileInsideFolder(
   fileId: string,
@@ -225,8 +231,9 @@ export async function fileInsideFolder(
       supportsAllDrives: true,
     });
     meta = res.data;
-  } catch {
-    return null;
+  } catch (e) {
+    if (isDriveNotFound(e)) return null;
+    throw e;
   }
   if (!meta.id || meta.trashed || meta.mimeType === FOLDER_MIME) return null;
 
@@ -251,8 +258,9 @@ export async function fileInsideFolder(
         supportsAllDrives: true,
       });
       folder = res.data;
-    } catch {
-      return null;
+    } catch (e) {
+      if (isDriveNotFound(e)) return null;
+      throw e;
     }
     folders.push({ id: folder.id || parent, name: folder.name || "" });
     parent = folder.parents?.[0];
@@ -260,10 +268,14 @@ export async function fileInsideFolder(
   return null;
 }
 
+function isDriveNotFound(e: unknown): boolean {
+  return (e as { response?: { status?: number } })?.response?.status === 404;
+}
+
 /** The same title / number split the folder listing uses, for one file. */
 export function describeDriveFile(name: string): { title: string; num: string | null; label: string } {
   const title = toTitle(name);
-  const { num, rest } = splitNumber(title);
+  const { num, rest } = splitLeadingNumber(title);
   return { title, num, label: rest };
 }
 
@@ -281,6 +293,14 @@ export type DriveListedFile = {
   mimeType: string;
   sizeBytes: number | null;
   modifiedTime: string | null;
+  /**
+   * Runtime of a video file, from Drive's own videoMediaMetadata. The
+   * facilitator walkthroughs and the Video Clips films carried no length at
+   * all while every curated Loom row showed one, although Drive had it the
+   * whole time. Null for anything that is not a video, and for a video Drive
+   * has not finished processing.
+   */
+  durationMs?: number | null;
   /** Sort key taken from a leading number in the filename, if present. */
   order: number;
 };
@@ -318,25 +338,16 @@ function toTitle(filename: string): string {
   // here. It was not, and every certification handout listed as "Welcome -
   // CERT". The marker is a Drive-side note that a file is the certification
   // version; it means nothing to the person reading the list.
+  // A leading run of dashes goes too: "-- Future Team Survey - CERT.pdf"
+  // (guide 1.7) listed as "-- Future Team Survey", which reads as retired
+  // material when the guide sends framers straight to it.
+  // The marker can sit before a date too, with or without a full stop:
+  // "PIVVOT NOTEBOOK - CERT 9.11.26" reads "PIVVOT NOTEBOOK 9.11.26".
   return filename
     .replace(/\.[a-z0-9]{1,5}$/i, "")
-    .replace(/\s*[-–—]\s*CERT\s*$/i, "")
+    .replace(/^\s*[-–—]+\s*/, "")
+    .replace(/\s*[-–—]\s*CERT\.?(?=\s|$)/i, "")
     .trim();
-}
-
-/**
- * The "01" / "03.1" prefix, split out so it can be styled separately.
- *
- * The separator goes with the number, not the label. Files are named two
- * ways in these folders — "01 Welcome.pdf" and "01 - Funnel Fusion
- * Handouts.pdf" — and keeping the dash left the second rendering as
- * "- Funnel Fusion Handouts" once the number was pulled out to its own
- * element.
- */
-function splitNumber(title: string): { num: string | null; rest: string } {
-  const m = title.match(/^\s*(\d+(?:\.\d+)?)\s*[-–—]?\s*(.*)$/);
-  if (!m || !m[2]) return { num: null, rest: title };
-  return { num: m[1], rest: m[2] };
 }
 
 /**
@@ -392,6 +403,7 @@ export async function listDriveFolder(rootId: string): Promise<DriveFolderGroup[
     parents?: string[];
     size?: string;
     modifiedTime?: string;
+    videoMediaMetadata?: { durationMillis?: string };
   }[] = [];
 
   const MAX_DEPTH = 3; // root > module folder > nested group. Deeper is not used.
@@ -424,7 +436,7 @@ export async function listDriveFolder(rootId: string): Promise<DriveFolderGroup[
             pageToken,
             q,
             fields:
-              "nextPageToken, files(id,name,mimeType,parents,size,modifiedTime)",
+              "nextPageToken, files(id,name,mimeType,parents,size,modifiedTime,videoMediaMetadata(durationMillis))",
             supportsAllDrives: true,
             includeItemsFromAllDrives: true,
           });
@@ -487,7 +499,7 @@ export async function listDriveFolder(rootId: string): Promise<DriveFolderGroup[
       )
       .map<DriveListedFile>((f) => {
         const title = toTitle(f.name);
-        const { num, rest } = splitNumber(title);
+        const { num, rest } = splitLeadingNumber(title);
         return {
           id: f.id,
           name: f.name,
@@ -497,6 +509,9 @@ export async function listDriveFolder(rootId: string): Promise<DriveFolderGroup[
           mimeType: f.mimeType,
           sizeBytes: f.size ? Number(f.size) : null,
           modifiedTime: f.modifiedTime || null,
+          durationMs: f.videoMediaMetadata?.durationMillis
+            ? Number(f.videoMediaMetadata.durationMillis)
+            : null,
           order: fileOrder(f.name),
         };
       })
@@ -674,13 +689,41 @@ export type PortalModule = {
 
 
 /**
+ * The handout listing, held for a minute — the same memo as
+ * `listBooksLibrary` and `listPresentations`.
+ *
+ * "Download all" asks for a ticket and then the zip, and each began with a
+ * flat list of the whole Drive, so every download paid for two walks before
+ * the first byte (2.5–3.7 s), and a second walk that failed swapped the
+ * portal tab for a raw JSON error. The ticket's walk now serves the zip.
+ * Sixty seconds still shows a handout dropped into Drive on the next visit.
+ *
+ * `fresh` walks Drive regardless and puts the new walk in the memo, so the
+ * library's Refresh is not answered with this minute-old listing.
+ */
+const LIBRARY_TTL_MS = 60_000;
+let libraryCache: { at: number; value: Promise<PortalModule[]> } | null = null;
+
+export function listPortalLibrary(opts: { fresh?: boolean } = {}): Promise<PortalModule[]> {
+  const now = Date.now();
+  if (!opts.fresh && libraryCache && now - libraryCache.at < LIBRARY_TTL_MS) return libraryCache.value;
+  const value = listPortalLibraryUncached().catch((err) => {
+    // A failed walk must not be served for a minute.
+    if (libraryCache?.value === value) libraryCache = null;
+    throw err;
+  });
+  libraryCache = { at: now, value };
+  return value;
+}
+
+/**
  * Read the shared Drive folder and return it grouped by module subfolder.
  *
  * This IS the resource list — the portal keeps no copy, so whatever is in
  * Drive is what framers see. Adding, renaming, or removing a file in Drive
  * needs no action here.
  */
-export async function listPortalLibrary(): Promise<PortalModule[]> {
+async function listPortalLibraryUncached(): Promise<PortalModule[]> {
   const rootId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
   if (!rootId) {
@@ -735,7 +778,7 @@ export async function listPortalLibrary(): Promise<PortalModule[]> {
       )
       .map<PortalFile>((f) => {
         const title = toTitle(f.name);
-        const { num, rest } = splitNumber(title);
+        const { num, rest } = splitLeadingNumber(title);
         return {
           id: f.id,
           name: f.name,
@@ -748,7 +791,21 @@ export async function listPortalLibrary(): Promise<PortalModule[]> {
           order: fileOrder(f.name),
         };
       })
-      .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
+      // Unnumbered files that sit side by side here are dated editions of
+      // one document, so the newest leads. On title alone, stripping the
+      // CERT marker left "PIVVOT NOTEBOOK 9.11.26" against "PIVVOT NOTEBOOK
+      // 9:8:26", ":" collates before ".", and Combined Handouts — captioned
+      // "the Pivvot Notebook" — led with the older 9/8 edition, first in its
+      // zip too. listDriveFolder stays alphabetical: its unnumbered files
+      // (the Intro films, Video Clips) are separate pieces, not editions.
+      .sort(
+        (a, b) =>
+          a.order - b.order ||
+          (a.order === Number.MAX_SAFE_INTEGER
+            ? (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? "")
+            : 0) ||
+          a.title.localeCompare(b.title)
+      );
 
   const moduleFolders = folders.filter((f) =>
     (f.parents || []).includes(rootId)

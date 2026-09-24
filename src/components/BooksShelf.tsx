@@ -167,7 +167,7 @@ export default function BooksShelf({
               href={CALLING_BOOK.amazonUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink/40"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink/40 max-sm:min-h-[44px]"
             >
               Buy on Amazon
               <ExternalIcon />
@@ -186,7 +186,7 @@ export default function BooksShelf({
               href={active.amazonUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink/40"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink/40 max-sm:min-h-[44px]"
             >
               Buy on Amazon
               <ExternalIcon />
@@ -200,9 +200,9 @@ export default function BooksShelf({
             <button
               onClick={onRefresh}
               disabled={refreshing}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 ring-1 ring-gray-200 transition hover:text-runfree-magentaDeep hover:ring-runfree-magenta/40 disabled:opacity-50"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 ring-1 ring-gray-200 transition hover:text-runfree-magentaDeep hover:ring-runfree-magenta/40 disabled:opacity-50 max-sm:min-h-[44px]"
             >
-              {refreshing ? "Refreshing…" : "Refresh"}
+              {refreshing ? "Refreshing…" : "Refresh from Drive"}
             </button>
             )}
           </div>
@@ -214,15 +214,27 @@ export default function BooksShelf({
               onOpen={onOpen}
               fetchBytes={fetchBytes}
             />
+            {/* No "yet": these files are not coming, and a framer read "yet" as
+                "missing". Future Church is in the library as three Parts; a
+                book with nothing at all is only on Amazon. */}
             <FeaturedCard
               label="Full Book"
               file={active.fullBook}
-              emptyText="No full book file yet"
+              emptyText={
+                active.chapters.length > 0
+                  ? "This book is in the library in parts. Open them under Chapters below."
+                  : "Not in the library. Use Buy on Amazon above."
+              }
               onOpen={onOpen}
             />
           </div>
 
-          {/* Chapters */}
+          {/* Chapters. Hidden for a book that is complete as one file
+              (Clarity Spiral, Innovating Discipleship): its Full Book card
+              above is the whole thing, and "Chapters 0" under it read as
+              something missing. Kept, with its empty line, when there is no
+              full book either, so the shelf never goes blank. */}
+          {(active.chapters.length > 0 || !active.fullBook) && (
           <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200">
             <div className="h-1 bg-runfree-grad" />
             <header className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
@@ -236,7 +248,7 @@ export default function BooksShelf({
 
             {active.chapters.length === 0 ? (
               <p className="px-5 py-8 text-center text-sm text-gray-500">
-                No chapters listed yet.
+                No chapters in the library.
               </p>
             ) : (
               <ul className="divide-y divide-gray-100">
@@ -253,13 +265,17 @@ export default function BooksShelf({
                       >
                         {f.num || "—"}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-runfree-ink">
+                      <span className="min-w-0 flex-1 line-clamp-2 text-[15px] font-medium text-runfree-ink">
                         {f.label}
                       </span>
                       <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">
                         {prettySize(f.sizeBytes)}
                       </span>
-                      <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep opacity-0 ring-1 ring-runfree-magenta/30 transition group-hover:opacity-100">
+                      {/* Visible on touch, revealed on hover elsewhere — the same guard as
+                          the handouts page. A chip at opacity-0 still takes its width, so on
+                          a phone it hid nothing but the end of every title, and the rows
+                          gave no sign they could be tapped. */}
+                      <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                         Preview
                       </span>
                     </button>
@@ -268,6 +284,7 @@ export default function BooksShelf({
               </ul>
             )}
           </section>
+          )}
 
           {/* Other: workbooks, bullet-books, anything that isn't a chapter */}
           {active.other.length > 0 && (
@@ -284,13 +301,13 @@ export default function BooksShelf({
                       onClick={() => onOpen(f)}
                       className="group flex w-full items-center gap-4 px-5 py-3 text-left transition hover:bg-runfree-pink/40"
                     >
-                      <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-runfree-ink">
+                      <span className="min-w-0 flex-1 line-clamp-2 text-[15px] font-medium text-runfree-ink">
                         {f.title}
                       </span>
                       <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">
                         {prettySize(f.sizeBytes)}
                       </span>
-                      <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep opacity-0 ring-1 ring-runfree-magenta/30 transition group-hover:opacity-100">
+                      <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                         Preview
                       </span>
                     </button>
@@ -327,13 +344,13 @@ export default function BooksShelf({
                   onClick={() => onOpen(f)}
                   className="group flex w-full items-center gap-4 px-5 py-3 text-left transition hover:bg-runfree-pink/40"
                 >
-                  <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-runfree-ink">
+                  <span className="min-w-0 flex-1 line-clamp-2 text-[15px] font-medium text-runfree-ink">
                     {f.title}
                   </span>
                   <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">
                     {prettySize(f.sizeBytes)}
                   </span>
-                  <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep opacity-0 ring-1 ring-runfree-magenta/30 transition group-hover:opacity-100">
+                  <span className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                     Preview
                   </span>
                 </button>
@@ -444,7 +461,7 @@ function VisualSummaryCard({
           <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-runfree-magentaDeep">
             Visual Summary
           </p>
-          <p className="mt-2 text-sm text-gray-500">No visual summary yet</p>
+          <p className="mt-2 text-sm text-gray-500">No visual summary for this book.</p>
         </div>
       )}
     </div>

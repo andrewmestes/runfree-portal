@@ -98,6 +98,10 @@ async function renderFirstPage(
   if (existing) return existing;
 
   const job = (async (): Promise<string | null> => {
+    // Each getDocument starts its own Web Worker and only destroy() ends it,
+    // so a shelf of covers left a worker per card running for the life of the
+    // tab. Held here so the finally ends it on success, failure or timeout.
+    let task: { destroy: () => Promise<void> } | null = null;
     try {
       const bytes = await fetchBytes(fileId);
       if (!bytes) return null;
@@ -105,10 +109,9 @@ async function renderFirstPage(
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.min.mjs";
 
-      const pdf = await withTimeout(
-        pdfjs.getDocument({ data: bytes }).promise,
-        RENDER_TIMEOUT_MS
-      );
+      const loading = pdfjs.getDocument({ data: bytes });
+      task = loading;
+      const pdf = await withTimeout(loading.promise, RENDER_TIMEOUT_MS);
       const page = await pdf.getPage(1);
 
       const base = page.getViewport({ scale: 1 });
@@ -119,10 +122,19 @@ async function renderFirstPage(
       canvas.width = Math.round(viewport.width);
       canvas.height = Math.round(viewport.height);
       const ctx = canvas.getContext("2d");
-      if (!ctx) return null;
+      if (!ctx) {
+        canvas.width = 0;
+        canvas.height = 0;
+        return null;
+      }
 
       await page.render({ canvas, canvasContext: ctx, viewport }).promise;
       const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+      // Only the JPEG is kept. iOS counts a detached canvas against its
+      // canvas memory cap until it is zeroed.
+      page.cleanup();
+      canvas.width = 0;
+      canvas.height = 0;
 
       writeCache(key, dataUrl);
 
@@ -133,6 +145,7 @@ async function renderFirstPage(
       return null;
     } finally {
       inFlight.delete(key);
+      void task?.destroy();
     }
   })();
 

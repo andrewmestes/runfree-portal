@@ -26,9 +26,26 @@ export default function LoginPage() {
    */
   const [next, setNext] = useState("/");
   useEffect(() => {
-    setNext(safeNext(new URLSearchParams(window.location.search).get("next")));
+    const q = new URLSearchParams(window.location.search);
+    setNext(safeNext(q.get("next")));
+    // The callback sends a failed Google sign-in back here as ?error=<code>.
+    // signup_disabled is the common one: self-signup is off, so a Google
+    // account on an address nobody invited is refused — a personal Gmail,
+    // say, when the invitation went to a church or work address.
+    const code = q.get("error");
+    if (code === "signup_disabled")
+      setError(
+        "That Google account isn't one the portal knows. Continue with Google using the address your invitation came to, or sign in below with that address and your password."
+      );
+    else if (code)
+      setError(
+        "That sign-in didn't complete. Try again, or use Forgot your password below to get a fresh link."
+      );
   }, []);
   const router = useRouter();
+  // A reset on the way in keeps the page they were headed for.
+  const forgotHref =
+    next === "/" ? "/auth/forgot-password" : `/auth/forgot-password?next=${encodeURIComponent(next)}`;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +87,7 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="RunFree Portal"
-      subtitle="Sign in to your engagement"
+      subtitle="Sign in with the email your invitation came to"
       about={
         <>
           <p>
@@ -108,10 +125,9 @@ export default function LoginPage() {
       }
       footer={
         <p className="leading-relaxed">
-          Access is granted by RunFree when you're added to a project. Need an
-          invitation?{" "}
+          Access is by invitation from RunFree. Need one?{" "}
           <a
-            href="mailto:andrew@runfree.co?subject=Client%20Portal%20access"
+            href="mailto:andrew@runfree.co?subject=RunFree%20Portal%20access"
             className="font-medium text-runfree-magentaDeep hover:underline"
           >
             Get in touch
@@ -147,33 +163,36 @@ export default function LoginPage() {
         />
         <SubmitButton
           loading={loading}
-          idleLabel="Sign In"
+          idleLabel="Sign in"
           busyLabel="Signing in…"
         />
       </form>
 
       <p className="mt-4 text-center text-sm">
         <a
-          href="/auth/forgot-password"
+          href={forgotHref}
           className="text-gray-500 hover:text-runfree-magentaDeep hover:underline"
         >
           Forgot your password?
         </a>
       </p>
 
-      {/* Most of a church team never opens the invitation, and then cannot
-          sign in because an invited account has no password yet. The way in
-          is the same link above, which works whether or not the invitation
-          was ever opened — so say so here, where they are stuck. */}
+      {/* Most invited people never open the invitation — a church team, or a
+          framer invited to the hub with no project at all (the 13 North
+          Carolina framers, 22 Sept 2026) — and then cannot sign in because an
+          invited account has no password yet. The way in is the same link
+          above, which works whether or not the invitation was ever opened —
+          so say so here, where they are stuck, without assuming a project. */}
       <p className="mt-2 text-center text-xs leading-relaxed text-gray-500">
-        Added to a project but never set a password? Use{" "}
+        Invited but never set a password? Use{" "}
         <a
-          href="/auth/forgot-password"
+          href={forgotHref}
           className="font-medium text-runfree-magentaDeep hover:underline"
         >
           Forgot your password
         </a>{" "}
-        with the email you were added with, and you can set one now.
+        with that same email, and you can set one now. Google sign-in works
+        only with that address too.
       </p>
     </AuthShell>
   );

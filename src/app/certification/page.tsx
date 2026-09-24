@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import PortalHeader from "@/components/PortalHeader";
 import PortalFooter from "@/components/PortalFooter";
 import { supabase } from "@/lib/supabase";
-import { getCurrentProfile, listMyProjects } from "@/lib/auth";
+import { getCurrentProfile, hasCertificationAccess, listMyProjects, loginUrlHere } from "@/lib/auth";
 
 /** Same shape the other pages declare locally; auth.ts exports no type. */
 type Profile = {
@@ -64,7 +64,7 @@ export default function CertificationHubPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
-        router.replace("/auth/login");
+        router.replace(loginUrlHere());
         return;
       }
       const current = (await getCurrentProfile()) as Profile | null;
@@ -74,8 +74,8 @@ export default function CertificationHubPage() {
       } catch {
         // Not being able to count them is no reason to block the hub.
       }
-      // Same gate the certification pages themselves use.
-      setStatus(current?.certification_access || current?.is_staff ? "ready" : "denied");
+      // Same rule as /open and every certification API.
+      setStatus((await hasCertificationAccess()) ? "ready" : "denied");
     })().catch(() => {
       // A ProfileLookupError used to strand the hub on "Loading…" with no
       // way forward.
@@ -216,7 +216,7 @@ export default function CertificationHubPage() {
             href="/keynotes"
             icon={<KeynotesIcon />}
             title="Keynote Presentations"
-            description="The decks you teach from, in Keynote and PowerPoint."
+            description="The decks you teach from — view the slides, or download Keynote and PowerPoint."
           />
         </div>
       </main>

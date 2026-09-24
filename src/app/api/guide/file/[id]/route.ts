@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCertificationAccess } from "@/lib/api-auth";
+import { contentDisposition } from "@/lib/content-disposition";
 import { getFacilitatorGuideCached, isDriveConfigured, readFacilitatorGuide } from "@/lib/guide";
 
 /**
@@ -49,7 +50,7 @@ export async function GET(
       headers: {
         ...cacheHeaders,
         "Content-Type": current.mimeType,
-        "Content-Disposition": `inline; filename="${current.name.replace(/"/g, "")}"`,
+        "Content-Disposition": contentDisposition("inline", current.name),
         ...(length ? { "Content-Length": String(length) } : {}),
       },
     });

@@ -12,6 +12,7 @@ import { takeNext } from "@/lib/auth";
  */
 export default function AuthCallbackPage() {
   const [failed, setFailed] = useState(false);
+  const [retryHref, setRetryHref] = useState("/auth/login");
   const router = useRouter();
 
   useEffect(() => {
@@ -39,11 +40,27 @@ export default function AuthCallbackPage() {
       return;
     }
     // A verify that failed before it got here (link already opened by a
-    // mail scanner, or expired) arrives as #error_code=…; send it where the
-    // message lives rather than spinning for five seconds and saying
-    // "didn't complete".
-    if (window.location.hash.includes("error_code=")) {
-      window.location.replace(`/auth/reset-password${window.location.hash}`);
+    // mail scanner, or expired) arrives as #error_code=otp_expired; send it
+    // where the message lives rather than spinning for five seconds and
+    // saying "didn't complete". Any other error is not a spent link: with
+    // self-signup disabled, Google sign-in from an address the portal does
+    // not know comes back as error_code=signup_disabled, and forwarding that
+    // to reset-password told a framer "This reset link is invalid or has
+    // expired" when they had never asked for one. Those go back to sign-in,
+    // which says what actually happened.
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const errorCode = hashParams.get("error_code") || query.get("error_code");
+    if (errorCode) {
+      if (errorCode === "otp_expired") {
+        window.location.replace(
+          `/auth/reset-password${window.location.hash || `?${query.toString()}`}`
+        );
+      } else {
+        const next = takeNext();
+        const p = new URLSearchParams({ error: errorCode });
+        if (next !== "/") p.set("next", next);
+        window.location.replace(`/auth/login?${p.toString()}`);
+      }
       return;
     }
 
@@ -65,7 +82,12 @@ export default function AuthCallbackPage() {
         await new Promise((r) => setTimeout(r, 250));
       }
 
-      if (!cancelled) setFailed(true);
+      if (!cancelled) {
+        // Keep the guide link or shelf page for the second attempt.
+        const n = takeNext();
+        setRetryHref(n === "/" ? "/auth/login" : `/auth/login?next=${encodeURIComponent(n)}`);
+        setFailed(true);
+      }
     }
 
     settle();
@@ -86,7 +108,7 @@ export default function AuthCallbackPage() {
             <p className="mt-2 text-sm text-gray-600">
               Sign-in didn&rsquo;t finish.{" "}
               <a
-                href="/auth/login"
+                href={retryHref}
                 className="font-medium text-runfree-magentaDeep hover:underline"
               >
                 Try again

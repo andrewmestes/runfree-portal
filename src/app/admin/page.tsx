@@ -43,6 +43,8 @@ type Row = Profile & {
   /** Their per-project roles, counted — "Editor on 2, Viewer on 1". */
   roleCounts: Record<string, number>;
   isFramer: boolean;
+  /** Their certified_framers row, for taking them off the list; null if not on it. */
+  framerId: string | null;
 };
 
 /**
@@ -135,13 +137,28 @@ export default function AdminPage() {
       // landing here sees a near-empty list rather than a permission error.
       if (!(me.is_owner || me.account_role === "admin")) return setStatus("denied");
 
-      const [{ data: profiles }, { data: members }, { data: framers }, { data: projects }] =
+      // The certified list comes from the admin API, not a direct table read.
+      // certified_framers' RLS shows every row only to someone whose OWN row
+      // has is_admin, so a Site Admin by account_role alone read back just
+      // themselves: every other listed framer looked unlisted, and demoting
+      // one to Project Member skipped taking them off the list — leaving the
+      // library open to them. The route reads with the service role behind
+      // the same account_role = 'admin' gate as this page.
+      const [{ data: profiles }, { data: members }, framersRes, { data: projects }] =
         await Promise.all([
           supabase.from("profiles").select("*").order("email"),
           supabase.from("project_members").select("profile_id, project_id, role"),
-          supabase.from("certified_framers").select("email"),
+          fetch("/api/admin/framers", {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          }),
           supabase.from("projects").select("id, name"),
         ]);
+      // A failed read must not pass for "nobody is on the list" — that is the
+      // same silent skip. Better the page says it couldn't load.
+      if (!framersRes.ok) throw new Error(`Certified list failed to load (${framersRes.status})`);
+      const { framers } = (await framersRes.json()) as {
+        framers: { id: string; email: string }[];
+      };
 
       const projectName = new Map((projects ?? []).map((p) => [p.id, p.name as string]));
       const byProfile = new Map<string, string[]>();
@@ -155,8 +172,8 @@ export default function AdminPage() {
         counts[m.role] = (counts[m.role] ?? 0) + 1;
         rolesByProfile.set(m.profile_id, counts);
       }
-      const framerEmails = new Set(
-        (framers ?? []).map((f) => (f.email as string).toLowerCase())
+      const framerByEmail = new Map(
+        (framers ?? []).map((f) => [f.email.toLowerCase(), f.id])
       );
 
       setRows(
@@ -165,7 +182,8 @@ export default function AdminPage() {
           projectNames: byProfile.get(p.id) ?? [],
           projectCount: (byProfile.get(p.id) ?? []).length,
           roleCounts: rolesByProfile.get(p.id) ?? {},
-          isFramer: framerEmails.has(p.email.toLowerCase()),
+          isFramer: framerByEmail.has(p.email.toLowerCase()),
+          framerId: framerByEmail.get(p.email.toLowerCase()) ?? null,
         }))
       );
       setStatus("ready");
@@ -179,15 +197,71 @@ export default function AdminPage() {
     void load();
   }, [load]);
 
-  async function setRole(id: string, role: AccountRole) {
-    setBusyId(id);
+  /**
+   * Change someone's account role.
+   *
+   * Project Member promises "No portal-wide access at all", but certification
+   * access is an allowed role OR a row on the certified list — the server has
+   * always accepted either. So demoting someone who is on the list, without
+   * taking them off it, left every shelf and guide link still open to them.
+   * Asked rather than done silently, because coming off the list also takes
+   * their GoHighLevel certified tag off — more than a role dropdown looks
+   * like it does. Cancel changes nothing at all (Project Member while still
+   * listed would be the same false promise), and the select snaps back to
+   * the stored role because it reads r.account_role.
+   */
+  async function setRole(r: Row, role: AccountRole) {
+    if (role === "client" && r.isFramer) {
+      if (
+        !confirm(
+          `${r.full_name || r.email} is on the Certified Vision Framer list, so Project Member alone would leave the certification library open to them.\n\nRemove them from the certified list too? Their login and projects stay; their GoHighLevel certified tag is removed where a matching contact is found.`
+        )
+      )
+        return;
+    }
+    setBusyId(r.id);
+    // Two steps, and the first can't be undone from here. If the role update
+    // then fails, "nothing changed" would be false and the row stale — so the
+    // catch needs to know the list step already happened.
+    let removed = false;
+    // The route answers 200 even when GoHighLevel couldn't be untagged (no
+    // matching contact, or GHL down) and says so here. The admin was told the
+    // tag comes off, so they need to hear when it didn't.
+    let ghlWarning: string | null = null;
     try {
-      const { error } = await supabase.from("profiles").update({ account_role: role }).eq("id", id);
+      if (role === "client" && r.isFramer && r.framerId) {
+        // The list first: if this fails, nothing has changed and the admin
+        // can simply try again. The route also untags them in GoHighLevel.
+        const session = await getCurrentSession();
+        const res = await fetch(`/api/admin/framers?id=${r.framerId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(body.error || "Couldn't take them off the certified list, so their role was left as it was.");
+          return;
+        }
+        removed = true;
+        ghlWarning = body.warning || null;
+      }
+      const { error } = await supabase.from("profiles").update({ account_role: role }).eq("id", r.id);
       if (error) throw error;
       await load();
+      if (ghlWarning) alert(ghlWarning);
     } catch (err) {
       console.error("Role change failed:", err);
-      alert("Couldn't change that role.");
+      if (removed) {
+        // Reload so the row stops showing them as listed. For a framer the
+        // route has already dropped the role to Project Member itself; for
+        // staff it is still what it was.
+        await load();
+        alert(
+          `Took them off the certified list, but the role change didn't save. Their row now shows the role they have — set it again if it isn't Project Member.${ghlWarning ? `\n\n${ghlWarning}` : ""}`
+        );
+      } else {
+        alert("Couldn't change that role.");
+      }
     } finally {
       setBusyId(null);
     }
@@ -576,7 +650,7 @@ export default function AdminPage() {
                         ? "You cannot change your own role"
                         : ROLES.find((x) => x.value === r.account_role)?.hint
                     }
-                    onChange={(e) => setRole(r.id, e.target.value as AccountRole)}
+                    onChange={(e) => setRole(r, e.target.value as AccountRole)}
                     className="min-h-[40px] w-full rounded-lg border border-gray-300 px-2.5 text-xs font-medium text-runfree-ink outline-none focus:border-runfree-magenta disabled:bg-gray-50 disabled:text-gray-400 sm:w-auto"
                   >
                     {ROLES.map((x) => (

@@ -17,6 +17,7 @@ import {
   type VisionFrameRow,
 } from "@/lib/vision-frame";
 import PortalHeader from "@/components/PortalHeader";
+import { useCertificationAccess } from "@/lib/useCertificationAccess";
 import PageLoader from "@/components/PageLoader";
 import PortalFooter from "@/components/PortalFooter";
 import VisionStackExplorer, { type StackEntry } from "@/components/VisionStackExplorer";
@@ -58,6 +59,8 @@ export default function VisionStackPage() {
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"checking" | "ready" | "not_found" | "error">("checking");
+  // Same rule as the hub, so the header's Certification link always opens.
+  const certAccess = useCertificationAccess();
   /**
    * The open document.
    *
@@ -179,7 +182,7 @@ export default function VisionStackPage() {
         backLabel="Back to project"
         title=""
         showTitleBlock={false}
-        certificationAccess={profile.certification_access || profile.is_staff}
+        certificationAccess={certAccess}
       />
 
       {/* ── Hero ───────────────────────────────────────────────────────

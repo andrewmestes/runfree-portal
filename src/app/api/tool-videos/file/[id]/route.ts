@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { contentDisposition } from "@/lib/content-disposition";
 import { fetchDriveFileRange } from "@/lib/drive";
 import { verifyTicket } from "@/lib/tool-videos";
 
@@ -49,7 +50,7 @@ export async function GET(
       "Content-Type": file.mimeType,
       "Accept-Ranges": "bytes",
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `inline; filename="${file.filename.replace(/"/g, "")}"`,
+      "Content-Disposition": contentDisposition("inline", file.filename),
     };
     if (file.contentLength) headers["Content-Length"] = file.contentLength;
     if (file.contentRange) headers["Content-Range"] = file.contentRange;

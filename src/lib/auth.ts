@@ -162,11 +162,25 @@ export async function logout() {
 /**
  * Only a same-site path is a legal return address — never a full URL, never
  * a protocol-relative "//evil.example". Anything else becomes the home page.
+ *
+ * Checking the string's shape wasn't enough: the URL parser the router hands
+ * this to strips TAB (and CR/LF) anywhere, so "/\t/evil.example" passed a
+ * "starts with / but not //" test and still resolved to https://evil.example/.
+ * So control characters and backslashes are refused outright, and the path
+ * must then resolve against a stand-in origin and still be on it. What comes
+ * back is the parsed path, so the caller navigates to exactly what was checked
+ * — but parsing folds dot segments, so "/..//evil.example" comes out as
+ * "//evil.example", which is protocol-relative again. That result is refused.
  */
 export function safeNext(raw: string | null | undefined): string {
-  if (!raw) return "/";
-  if (!raw.startsWith("/") || raw.startsWith("//") || /[\r\n\\]/.test(raw)) return "/";
-  return raw;
+  if (!raw || !raw.startsWith("/") || /[\u0000-\u001f\u007f\\]/.test(raw)) return "/";
+  try {
+    const u = new URL(raw, "https://x.invalid");
+    const path = u.pathname + u.search + u.hash;
+    return u.origin === "https://x.invalid" && !path.startsWith("//") ? path : "/";
+  } catch {
+    return "/";
+  }
 }
 
 const NEXT_KEY = "runfree.next";
@@ -187,6 +201,42 @@ export function takeNext(): string {
     const v = sessionStorage.getItem(NEXT_KEY);
     sessionStorage.removeItem(NEXT_KEY);
     return safeNext(v);
+  } catch {
+    return "/";
+  }
+}
+
+/**
+ * The sign-in address for a gated page that finds nobody signed in, carrying
+ * this page (query string included, so /videos?tab=facilitators survives) as
+ * ?next= — the same return trip a guide link already gets from /open.
+ */
+export function loginUrlHere(): string {
+  const here = window.location.pathname + window.location.search;
+  return here === "/" ? "/auth/login" : `/auth/login?next=${encodeURIComponent(here)}`;
+}
+
+const RESET_NEXT_KEY = "runfree.resetNext";
+const RESET_NEXT_TTL_MS = 2 * 60 * 60_000; // scanners can hold the reset mail for a while
+
+/** Carry a return path across a password reset. The email opens a new tab, so sessionStorage can't carry it. */
+export function rememberResetNext(path: string) {
+  if (!path || path === "/") return; // never clear: a re-request from a spent link has no ?next
+  try {
+    localStorage.setItem(RESET_NEXT_KEY, JSON.stringify({ path, at: Date.now() }));
+  } catch {
+    /* private mode; the reset still works, it just lands home */
+  }
+}
+
+/** Read the reset's return path once, clearing it. Stale or missing is the home page. */
+export function takeResetNext(): string {
+  try {
+    const raw = localStorage.getItem(RESET_NEXT_KEY);
+    localStorage.removeItem(RESET_NEXT_KEY);
+    if (!raw) return "/";
+    const { path, at } = JSON.parse(raw);
+    return Date.now() - Number(at) < RESET_NEXT_TTL_MS ? safeNext(path) : "/";
   } catch {
     return "/";
   }
@@ -295,10 +345,10 @@ export async function setProjectPinned(projectId: string, pinned: boolean) {
  * The certified-framer record for the signed-in user, or null.
  *
  * Ported during the portal merge so the certification pages keep working
- * unchanged. `certified_framers` is CVF's table and is read-only from here;
- * whether someone may SEE those pages is decided by profiles.account_role
- * (migration 031), not by this row — a RunFree admin has no framer row and
- * still gets in.
+ * unchanged. `certified_framers` is CVF's table and is read-only from here.
+ * This row is one of two ways into those pages, not the only one: an allowed
+ * profiles.account_role (migration 031) is the other — a RunFree admin has no
+ * framer row and still gets in. See hasCertificationAccess().
  */
 export async function getCurrentFramer() {
   const user = await getCurrentUser();
@@ -344,26 +394,28 @@ export async function isPortalAdmin(): Promise<boolean> {
 /**
  * May this person see the certification library?
  *
- * The merge rewrote the SERVER gate (requireCertificationAccess) to accept an
- * account_role of admin / runfree_team / framer / framer_subscribed, or the
- * legacy certified_framers row. The five certification PAGES kept the old
- * client-side test — "is there a roster row?" — so a RunFree admin with no
- * row was shown the nav links by the header and then bounced to / on arrival.
- * Same question, same answer, one place.
+ * The client copy of requireCertificationAccess() in api-auth.ts, and it must
+ * stay exactly that rule: an account_role of admin / runfree_team / framer /
+ * framer_subscribed, or a certified_framers row. Nothing else.
+ *
+ * It used to accept is_owner and profiles.certification_access as well, and
+ * the hub, the header link and the home redirect read the flag directly. The
+ * two rules disagreed at the edges: a framer set to Project Member in Admin
+ * but still on the certified list lost the hub (the 031 trigger clears the
+ * flag) while every shelf and API still opened for them, and a flag without a
+ * role showed the page and then got a 403 from its own API. The owner is an
+ * admin by account_role, so dropping is_owner loses no one. One rule, and the
+ * server is the one that decides, so this copies the server.
  */
 export async function hasCertificationAccess(): Promise<boolean> {
-  const profile = (await getCurrentProfile()) as
-    | { account_role?: string; is_owner?: boolean; certification_access?: boolean }
-    | null;
+  const profile = (await getCurrentProfile()) as { account_role?: string } | null;
 
-  if (profile?.is_owner) return true;
   if (
     profile?.account_role &&
     ["admin", "runfree_team", "framer", "framer_subscribed"].includes(profile.account_role)
   ) {
     return true;
   }
-  if (profile?.certification_access) return true;
 
   return Boolean(await getCurrentFramer());
 }

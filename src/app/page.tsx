@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getCurrentProfile, getCurrentSession, getCurrentUser, listMyProjects, logout, setProjectPinned } from "@/lib/auth";
+import { getCurrentProfile, getCurrentSession, getCurrentUser, hasCertificationAccess, listMyProjects, logout, setProjectPinned } from "@/lib/auth";
 import { createUserClient } from "@/lib/supabase";
 import { getSignedImageUrls } from "@/lib/storage";
 import PortalHeader from "@/components/PortalHeader";
@@ -38,6 +38,13 @@ type ProjectRow = {
 export default function HomePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  /**
+   * Certification access by the one rule the hub, /open and the APIs share
+   * (hasCertificationAccess), not by profiles.certification_access — the
+   * flag could say no while the library still opened, or yes while every
+   * shelf returned 403.
+   */
+  const [certAccess, setCertAccess] = useState(false);
   const [layout, setLayout] = useState<"cards" | "list">("cards");
   useEffect(() => {
     const saved = window.localStorage.getItem("rf-projects-layout");
@@ -55,10 +62,27 @@ export default function HomePage() {
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
 
-    // Same recovery/invite-link forwarding as the CVF portal this was
-    // forked from — see docs/forking-guide.md and auth/callback/page.tsx.
+    // Recovery/invite links that land on the site root. A link built from
+    // {{ .RedirectTo }} comes here when the send had no allowlisted
+    // redirect_to (dashboard "Invite user" / "Send password recovery", a
+    // Vercel preview origin) and Supabase used the Site URL instead.
+    // Same forwarding as auth/callback/page.tsx — including passing a
+    // token-hash link along untouched, since nothing has been spent yet.
+    //
+    // Of the error codes, only otp_expired goes to reset-password: any other
+    // (a Google sign-in refused with signup_disabled, say) would read there
+    // as "This reset link is invalid or has expired" to someone who never
+    // asked for one — the mistake callback/page.tsx already fixed once.
     const hash = window.location.hash;
-    if (hash.includes("type=recovery") || hash.includes("type=invite")) {
+    if (new URLSearchParams(window.location.search).get("token_hash")) {
+      window.location.replace(`/auth/reset-password${window.location.search}`);
+      return;
+    }
+    if (
+      hash.includes("type=recovery") ||
+      hash.includes("type=invite") ||
+      hash.includes("error_code=otp_expired")
+    ) {
       window.location.replace(`/auth/reset-password${hash}`);
       return;
     }
@@ -90,7 +114,11 @@ export default function HomePage() {
         }
 
         setProfile(current);
-        const mine = (await listMyProjects()) as unknown as ProjectRow[];
+        // Asked alongside the list rather than after it, so the redirect
+        // below costs no extra wait.
+        const [mineRaw, cert] = await Promise.all([listMyProjects(), hasCertificationAccess()]);
+        const mine = mineRaw as unknown as ProjectRow[];
+        setCertAccess(cert);
 
         // A church client is on exactly one engagement and has no use for a
         // list of one. Send them straight in — "I want it to go directly to
@@ -118,7 +146,7 @@ export default function HomePage() {
          * Staff are excluded: an empty list is a real state for someone who is
          * about to create their first project, and they need the button.
          */
-        if (!current.is_staff && mine.length === 0 && current.certification_access) {
+        if (!current.is_staff && mine.length === 0 && cert) {
           router.replace("/certification");
           return;
         }
@@ -195,7 +223,10 @@ export default function HomePage() {
     router.replace("/auth/login");
   }
 
-  if (status === "checking") return <PageLoader label="Loading your projects…" />;
+  // Not "Loading your projects…": a framer with no projects (the whole
+  // certification cohort) is about to be sent on to /certification, and
+  // was being promised a list they don't have.
+  if (status === "checking") return <PageLoader label="Opening your portal…" />;
 
   if (status === "error") {
     return <AccessError onRetry={() => window.location.reload()} />;
@@ -242,7 +273,7 @@ export default function HomePage() {
         // — this page rendered the header without the prop, so it defaulted to
         // false and the switcher only ever appeared once you were inside a
         // project.
-        certificationAccess={(profile?.certification_access ?? false) || (profile?.is_staff ?? false)}
+        certificationAccess={certAccess}
       />
 
       <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
@@ -278,9 +309,7 @@ export default function HomePage() {
         {projects.length === 0 ? (
           <EmptyState
             isStaff={profile?.is_staff ?? false}
-            certificationAccess={
-              (profile?.certification_access ?? false) || (profile?.is_staff ?? false)
-            }
+            certificationAccess={certAccess}
           />
         ) : layout === "list" ? (
           <ul className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-200">

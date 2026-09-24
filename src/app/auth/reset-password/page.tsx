@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { updatePassword } from "@/lib/auth";
+import { takeResetNext, updatePassword } from "@/lib/auth";
 import AuthShell, {
   Field,
   FormError,
@@ -141,9 +141,21 @@ export default function ResetPasswordPage() {
           setReady("invalid");
           return;
         }
+        // The token is spent now and the session is open. If the password
+        // step below fails, a retry only needs updatePassword — verifying
+        // again would fail and call a good link "already used".
+        setTokenHash(null);
       }
-      await updatePassword(password);
-      router.push("/");
+      try {
+        await updatePassword(password);
+      } catch (e) {
+        // Supabase refuses a "new" password that matches the current one.
+        // That password already works, so they are in either way.
+        if ((e as { code?: string })?.code !== "same_password") throw e;
+      }
+      // Back to the guide link or shelf that sent them to sign in, if the
+      // reset was asked for from there in this browser; otherwise home.
+      router.push(takeResetNext());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update password");
     } finally {
@@ -215,13 +227,12 @@ export default function ResetPasswordPage() {
           </p>
           {spent && (
             <p className="text-sm leading-relaxed text-gray-500">
-              If this keeps happening, your organisation&rsquo;s email security may be
-              opening links before you do. Try the link from a personal email
-              address, or ask{" "}
+              If you asked for more than one link, only the newest one works, so use
+              the most recent email. If a fresh link says this too, email{" "}
               <a href="mailto:andrew@runfree.co" className="font-medium text-runfree-magentaDeep hover:underline">
                 andrew@runfree.co
               </a>{" "}
-              for help.
+              and he&rsquo;ll get you in.
             </p>
           )}
         </div>

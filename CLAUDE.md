@@ -2278,3 +2278,19 @@ had never opened one (5:34 pm ET, old shape — fine, their orgs do not
 scan, and the raised expiry applies at verify time), password links to
 the five whose links the scanner had spent (5:56 pm ET, new shape).
 `docs/auth-email-templates.md` holds the templates as pasted.
+
+
+## One Upper / Lower Room teaching (086, 24 Sept 2026)
+
+Andrew: "use this as the master upper room / lower room everywhere
+https://www.loom.com/share/46ca4a2e6b184bda9f2a746eb3886b78" (Will's 8/17/21
+overview, 12:07). Two other recordings had been playing under the same name —
+bbbbc289… ("18 - Upper Room Lower Room", 9:11) on both templates' Process
+tab, Mod #1, and ef1ec3b7… ("Upper/Lower Room Identity", 12:12) under the
+certification template's Master Teaching Videos and on the Kairos and North
+Carolina cohorts' highlight cards (copied from the template when those
+projects were made, so a template edit alone does not reach them). 086 moves
+all of them to 46ca4a2e; a full scan of every text column in the public
+schema afterwards finds no row playing either retired Loom. Migration 081
+still seeds B and C — history only; new projects read the template rows.
+If a teaching is ever swapped again, scan project_highlights too.

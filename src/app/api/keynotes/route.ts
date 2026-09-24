@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { requireCertificationAccess } from "@/lib/api-auth";
 import { listPresentations, isDriveConfigured } from "@/lib/keynotes";
+
+/**
+ * The deck listing in Next's shared data cache for a minute, so a cold
+ * serverless instance answers without walking Drive first (about 1.3 s on
+ * the live site). Same reasoning as /api/library.
+ */
+const cachedPresentations = unstable_cache(() => listPresentations(), ["keynote-listing-v1"], {
+  revalidate: 60,
+  tags: ["keynote-listing"],
+});
 
 /** GET /api/keynotes — the decks, each with whichever formats exist in Drive. */
 export async function GET(req: NextRequest) {
@@ -15,7 +26,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ presentations: await listPresentations() });
+    return NextResponse.json(
+      { presentations: await cachedPresentations() },
+      { headers: { "Cache-Control": "private, max-age=60, stale-while-revalidate=300" } }
+    );
   } catch (error) {
     console.error("Keynote list failed:", error);
     return NextResponse.json(

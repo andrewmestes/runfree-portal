@@ -208,7 +208,11 @@ export default function FilePreview({
               <PdfPageViewer blobUrl={blobUrl} onFail={() => setCanvasFailed(true)} />
             ) : (
               <iframe
-                src={`${blobUrl}#toolbar=0&navpanes=0&statusbar=0`}
+                // The browser's own toolbar stays on: it is the page number
+                // and go-to-page box a framer needs to say "turn to page 88"
+                // in a room. It had been hidden, which left desktop with no
+                // way to tell or choose the page at all.
+                src={`${blobUrl}#navpanes=0`}
                 title={file.title}
                 className="h-full w-full border-0"
               />

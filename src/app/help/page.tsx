@@ -383,6 +383,17 @@ export default function HelpPage() {
               there carries the Pivvot mark, so you can always tell which part of the
               portal you are in.
             </Faq>
+            <Faq q="Start here: your first week">
+              New to the hub? The <strong>Start here</strong> card at the top of it walks
+              you through six steps, each linking to the right place: read the
+              Certification Companion Guide, pages 3&ndash;10; get to know the Digital
+              Facilitator&rsquo;s Guide; watch the Orientation videos; see where
+              everything lives (Handouts by module, Training Videos&rsquo; two tabs,
+              Books, Keynotes); share a video with a client; and open the Preparation
+              Checklist for your first session. Tick each one off as you go. Your
+              ticks are kept in this browser, and <strong>Hide</strong> tucks the card
+              away &mdash; <em>Show the Start here steps</em> on the hub brings it back.
+            </Faq>
             <Faq q="What is the Certification Companion Guide?">
               Will&rsquo;s orientation to the certification: the bird&rsquo;s-eye view
               of how you will learn to use Pivvot Vision Framing. If you are in a cohort,
@@ -414,6 +425,14 @@ export default function HelpPage() {
               for everyone as soon as it is replaced there. If something still looks
               stale a little later, reload the page — and if it is still wrong, tell
               Andrew, who can force a fresh read from Drive.
+            </Faq>
+            <Faq q="Finding a page in the guide or a handout">
+              When a guide or handout is open in the portal, the page number and a{" "}
+              <em>go to page</em> box are at the top of it. On a computer this is your
+              browser&rsquo;s own PDF toolbar; on a phone or iPad it is the bar above
+              the pages, with arrows for the page before and after. Type a number and
+              press Go (or Return) to jump straight there &mdash; handy when you say
+              &ldquo;turn to page 88&rdquo; in a room.
             </Faq>
             <Faq q="Links in the Digital Facilitator&rsquo;s Guide">
               The handout and video icons in the guide point at the portal, not at
@@ -460,6 +479,10 @@ export default function HelpPage() {
               <em>Video Clips</em> do not, for now, so play those in the room. If a
               video is later taken down or moved, a link you already sent opens a
               RunFree page asking them for a fresh one; copy it again from the tab.
+              To send a whole module as pre-work, use <strong>Copy this
+              module&rsquo;s videos</strong> beside its heading: it copies a ready-to-paste
+              list of that module&rsquo;s client videos, each with its length and its
+              link.
             </Faq>
             <Faq q="What is the difference between this and a church project?">
               The certification library is <em>your</em> material as a facilitator — how

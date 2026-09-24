@@ -192,8 +192,102 @@ export default function PdfPageViewer({
     hostRef.current?.querySelector(`[data-page="${idx}"]`)?.scrollIntoView({ block: "start" });
   };
 
+  /**
+   * Which page is on screen, and a box to go to any page. Andrew picked
+   * "page numbers and a go-to-page box in the guide viewer" as the next
+   * thing to build: in a room, "turn to page 88" meant scrolling a phone
+   * past 87 pages. The page counted as current is the one crossing a line a
+   * third of the way down the viewport — what a reader thinks of as "the
+   * page I'm on" when two are half visible.
+   */
+  const [current, setCurrent] = useState(1);
+  const [draft, setDraft] = useState("1");
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !doc) return;
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const line = host.scrollTop + host.clientHeight / 3;
+        const items = host.querySelectorAll<HTMLElement>("li[data-page]");
+        let page = 1;
+        for (const li of items) {
+          if (li.offsetTop <= line) page = Number(li.dataset.page) + 1;
+          else break;
+        }
+        setCurrent(page);
+      });
+    };
+    onScroll();
+    host.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      host.removeEventListener("scroll", onScroll);
+    };
+  }, [doc, width]);
+  useEffect(() => {
+    if (!editing) setDraft(String(current));
+  }, [current, editing]);
+
+  const goToPage = (n: number) => {
+    if (!doc) return;
+    const page = Math.min(Math.max(1, Math.round(n)), doc.numPages);
+    hostRef.current?.querySelector(`[data-page="${page - 1}"]`)?.scrollIntoView({ block: "start" });
+    setCurrent(page);
+  };
+
   return (
-    <div ref={hostRef} className="h-full overflow-y-auto overscroll-contain bg-gray-100 px-3 py-3">
+    <div className="flex h-full flex-col bg-gray-100">
+      {doc && doc.numPages > 1 && (
+        <div className="flex shrink-0 items-center justify-center gap-2 border-b border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600">
+          <button
+            type="button"
+            onClick={() => goToPage(current - 1)}
+            disabled={current <= 1}
+            aria-label="Previous page"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-runfree-ink transition hover:bg-gray-100 disabled:opacity-30"
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12.5 4.5L7 10l5.5 5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const n = Number(draft);
+              if (Number.isFinite(n) && n > 0) goToPage(n);
+              else setDraft(String(current));
+              (document.activeElement as HTMLElement | null)?.blur();
+            }}
+            className="flex items-center gap-1.5"
+          >
+            <label htmlFor="pdf-page" className="sr-only">Go to page</label>
+            <span aria-hidden="true">Page</span>
+            <input
+              id="pdf-page"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              enterKeyHint="go"
+              value={draft}
+              onFocus={(e) => { setEditing(true); e.currentTarget.select(); }}
+              onBlur={() => setEditing(false)}
+              onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+              className="h-9 w-14 rounded-md border border-gray-300 text-center text-base text-runfree-ink outline-none focus:border-runfree-magenta focus:ring-2 focus:ring-runfree-magenta/25"
+            />
+            <span>of {doc.numPages}</span>
+          </form>
+          <button
+            type="button"
+            onClick={() => goToPage(current + 1)}
+            disabled={current >= doc.numPages}
+            aria-label="Next page"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-runfree-ink transition hover:bg-gray-100 disabled:opacity-30"
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M7.5 4.5L13 10l-5.5 5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+        </div>
+      )}
+    <div ref={hostRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
       {doc && width > 0 ? (
         <ul className="mx-auto flex max-w-3xl flex-col gap-3">
           {Array.from({ length: doc.numPages }, (_, i) => (
@@ -223,6 +317,7 @@ export default function PdfPageViewer({
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }

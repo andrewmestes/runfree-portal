@@ -67,6 +67,8 @@ export default function ResourcesPage() {
 
     const res = await fetch(`/api/library${fresh ? "?fresh=1" : ""}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
+      // Refresh means "read Drive now", not "the copy the browser kept".
+      ...(fresh ? { cache: "no-store" as RequestCache } : {}),
     });
     const body = await res.json();
 
@@ -99,6 +101,10 @@ export default function ResourcesPage() {
 
       // Independent questions, asked together. They used to be awaited one
       // after the other, which meant two full round-trips where one would do.
+      // The listing and the admin check go out with the access checks — the
+      // API gates itself — so the page waits one round trip, not four.
+      const library = loadLibrary();
+      const admin = isPortalAdmin();
       const [current, allowed] = await Promise.all([
         getCurrentFramer() as Promise<Framer | null>,
         hasCertificationAccess(),
@@ -112,8 +118,8 @@ export default function ResourcesPage() {
       setStatus("loading");
 
       setFramer(current);
-      setCanRefresh(await isPortalAdmin());
-      await loadLibrary();
+      const [, canRefreshNow] = await Promise.all([library, admin]);
+      setCanRefresh(canRefreshNow);
       setStatus("ready");
     }
     init().catch((err) => {

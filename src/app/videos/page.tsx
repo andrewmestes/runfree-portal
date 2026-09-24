@@ -647,6 +647,9 @@ export default function VideosPage() {
                   <span className="rounded-full bg-runfree-indigo px-2.5 py-0.5 text-xs font-semibold text-runfree-navy">
                     {group.videos.length}
                   </span>
+                  {tab === "clients" && group.videos.some(isShareable) && (
+                    <CopyModuleButton label={group.label} videos={group.videos} className="ml-auto" />
+                  )}
                 </header>
 
                 {/* Four across on wide screens: at three, twenty videos ran to
@@ -782,6 +785,78 @@ export default function VideosPage() {
  * and says so for two seconds. Compact on the card (an icon pill over the
  * thumbnail), spelled out in the player.
  */
+/**
+ * "Copy this module's videos": one tap puts a ready-to-send list on the
+ * clipboard — the module, then each client video with its length and its
+ * public /watch link — to paste into an email or text as pre-work. Andrew
+ * picked it from the review's ideas ("a button that copies a module's
+ * client videos as a ready-to-send list"). Only videos that have a public
+ * address are listed; the Drive clips stream behind a sign-in and are left
+ * out rather than sent as links a client cannot open.
+ */
+function CopyModuleButton({
+  label,
+  videos,
+  className = "",
+}: {
+  label: string;
+  videos: Video[];
+  className?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  async function copy() {
+    const lines = videos
+      .filter(isShareable)
+      .map((v) => {
+        const { duration } = splitVideoMeta(v.description);
+        return `• ${v.title}${duration ? ` (${duration})` : ""}: ${shareUrl(v)}`;
+      });
+    const text = `${label} — videos to watch before we meet:\n\n${lines.join("\n")}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt("Copy these links for your client:", text);
+    }
+    setCopied(true);
+  }
+
+  const count = videos.filter(isShareable).length;
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={`Copy all ${count} of this module's client videos as a list you can send — each link opens without a sign-in`}
+      aria-label={copied ? "List copied" : `Copy ${label} videos as a list for a client`}
+      className={`${className} inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm transition sm:text-sm ${
+        copied ? "bg-runfree-magenta text-white" : "bg-runfree-pink text-runfree-magentaDeep hover:bg-runfree-magenta hover:text-white"
+      }`}
+    >
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        {copied ? (
+          <path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" />
+        ) : (
+          <>
+            <path d="M7 5h9M7 10h9M7 15h9" strokeLinecap="round" />
+            <path d="M3.5 5h.01M3.5 10h.01M3.5 15h.01" strokeLinecap="round" strokeWidth="2.4" />
+          </>
+        )}
+      </svg>
+      {copied ? "Copied" : (
+        <>
+          <span className="sm:hidden">Copy list</span>
+          <span className="hidden sm:inline">Copy this module&rsquo;s videos</span>
+        </>
+      )}
+    </button>
+  );
+}
+
 function CopyLinkButton({
   getUrl,
   className = "",

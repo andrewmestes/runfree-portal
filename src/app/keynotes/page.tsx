@@ -55,6 +55,20 @@ export default function KeynotesPage() {
         router.replace(loginUrlHere());
         return;
       }
+      // The deck list is asked for alongside the access checks rather than
+      // after them — the API gates itself, so nothing leaks if access turns
+      // out to be denied, and the page no longer waits three round trips in
+      // a row before the first byte of the list.
+      const listing = (async () => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return null;
+        const res = await fetch("/api/keynotes", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        return { ok: res.ok, body: await res.json() };
+      })();
       const [current, allowed] = await Promise.all([
         getCurrentFramer() as Promise<Framer | null>,
         hasCertificationAccess(),
@@ -69,16 +83,10 @@ export default function KeynotesPage() {
       // as a permissions problem to someone who had every right to be here.
       setStatus("loading");
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        const res = await fetch("/api/keynotes", {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        const body = await res.json();
-        if (!res.ok) setLoadError(body.error || "Could not load the presentations.");
-        else setDecks(body.presentations ?? []);
+      const result = await listing;
+      if (result) {
+        if (!result.ok) setLoadError(result.body.error || "Could not load the presentations.");
+        else setDecks(result.body.presentations ?? []);
       }
       setStatus("ready");
     }

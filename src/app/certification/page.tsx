@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import PortalHeader from "@/components/PortalHeader";
 import PortalFooter from "@/components/PortalFooter";
+import StartHere from "@/components/StartHere";
 import { supabase } from "@/lib/supabase";
 import { getCurrentProfile, hasCertificationAccess, listMyProjects, loginUrlHere } from "@/lib/auth";
 
@@ -99,14 +100,16 @@ export default function CertificationHubPage() {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session || cancelled) return;
-      try {
-        await fetch("/api/companion/file/current", {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          priority: "low",
-        } as RequestInit);
-      } catch {
-        // Nothing to do; the card fetches for itself when opened.
-      }
+      // The Handouts and Keynotes lists too: both answer with a minute's
+      // private cache, so the card opens on a list already in the browser.
+      const headers = { Authorization: `Bearer ${session.access_token}` };
+      await Promise.all(
+        ["/api/library", "/api/keynotes", "/api/companion/file/current"].map((url) =>
+          fetch(url, { headers, priority: "low" } as RequestInit).catch(() => {
+            // Nothing to do; each page fetches for itself when opened.
+          })
+        )
+      );
     })();
     return () => { cancelled = true; };
   }, [status]);
@@ -181,6 +184,7 @@ export default function CertificationHubPage() {
       />
 
       <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <StartHere />
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <HubCard
             href="/guide"

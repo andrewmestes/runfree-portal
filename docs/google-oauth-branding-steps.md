@@ -27,7 +27,8 @@ that, and Google refuses `portal.runfree.co` as an authorized domain.
 > lives between sessions: the preparation checklist, session recordings and
 > notes, the handouts and teaching videos for each tool, the team's
 > deliverables — mission, values, strategy, measures and the Horizon
-> Storyline — and the tasks the team has committed to.
+> Storyline — and the tasks the team has committed to. Certified Vision
+> Framers also use it for their certification resources.
 >
 > Access is by invitation only. Sign in with the email address your RunFree
 > coach invited, or with a Google account that uses that same address.

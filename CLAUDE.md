@@ -2325,18 +2325,38 @@ that). The old `/guide/how-to-use` explainer is now only a redirect to
 How it works:
 
 - Each step is one guide page. Everything except `spots` is dimmed.
-- An arrow runs from the note into the spot.
-- Progress is a bar, with no step numbers.
+- On the same page the bright spot glides to its next place (`useGlide`);
+  a new page fades in. The dim layer is keyed by page, not by step: keyed
+  by step, it blinked to full brightness on every Next.
+- 13 of the 21 steps have an arrow pointing into the spot. Give every arrow
+  a slight bow: the gradient is sized to the arrow's own box, so a dead-straight
+  horizontal or vertical arrow loses its colour and draws plain white.
+- A double-click on a hotspot counts once (`e.detail > 1`): the logo sits in
+  the same place on steps 17 and 18, and a double-click skipped "And up again".
+- Progress is a bar, with no step numbers. Screen readers hear "Step N of
+  21" (`aria-valuetext`).
 - On a `click` step, a pulsing hotspot over the real link moves the tour on,
-  just as the guide's own link would.
+  just as the guide's own link would. Its tap area is at least 44 px
+  (`MIN_HIT`), however small the page; the pulse stays the size of the link.
+- The notes say "Click" with a mouse and "Tap" on a touch screen (`<Tap />`).
 - Next, Back, ←/→ and Esc work everywhere. Nothing advances on its own.
-- On a phone the note docks under the page.
+- The note floats on the page when the page gets at least 840 px
+  (`FLOAT_MIN`). Otherwise `layoutFor` puts it beside the page (a 300–420 px
+  column) or under it, whichever leaves the bigger page: beside on short
+  laptops, 1024 × 768 iPads and phones on their side; under on upright
+  phones and iPads. Below 500 px of window height the padding tightens.
+- `/guide` fetches the stills a second after it settles
+  (`prefetchGuideStills`), so the tour opens on the cover, not "Loading…".
+- With no guide file (Drive down), `?tour=1` still opens the tour, and its
+  last button reads "Done" instead of "Open the Guide".
 
-The route is menu → Disciple's Journey → 3.9 → front (number, timer, what
-goes up) → back (header, Big Idea, How It Works, Coaching Tips,
-handout/video icons, module and phrase) → logo → Tool List → logo → menu →
-Kingdom Platform → 4.1 → the end. The Tool List step also covers the
-module's name and icon, which open its title slide (p71/p100).
+The route (21 steps) is cover → menu → Disciple's Journey → its Tool List →
+the module's name and icon, which open its title slide (p71; p100 for
+Kingdom Platform) → 3.9 → front (number, timer, what goes up) → back (the
+next page, reached by scrolling: header, Big Idea, How It Works, Coaching
+Tips, module and phrase, icons) → logo → Tool List → logo → menu → Kingdom
+Platform → 4.1 → the end. The back comes in the order Andrew listed it.
+No front links to its back; the tour says so.
 
 The claims were checked against the whole September PDF, not one example:
 
@@ -2349,7 +2369,8 @@ The claims were checked against the whole September PDF, not one example:
 - Every back has Big Idea, How It Works and Coaching Tips.
 - None of the 31 grey icons has a link.
 
-Re-check those counts against a new edition.
+Re-check those counts against a new edition, and the page count the tour's
+first and last notes state ("172 pages").
 
 **The stills are private.** They are guide pages 1, 2, 5, 6, 89, 90 and 102.
 The back of 3.9 is certification-only teaching.

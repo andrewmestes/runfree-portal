@@ -11,7 +11,7 @@ import AccessError from "@/components/AccessError";
 import PortalFooter from "@/components/PortalFooter";
 import FilePreview, { PreviewFile } from "@/components/FilePreview";
 import PdfThumbnail from "@/components/PdfThumbnail";
-import GuideTour from "@/components/GuideTour";
+import GuideTour, { prefetchGuideStills } from "@/components/GuideTour";
 
 type Framer = {
   id: string;
@@ -129,7 +129,7 @@ export default function GuidePage() {
   /**
    * Warm the guide while the cover is on screen. The file route answers with
    * a five-minute private cache and an ETag, so this one low-priority fetch
-   * means "Open the Guide" reads 16.6 MB from the browser's own copy instead
+   * means "Open the Guide" reads 25 MB from the browser's own copy instead
    * of waiting on Drive. Fire-and-forget: if it fails, the preview fetches
    * for itself exactly as before.
    */
@@ -153,6 +153,14 @@ export default function GuidePage() {
     return () => {
       cancelled = true;
     };
+  }, [file]);
+
+  // The tour's seven stills (about 850 KB), a moment after the page settles,
+  // so "How it works" opens on the guide's cover instead of "Loading…".
+  useEffect(() => {
+    if (!file) return;
+    const t = window.setTimeout(() => void prefetchGuideStills(), 1000);
+    return () => window.clearTimeout(t);
   }, [file]);
 
   /**
@@ -262,9 +270,9 @@ export default function GuidePage() {
             <div className="p-6 text-center sm:p-10">
               {file ? (
                 <>
-                  {/* The guide's own title slide — a 168-page playbook deserves
+                  {/* The guide's own title slide — a 172-page playbook deserves
                       to show its face rather than sit behind a text link.
-                      Always the real cover, not a live PDF render: at 16.6MB
+                      Always the real cover, not a live PDF render: at 25 MB
                       the guide sits well over PdfThumbnail's 12MB cap, so the
                       fallback is what actually renders every time. Handing it
                       the guide's own designed cover (rather than the generic
@@ -343,7 +351,7 @@ export default function GuidePage() {
 
       <PortalFooter />
 
-      <GuideTour open={tourOpen} onClose={() => setTourOpen(false)} onOpenGuide={openGuide} />
+      <GuideTour open={tourOpen} onClose={() => setTourOpen(false)} onOpenGuide={file ? openGuide : undefined} />
 
       {preview && (
         <FilePreview

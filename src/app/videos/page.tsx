@@ -120,9 +120,9 @@ const embeds = (v: Video) => Boolean(parseVideoUrl(v.url).embedUrl);
  * or null where there is none. The client shelf's database videos get one,
  * and so does a walkthrough that is the same film as one of them (twinOf):
  * its link opens that client row, never the Drive file. A Video Clips film
- * gets /watch/{slug} when it has an official public version
- * (lib/clip-shares.ts), which that page plays instead of our copy. Every
- * other walkthrough stays private. shareId is the one predicate: the button
+ * gets /watch/{slug} when it has an entry in lib/clip-shares.ts: the maker's
+ * own public version, or our copy for a `stream` entry. Every other
+ * walkthrough stays private. shareId is the one predicate: the button
  * shows exactly when there is an address to copy.
  */
 const shareId = (v: Video) => {
@@ -811,10 +811,9 @@ export default function VideosPage() {
  * public /watch link — to paste into an email or text as pre-work. Andrew
  * picked it from the review's ideas ("a button that copies a module's
  * client videos as a ready-to-send list"). Only videos that have a public
- * address are listed. A Video Clips film with an official public version
- * (lib/clip-shares.ts) is listed under that entry's title, not its Drive
- * filename. Every other Drive file streams behind a sign-in and is left out,
- * rather than sent as a link a client cannot open.
+ * address are listed. A Video Clips film with an entry in lib/clip-shares.ts
+ * is listed under that entry's title, not its Drive filename. Every other
+ * Drive file is left out, rather than sent as a link a client cannot open.
  */
 function CopyModuleButton({
   label,

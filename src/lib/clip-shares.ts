@@ -5,18 +5,24 @@
  * Andrew, 24 Sept 2026: "the 'video clips' in the training videos for
  * clients don't have a sharable link." Most of those films are other
  * people's work (a TED talk, a CNN segment, a podcast, film scenes), so a
- * share link never puts our Drive copy on an open address. It opens
+ * share link never puts our Drive copy on an open address (except the two
+ * `stream` films below). It opens
  * /watch/{slug}, which plays the rights-holder's OWN public version — TED's
  * YouTube upload, Carey Nieuwhof's channel, Fast Company's player — or, where
  * that cannot be embedded (CNN), sends the viewer to it. Each source below
  * was found and then re-checked by a second researcher: same film, same cut
  * (or the exact section of a longer one), uploaded by the owner.
  *
- * A clip with no entry has no Copy link: no official public version was
- * found (Mr. Holland's Opus; Hope Baptist's "Jesus Follower" film, which
- * Will uploaded privately — no public copy of it was found), or the only
- * official one is a different cut (Smoke — Movieclips has 2:41 of the 6:56
- * scene). Those are Andrew's call.
+ * Two films have no official public version anywhere — Mr. Holland's Opus
+ * and Hope Baptist's "Jesus Follower" film (Will's private upload). Andrew,
+ * 25 Sept: "make the mr. holland's opus clip available to be shared … figure
+ * out the hope baptist one." Those two are `stream`: the page plays OUR
+ * copy, through /api/clips/{slug}/video, which serves only a clip marked
+ * `stream` here and never a Drive id from the request. The Drive files
+ * themselves stay private.
+ *
+ * A clip with no entry has no Copy link: Smoke, whose only official version
+ * (Movieclips) is 2:41 of our 6:56 scene — Andrew is watching it to decide.
  *
  * Keyed by the Drive file id. A clip re-uploaded to Drive (rather than
  * replaced with Manage versions) gets a new id and silently loses its link:
@@ -30,12 +36,14 @@ export type ClipShare = {
   title: string;
   /** One line under the title: who made it and what it is. */
   about: string;
-  /** Who published the version the page plays or links to. */
+  /** Who published the version the page plays or links to, or who made the film. */
   source: string;
-  /** What the page puts in its player: an embeddable address. Absent: the page links out instead. */
+  /** What the page puts in its player: an embeddable address. Absent: the page plays our copy (`stream`) or links out to `href`. */
   embed?: string;
-  /** The rights-holder's own page for the film — always shown, and the whole page when there is no embed. */
-  href: string;
+  /** No official version exists: the page plays our own copy, streamed from Drive. */
+  stream?: true;
+  /** The rights-holder's own page for the film — shown as "Watch the original", and the whole page when there is no embed or stream. */
+  href?: string;
   /** The picture for link previews (and the page, when it cannot embed). */
   poster: string;
 };
@@ -95,6 +103,25 @@ export const CLIP_SHARES: ClipShare[] = [
     embed: "https://www.youtube-nocookie.com/embed/firgtj7hAJQ?rel=0",
     href: "https://www.youtube.com/watch?v=firgtj7hAJQ",
     poster: "https://i.ytimg.com/vi/firgtj7hAJQ/maxresdefault.jpg",
+  },
+  {
+    driveId: "1D_6-WT2qM51Wej93_p5YaYo2eV2ld6_P",
+    slug: "mr-hollands-opus-play-the-sunset",
+    title: "Mr. Holland’s Opus: Play the Sunset",
+    about: "Glenn Holland (Richard Dreyfuss) tells a struggling clarinetist to stop reading the notes and play the sunset (4½ min).",
+    source: "Mr. Holland’s Opus (1995)",
+    stream: true,
+    poster: "/brand/videos/drive/1D_6-WT2qM51Wej93_p5YaYo2eV2ld6_P.jpg",
+  },
+  {
+    driveId: "1kpUGeGrdbrkCAFQPPmxltuM4ViQxgL3u",
+    slug: "hope-baptist-jesus-follower",
+    title: "Hope Baptist: The Life of a Jesus Follower",
+    about:
+      "A short animated film from Hope Baptist Church: Jesus living His life in and through us, the three words Hope uses for our relationships, and the time we give them (3 min).",
+    source: "Hope Baptist Church",
+    stream: true,
+    poster: "/brand/videos/drive/1kpUGeGrdbrkCAFQPPmxltuM4ViQxgL3u.jpg",
   },
 ];
 

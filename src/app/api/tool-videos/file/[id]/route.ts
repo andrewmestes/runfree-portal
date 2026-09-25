@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { contentDisposition } from "@/lib/content-disposition";
 import { fetchDriveFileRange } from "@/lib/drive";
 import { verifyTicket } from "@/lib/tool-videos";
+import { clampRange, driveErrorStatus } from "@/lib/video-range";
 
 /**
  * GET /api/tool-videos/file/{id}?t={ticket}
@@ -12,18 +13,12 @@ import { verifyTicket } from "@/lib/tool-videos";
  * is the access check; it was minted by the ticket route after the session
  * and the folder membership were both verified.
  *
- * Each ranged request is short, which is what keeps a 3.5 GB video inside
- * a serverless function's time limit: the browser never asks for the whole
- * file at once.
+ * Every range is capped at an 8 MB slice (lib/video-range.ts), which is what
+ * keeps a 3.5 GB video inside a serverless function's time limit: a player
+ * opening with `bytes=0-`, or Safari asking for `bytes=0-<size-1>`, gets a
+ * slice and asks for the next one itself.
  */
 export const maxDuration = 60;
-
-/**
- * How much to answer an open-ended request with. Big enough that playback
- * starts and keeps going while the next slice is fetched, small enough that
- * the function is never streaming hundreds of megabytes.
- */
-const FIRST_SLICE_BYTES = 8 * 1024 * 1024;
 
 export async function GET(
   req: NextRequest,
@@ -35,15 +30,8 @@ export async function GET(
       return NextResponse.json({ error: "This link has expired — open the video again" }, { status: 401 });
     }
 
-    // A player opens with `Range: bytes=0-`, meaning "send it all". Passed
-    // through, Drive starts pushing a 600 MB file through this function and
-    // the picture waits on it. Answering the first open-ended ask with a
-    // slice instead makes the browser range-request the rest itself, which
-    // is what it does for the seek bar anyway.
-    const asked = req.headers.get("range");
-    const range = asked && /^bytes=\d+-$/.test(asked.trim())
-      ? `${asked.trim()}${Number(asked.trim().slice(6, -1)) + FIRST_SLICE_BYTES - 1}`
-      : asked;
+    const range = clampRange(req.headers.get("range"));
+    if (range === "bad") return new NextResponse(null, { status: 416, headers: { "Accept-Ranges": "bytes" } });
     const file = await fetchDriveFileRange(id, range);
 
     const headers: Record<string, string> = {
@@ -57,6 +45,7 @@ export async function GET(
 
     return new NextResponse(file.body, { status: file.status, headers });
   } catch (error) {
+    if (driveErrorStatus(error) === 416) return new NextResponse(null, { status: 416, headers: { "Accept-Ranges": "bytes" } });
     console.error("Tool video stream failed:", error);
     return NextResponse.json({ error: "Could not play that video" }, { status: 500 });
   }

@@ -2190,10 +2190,23 @@ Fast Company's own video page (its YouTube copy is private, and Fast
 Company's embeddable player runs an ad and then autoplays other videos).
 YouTube embeds carry `rel=0`. Every
 source was found and then re-checked by a second researcher: same film,
-same cut or the exact section, uploaded by the owner. No link, on purpose:
-Mr. Holland's Opus (no official version online), Hope Baptist's "Jesus
-Follower" film (Will's private upload; no public copy was found)
-and Smoke (Movieclips' official clip is 2:41 of our 6:56 scene). A clip re-uploaded to Drive gets
+same cut or the exact section, uploaded by the owner. Two films have no
+official version anywhere — Mr. Holland's Opus and Hope Baptist's "Jesus
+Follower" film (Will's private upload) — and Andrew chose to share them
+anyway (25 Sept: "make the mr. holland's opus clip available to be shared
+… figure out the hope baptist one"). They are `stream` entries: /watch
+plays OUR copy through `/api/clips/{slug}/video`, a public route that
+serves only a clip marked `stream` in `clip-shares.ts`, by slug, never a
+Drive id from the request (`public, max-age=3600`; noindex). Both it and
+the tool-video route cap EVERY range at 8 MB (`lib/video-range.ts`):
+Safari asks for `bytes=0-<size-1>` outright, and passed through, a whole
+film on a phone's connection can outlast the function's 60 s and cut off.
+Multi-range and junk get 416. The Drive files stay
+private. No link: Smoke (Movieclips' official clip is 2:41 of our 6:56
+scene; Andrew is comparing the two). The clip files were renamed in Drive
+the same day at Andrew's word ("Mr. Holland's Opus: Play the Sunset",
+"Smoke: My Life's Work", …), and the Crowd Cloud copies of those two with
+them, so `isClipTwin` still pairs them. A clip re-uploaded to Drive gets
 a new id and loses its link; update `clip-shares.ts`. `site-shot.ts`
 captures the page as `watch`.
 

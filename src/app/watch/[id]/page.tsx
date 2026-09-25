@@ -17,10 +17,11 @@ import { clipShareBySlug, type ClipShare } from "@/lib/clip-shares";
  *
  * Two kinds of address. /watch/{uuid} is a `training_videos` row that
  * embeds (Loom, YouTube, Vimeo). /watch/{slug} is one of the Video Clips
- * films (lib/clip-shares.ts), and it plays the rights-holder's own public
- * version — never our Drive copy, which streams only to a signed-in framer —
- * or links out to it where it cannot be embedded. The facilitator
- * walkthroughs never get a public address at all.
+ * films (lib/clip-shares.ts): it plays the rights-holder's own public
+ * version, links out to it where it cannot be embedded, or, for the two
+ * `stream` films with no official version anywhere, plays our copy through
+ * /api/clips/{slug}/video. The facilitator walkthroughs never get a public
+ * address at all.
  */
 
 export const dynamic = "force-dynamic";
@@ -110,9 +111,10 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
 }
 
 /**
- * A Video Clips film: the rights-holder's own player when it embeds, and
- * always a plain link to the original, so the source is named and the film
- * still opens if the embed is ever withdrawn.
+ * A Video Clips film: the rights-holder's own player when it embeds, and a
+ * plain link to the original, so the source is named and the film still
+ * opens if the embed is ever withdrawn. A `stream` clip has no official
+ * version anywhere; it plays our own copy (/api/clips/{slug}/video).
  */
 function ClipWatch({ clip }: { clip: ClipShare }) {
   return (
@@ -128,6 +130,18 @@ function ClipWatch({ clip }: { clip: ClipShare }) {
               title={clip.title}
             />
           </div>
+        ) : clip.stream ? (
+          <video
+            src={`/api/clips/${clip.slug}/video`}
+            poster={clip.poster}
+            controls
+            playsInline
+            preload="metadata"
+            controlsList="nodownload"
+            className="aspect-video w-full bg-black"
+          >
+            {clip.title}
+          </video>
         ) : (
           <a
             href={clip.href}
@@ -156,10 +170,15 @@ function ClipWatch({ clip }: { clip: ClipShare }) {
         </h1>
         <p className="mt-3 text-base leading-relaxed text-white/75">{clip.about}</p>
         <p className="mt-3 text-sm text-white/55">
-          From {clip.source} ·{" "}
-          <a href={clip.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-white/80 underline decoration-white/30 underline-offset-2 transition hover:text-white">
-            Watch the original
-          </a>
+          From {clip.source}
+          {clip.href && (
+            <>
+              {" · "}
+              <a href={clip.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-white/80 underline decoration-white/30 underline-offset-2 transition hover:text-white">
+                Watch the original
+              </a>
+            </>
+          )}
         </p>
         <p className="mt-6 text-sm text-white/55">
           Shared with you by a Certified Vision Framer. Part of the process RunFree uses to help churches run free into what Jesus started.

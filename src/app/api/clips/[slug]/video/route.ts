@@ -9,8 +9,8 @@ import { clampRange, driveErrorStatus } from "@/lib/video-range";
  * public /watch/{slug} page, with no sign-in.
  *
  * Only a clip marked `stream` in lib/clip-shares.ts is served — the films
- * with no official public version that Andrew chose to share anyway (25
- * Sept). The Drive id comes from that list, never from the request, so no
+ * with no usable official public version that Andrew chose to share anyway
+ * (25 Sept: Mr. Holland's Opus, Smoke, the Hope Baptist film). The Drive id comes from that list, never from the request, so no
  * other file in Drive can be reached through here. Every other clip's page
  * plays or links to the maker's own copy and does not use this route.
  *

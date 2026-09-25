@@ -483,9 +483,8 @@ export default function HelpPage() {
               (the TED talk, the Carey Nieuwhof interview, the Gospel Coalition roundtable,
               and the CNN and Fast Company pieces): the link opens the maker&rsquo;s own
               version (the CNN and Fast Company ones on their own sites), never our copy.
-              Mr. Holland&rsquo;s Opus and the Hope Baptist film have no public version
-              anywhere, so their links play our own copy on the same RunFree page. Smoke
-              has no link yet, so play it in the room. If a
+              The two movie scenes and the Hope Baptist film have no usable public
+              version, so their links play our own copy on the same RunFree page. If a
               video is later taken down or moved, a link you already sent opens a
               RunFree page asking them for a fresh one; copy it again from the tab.
               To send a whole module as pre-work, use <strong>Copy this

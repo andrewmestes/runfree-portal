@@ -5,7 +5,7 @@
  * Andrew, 24 Sept 2026: "the 'video clips' in the training videos for
  * clients don't have a sharable link." Most of those films are other
  * people's work (a TED talk, a CNN segment, a podcast, film scenes), so a
- * share link never puts our Drive copy on an open address (except the two
+ * share link never puts our Drive copy on an open address (except the
  * `stream` films below). It opens
  * /watch/{slug}, which plays the rights-holder's OWN public version — TED's
  * YouTube upload, Carey Nieuwhof's channel, Fast Company's player — or, where
@@ -13,16 +13,15 @@
  * was found and then re-checked by a second researcher: same film, same cut
  * (or the exact section of a longer one), uploaded by the owner.
  *
- * Two films have no official public version anywhere — Mr. Holland's Opus
- * and Hope Baptist's "Jesus Follower" film (Will's private upload). Andrew,
- * 25 Sept: "make the mr. holland's opus clip available to be shared … figure
- * out the hope baptist one." Those two are `stream`: the page plays OUR
- * copy, through /api/clips/{slug}/video, which serves only a clip marked
- * `stream` here and never a Drive id from the request. The Drive files
- * themselves stay private.
- *
- * A clip with no entry has no Copy link: Smoke, whose only official version
- * (Movieclips) is 2:41 of our 6:56 scene — Andrew is watching it to decide.
+ * Three films have no usable official version — Mr. Holland's Opus and
+ * Hope Baptist's "Jesus Follower" film (Will's private upload) have none at
+ * all, and Smoke's (Movieclips) is 2:41 of our 6:56 scene. Andrew, 25 Sept:
+ * "make the mr. holland's opus clip available to be shared … figure out the
+ * hope baptist one", and of Smoke: "the 2:41 smoke clip won't work. do the
+ * same for ours". Those three are `stream`: the page plays OUR copy,
+ * through /api/clips/{slug}/video, which serves only a clip marked `stream`
+ * here and never a Drive id from the request. The Drive files themselves
+ * stay private. Every Video Clips film now has a link.
  *
  * Keyed by the Drive file id. A clip re-uploaded to Drive (rather than
  * replaced with Manage versions) gets a new id and silently loses its link:
@@ -112,6 +111,16 @@ export const CLIP_SHARES: ClipShare[] = [
     source: "Mr. Holland’s Opus (1995)",
     stream: true,
     poster: "/brand/videos/drive/1D_6-WT2qM51Wej93_p5YaYo2eV2ld6_P.jpg",
+  },
+  {
+    driveId: "1BSPDsFMHqATSxcQ7QqCMww_uoNrzi6I0",
+    slug: "smoke-my-lifes-work",
+    title: "Smoke: My Life’s Work",
+    about:
+      "Auggie Wren (Harvey Keitel) shows Paul Benjamin (William Hurt) his life’s work — a photo of the same street corner every morning — tells him to slow down, and Paul finds his late wife in one of them (7 min).",
+    source: "Smoke (1995)",
+    stream: true,
+    poster: "/brand/videos/drive/1BSPDsFMHqATSxcQ7QqCMww_uoNrzi6I0.jpg",
   },
   {
     driveId: "1kpUGeGrdbrkCAFQPPmxltuM4ViQxgL3u",

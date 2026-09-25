@@ -18,8 +18,8 @@ import { clipShareBySlug, type ClipShare } from "@/lib/clip-shares";
  * Two kinds of address. /watch/{uuid} is a `training_videos` row that
  * embeds (Loom, YouTube, Vimeo). /watch/{slug} is one of the Video Clips
  * films (lib/clip-shares.ts): it plays the rights-holder's own public
- * version, links out to it where it cannot be embedded, or, for the two
- * `stream` films with no official version anywhere, plays our copy through
+ * version, links out to it where it cannot be embedded, or, for the
+ * `stream` films with no usable official version, plays our copy through
  * /api/clips/{slug}/video. The facilitator walkthroughs never get a public
  * address at all.
  */

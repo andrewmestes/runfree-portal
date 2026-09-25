@@ -383,17 +383,86 @@ export default function HelpPage() {
               there carries the Pivvot mark, so you can always tell which part of the
               portal you are in.
             </Faq>
-            <Faq q="How the Digital Facilitator&rsquo;s Guide is laid out">
-              A menu on page 2 opens each module&rsquo;s <em>Tool List</em>. Almost
-              every tool has a front (dark header &mdash; the flip chart or visual as it
-              goes up in the room) and a back (light header &mdash; Big Idea, How It
-              Works, Coaching Tips, and the keynote, handout and video icons); each
-              module&rsquo;s Pre-work is a single page. The logo in the top-right
-              corner always takes you one level back up. On the Guide page,{" "}
-              <a href="/guide?tour=1" className="font-semibold text-runfree-magentaDeep hover:underline">How it works</a>{" "}
-              (just above the cover) is a short guided tour on the guide&rsquo;s own pages:
-              you click where you would in the guide, and it explains each part as you go,
-              including both sides of a card and every kind of icon.
+            <Faq q="How to use the Digital Facilitator&rsquo;s Guide">
+              The guide is the playbook you lead every session from: every tool in the
+              six modules, in order. You don&rsquo;t scroll through it; its links take you
+              where you need to go. On the Guide page,{" "}
+              <a href="/guide?tour=1" className="font-semibold text-runfree-magentaDeep hover:underline">How to use the guide</a>
+              , just above the cover, is a short tour on the guide&rsquo;s own pages. In
+              short:
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>The title on the cover opens the menu (page 2).</li>
+                <li>
+                  Each module on the menu opens its <em>Tool List</em>, and each line of a
+                  Tool List opens that tool. 3.9 is tool 9 of module 3.
+                </li>
+                <li>
+                  Almost every tool is two pages. The front (dark blue header) shows what
+                  the room sees: the flip chart you draw, the handout or the visual. The
+                  back (light header) is for you: Big Idea, How It Works and Coaching Tips.
+                  The back is the very next page, with no link to it, and the page after it
+                  is the next tool.
+                </li>
+                <li>
+                  A dark blue icon on the back opens the keynote, handout or video that goes
+                  with the tool. A faded one means there isn&rsquo;t one.
+                </li>
+                <li>
+                  On a Tool List, the module&rsquo;s name and icon open its title slide, a
+                  clean page to show the room.
+                </li>
+                <li>
+                  Each module&rsquo;s Pre-work is a single page. Its video links open only for
+                  Certified Vision Framers; to send the team those films, see{" "}
+                  <em>Sharing a video with a client</em>.
+                </li>
+                <li>
+                  The logo in the top-right corner goes one level back up: tool, then Tool
+                  List, then menu. Use it rather than your browser&rsquo;s Back button, which
+                  closes the guide.
+                </li>
+              </ul>
+            </Faq>
+            <Faq q="Finding a page in the guide or a handout">
+              When a guide or handout is open in the portal, the page number and a{" "}
+              <em>go to page</em> box are at the top of it. In Chrome, Edge or Firefox
+              on a computer this is the browser&rsquo;s own PDF toolbar; in Safari, and
+              on a phone or iPad, it is the bar above the pages, with arrows for the
+              page before and after. Type a number and press Return or Go (on an
+              iPhone, tap Done) to jump straight there &mdash; handy when you say
+              &ldquo;turn to page 88&rdquo; in a room. Tool numbers aren&rsquo;t page
+              numbers: tool 3.9 is on pages 89 and 90, so reach a tool through the menu
+              (page 2) and its module&rsquo;s Tool List. On a phone, an iPad or in Safari,
+              close the guide and open it again in the same tab, and it comes back to the
+              page you were on.
+            </Faq>
+            <Faq q="Links in the Digital Facilitator&rsquo;s Guide">
+              The handout and video icons in the guide point at the portal, not at
+              Google Drive. Clicking one checks that you are signed in and certified,
+              then opens that one file straight away &mdash; no shelf, no search. On a
+              phone, an iPad or in Safari it opens in a new tab, and{" "}
+              <strong>Close</strong> on it closes that tab and brings you back to the
+              guide. If
+              you are signed out it takes you to sign in and comes straight back to
+              the file &mdash; even if you have to reset your password on the way, as
+              long as you open the reset email in the same browser. Every
+              certification page does the same. The same link on a phone opens the same way, so it works from
+              the front of a room. A keynote icon opens the slides as a PDF right in
+              the portal, on any device with nothing to install. The Keynote and
+              PowerPoint files are one click away in its header. If a deck has no PDF
+              yet, the download starts instead. If a link says the file didn&rsquo;t
+              open, that is usually a passing hiccup at Google Drive &mdash;{" "}
+              <strong>Try again</strong> on that screen. &ldquo;Isn&rsquo;t in the
+              library&rdquo; means the file itself has moved; the current version is
+              on the shelf the button takes you to.
+            </Faq>
+            <Faq q="Using the guide offline">
+              <strong>Download</strong>, at the top of the open guide, saves the whole
+              guide (about 25 MB). In the saved copy the menu, the Tool Lists and the logo
+              work in most PDF apps. The keynote, handout and video icons still open the
+              portal, so they need the internet, and a sign-in if you&rsquo;re signed out.
+              A saved copy doesn&rsquo;t update: the Guide page always opens the latest
+              edition, so download it again when its <em>Last updated</em> date changes.
             </Faq>
             <Faq q="What is the Certification Companion Guide?">
               Will&rsquo;s orientation to the certification: the bird&rsquo;s-eye view
@@ -428,32 +497,6 @@ export default function HelpPage() {
               reload the page — and if it is still wrong, tell Andrew, who can force a
               fresh read from Drive.
             </Faq>
-            <Faq q="Finding a page in the guide or a handout">
-              When a guide or handout is open in the portal, the page number and a{" "}
-              <em>go to page</em> box are at the top of it. In Chrome, Edge or Firefox
-              on a computer this is the browser&rsquo;s own PDF toolbar; in Safari, and
-              on a phone or iPad, it is the bar above the pages, with arrows for the
-              page before and after. Type a number and press Return or Go (on an
-              iPhone, tap Done) to jump straight there &mdash; handy when you say
-              &ldquo;turn to page 88&rdquo; in a room.
-            </Faq>
-            <Faq q="Links in the Digital Facilitator&rsquo;s Guide">
-              The handout and video icons in the guide point at the portal, not at
-              Google Drive. Clicking one checks that you are signed in and certified,
-              then opens that one file straight away &mdash; no shelf, no search. If
-              you are signed out it takes you to sign in and comes straight back to
-              the file &mdash; even if you have to reset your password on the way, as
-              long as you open the reset email in the same browser. Every
-              certification page does the same. The same link on a phone opens the same way, so it works from
-              the front of a room. A keynote icon opens the slides as a PDF right in
-              the portal, on any device with nothing to install. The Keynote and
-              PowerPoint files are one click away in its header. If a deck has no PDF
-              yet, the download starts instead. If a link says the file didn&rsquo;t
-              open, that is usually a passing hiccup at Google Drive &mdash;{" "}
-              <strong>Try again</strong> on that screen. &ldquo;Isn&rsquo;t in the
-              library&rdquo; means the file itself has moved; the current version is
-              on the shelf the button takes you to.
-            </Faq>
             <Faq q="Which videos can I show a client?">
               <strong>Training Videos</strong> has two tabs. <em>Client Videos</em> are
               the teaching videos you show the teams you lead, plus the films under{" "}
@@ -466,8 +509,10 @@ export default function HelpPage() {
               tabs play without a Google account, and a video replaced in Drive is
               replaced here the same day. On a walkthrough or a clip,{" "}
               <em>Open full screen</em> in the player gives you a page with only the
-              video on it, which is the page the guide&rsquo;s video icons open. Its
-              link back goes to the tab that video lives on. A
+              video on it, which is the page the guide&rsquo;s video icons open. Opened in a
+              tab of its own (<em>Open full screen</em> does that, and so does a guide icon on a
+              phone, an iPad or in Safari), its <strong>Close</strong> button closes that tab and
+              takes you back. Otherwise its link back goes to the tab that video lives on. A
               teaching video offers <em>Open original</em> instead, which opens it on
               Loom.
             </Faq>
@@ -490,7 +535,10 @@ export default function HelpPage() {
               To send a whole module as pre-work, use <strong>Copy this
               module&rsquo;s videos</strong> beside its heading: it copies a ready-to-paste
               list of that module&rsquo;s client videos, each with its length and its
-              link.
+              link. The video pictures on the guide&rsquo;s Pre-work pages open only for
+              Certified Vision Framers, so don&rsquo;t forward those links: send the team
+              the links from this tab instead. If a Pre-work film isn&rsquo;t here, tell
+              Andrew.
             </Faq>
             <Faq q="What is the difference between this and a church project?">
               The certification library is <em>your</em> material as a facilitator — how

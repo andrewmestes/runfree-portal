@@ -73,6 +73,9 @@ export default function OpenPage() {
   const id = params.id;
 
   const [status, setStatus] = useState<Status>("checking");
+  // A fresh tab has one history entry; set in an effect because the page also renders on the server.
+  const [ownTab, setOwnTab] = useState(false);
+  useEffect(() => setOwnTab(window.history.length === 1), []);
   const [file, setFile] = useState<PreviewFile | null>(null);
   /**
    * The bytes, not a URL. FilePreview owns the object URL it is handed —
@@ -308,6 +311,22 @@ export default function OpenPage() {
 
   const back = kind ? KINDS[kind].back : "/";
   const backLabel = kind ? KINDS[kind].backLabel : "Home";
+  /**
+   * Close from a tab of its own — a guide icon tapped on a phone, an iPad or
+   * in Safari opens its file in a new tab — closes that tab, which brings the
+   * framer back to the guide where they were. It used to go to the file's
+   * shelf, leaving a second portal tab with the guide somewhere behind it.
+   * Where the browser refuses to close the tab, the shelf opens as before.
+   */
+  function leaveTo(fallback: string) {
+    if (ownTab) {
+      window.close();
+      window.setTimeout(() => router.push(fallback), 300);
+      return;
+    }
+    router.push(fallback);
+  }
+  const leave = () => leaveTo(back);
 
   if (status === "checking") return <PageLoader label="Opening…" />;
 
@@ -373,7 +392,7 @@ export default function OpenPage() {
     );
     return (
       <div className="min-h-screen bg-runfree-ink">
-        <FilePreview file={file} fetchUrl={fetchUrl} onClose={() => router.push(back)} actions={deckLinks} />
+        <FilePreview file={file} fetchUrl={fetchUrl} onClose={leave} actions={deckLinks} />
       </div>
     );
   }
@@ -454,12 +473,22 @@ export default function OpenPage() {
             </p>
             <h1 className="truncate font-display text-base font-semibold">{video.title}</h1>
           </div>
-          <Link
-            href={shelfLink.href}
-            className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
-          >
-            {shelfLink.label}
-          </Link>
+          {ownTab ? (
+            <button
+              type="button"
+              onClick={() => leaveTo(shelfLink.href)}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+            >
+              Close
+            </button>
+          ) : (
+            <Link
+              href={shelfLink.href}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
+            >
+              {shelfLink.label}
+            </Link>
+          )}
         </header>
         <div className="flex flex-1 items-center justify-center">
           <video
@@ -480,7 +509,12 @@ export default function OpenPage() {
   return (
     <div className="min-h-screen bg-runfree-ink">
       {file && blob && (
-        <FilePreview file={file} fetchUrl={fetchUrl} onClose={() => router.push(back)} />
+        <FilePreview
+          file={file}
+          fetchUrl={fetchUrl}
+          onClose={leave}
+          resumeKey={kind === "guide" ? `guide-page:${file.id}` : undefined}
+        />
       )}
     </div>
   );

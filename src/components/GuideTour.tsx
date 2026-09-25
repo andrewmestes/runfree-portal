@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useFocusTrap } from "@/lib/useFocusTrap";
 
 /**
- * "How it works" — a guided tour of the Digital Facilitator's Guide.
+ * "How to use the guide" — a guided tour of the Digital Facilitator's Guide.
  *
  * Andrew, 24 Sept 2026: "make a creative slide deck that pops up when opening
  * the 'how it works' … show the first menu, the card dims except for where an
@@ -28,7 +28,9 @@ import { useFocusTrap } from "@/lib/useFocusTrap";
  * built from several stills (`layers`): the two sides of one card fanned
  * together, every kind of icon, and a map of the route. Every step has at
  * least one arrow. On the same page the bright spot glides to its next place.
- * The progress bar is four chapters, each a button that jumps to it. Next,
+ * The progress bar is four chapters, each a button that jumps to it. A tap on
+ * the page away from the spot nudges (the spot on a click step, Next on any
+ * other). On an upright phone the last note adds a tip (<OnPhone>). Next,
  * Back, the arrow keys and Escape work throughout; nothing advances on its own.
  *
  * Geometry is in the stills' own units (960 x 720, the guide page at 1.25
@@ -113,6 +115,12 @@ function Tap() {
   return <>{useContext(TapWord)}</>;
 }
 
+/** True on an upright phone, where the real guide's links are small. */
+const Upright = createContext(false);
+function OnPhone({ children }: { children: React.ReactNode }) {
+  return useContext(Upright) ? <>{children}</> : null;
+}
+
 // The two sides of 3.9, fanned: the front on top, the back dealt out from behind it.
 const PAIR_FRONT: Layer = { still: "front", x: 30, y: 56, w: 450, rot: -3, z: 2, from: [30, 56, 0, 1.12] };
 const PAIR_BACK: Layer = { still: "back", x: 470, y: 236, w: 450, rot: 2.5, z: 1, from: [30, 56, -3], delay: 380 };
@@ -124,32 +132,26 @@ const STEPS: Step[] = [
     title: "The Digital Facilitator’s Guide",
     body: (
       <>
-        172 pages, built to be clicked rather than scrolled. <Tap /> the title to open the menu.
+        The guide you lead every session from. You don’t scroll through its 172 pages: its links take you straight to
+        the tool you need. <Tap /> the title to open the menu.
       </>
     ),
     spots: [[180, 540, 600, 105]],
     click: [185, 545, 590, 95],
     hotspot: "The guide’s title: open the menu",
     arrows: [{ from: [480, 250], c: [540, 420], to: [482, 538] }],
-    pop: [240, 110, 480],
+    pop: [220, 90, 520],
   },
   {
     page: "menu",
     title: "The menu",
-    body: <>The six modules of Pivvot Vision Framing, in order. Each one opens its own Tool List.</>,
-    spots: [[55, 285, 850, 235]],
-    arrows: [{ from: [300, 592], c: [170, 604], to: [112, 530] }],
-    pop: [160, 572, 640],
-  },
-  {
-    page: "menu",
-    title: "Open a module",
     body: (
       <>
-        <Tap /> <strong>Disciple’s Journey</strong>.
+        The six modules of Pivvot Vision Framing, in order. Each opens its own Tool List. <Tap /> module 3,{" "}
+        <strong>Disciple’s Journey</strong>.
       </>
     ),
-    spots: [[361, 290, 92, 222]],
+    spots: [[55, 285, 850, 235]],
     click: [366, 295, 82, 212],
     hotspot: "Open Disciple’s Journey",
     arrows: [{ from: [640, 600], c: [470, 610], to: [418, 522] }],
@@ -160,28 +162,17 @@ const STEPS: Step[] = [
     title: "The Tool List",
     body: (
       <>
-        Every tool in this module, in order. 3.0 is the <span className="whitespace-nowrap">Pre-work</span> the team does
-        before the session. <em>Deliverables</em>, at the bottom, is what the module produces, and what you put together
-        afterwards.
+        Every tool in this module, in the order you lead them. 3.0 is the{" "}
+        <span className="whitespace-nowrap">Pre-work</span> the team does before the session. <em>Deliverables</em>, at
+        the bottom, is what the module produces, and what you put together afterwards.
       </>
     ),
     spots: [[180, 238, 460, 408]],
     arrows: [
       { from: [670, 300], c: [520, 236], to: [336, 258] },
-      { from: [720, 452], c: [620, 690], to: [392, 628], delay: 250 },
+      { from: [720, 452], c: [700, 700], to: [392, 628], delay: 250 },
     ],
     pop: [660, 250, 280],
-  },
-  {
-    page: "list-dj",
-    title: "Title slide",
-    body: <>The module’s name and icon open its title slide — a clean page to put up for the room as the module begins.</>,
-    spots: [
-      [42, 162, 91, 91],
-      [183, 162, 493, 62],
-    ],
-    arrows: [{ from: [760, 340], c: [790, 215], to: [686, 193] }],
-    pop: [640, 330, 290],
   },
   {
     page: "list-dj",
@@ -203,7 +194,8 @@ const STEPS: Step[] = [
     title: "The front of the card",
     body: (
       <>
-        You’ve opened 3.9. This is its front: the side with the <strong>dark blue header</strong>.
+        You’ve opened 3.9. Almost every tool is two pages, like the two sides of a card. This is the front: the side
+        with the <strong>dark blue header</strong>.
       </>
     ),
     spots: [[0, 0, 960, 122]],
@@ -212,24 +204,27 @@ const STEPS: Step[] = [
   },
   {
     page: "front",
-    title: "Tool number",
-    body: <>The same number as on the Tool List. Most of the walkthroughs in Training Videos → Facilitator Training start with it too.</>,
-    spots: [[32, 22, 80, 82]],
-    arrows: [{ from: [150, 250], c: [70, 200], to: [72, 110] }],
-    pop: [18, 240, 262],
+    title: "Number and timer",
+    body: <>3.9 is tool 9 of module 3, the same number as on the Tool List. The timer is roughly how many minutes the tool takes in the room.</>,
+    spots: [
+      [32, 22, 80, 82],
+      [764, 26, 70, 70],
+    ],
+    arrows: [
+      { from: [320, 230], c: [110, 230], to: [72, 110] },
+      { from: [640, 230], c: [810, 230], to: [800, 102], delay: 200 },
+    ],
+    pop: [300, 190, 360],
   },
   {
     page: "front",
-    title: "Timer",
-    body: <>Roughly how many minutes the tool takes in the room.</>,
-    spots: [[764, 26, 70, 70]],
-    arrows: [{ from: [800, 240], c: [812, 170], to: [800, 102] }],
-    pop: [682, 230, 262],
-  },
-  {
-    page: "front",
-    title: "What goes up in the room",
-    body: <>The flip chart you’ll draw, the handout or the visual — often shown filled in, as an example.</>,
+    title: "What the room sees",
+    body: (
+      <>
+        What you’ll put in front of the team: the flip chart you draw, the handout you give out or the visual you show.
+        It’s often shown filled in, as an example.
+      </>
+    ),
     spots: [[288, 143, 378, 484]],
     arrows: [{ from: [724, 412], c: [724, 304], to: [674, 282] }],
     pop: [684, 400, 262],
@@ -241,9 +236,8 @@ const STEPS: Step[] = [
     title: "Two sides of one card",
     body: (
       <>
-        Almost every tool is two pages, like the two sides of a card. The <strong>front</strong> goes up for the room.
-        The <strong>back</strong> is for you, and it’s the very next page: no link takes you there, just scroll down one
-        page.
+        Here are both sides of 3.9. The <strong>front</strong> is what the room sees. The <strong>back</strong> is for
+        you, and it’s the very next page: no link takes you there, so scroll down one page.
       </>
     ),
     spots: [],
@@ -260,7 +254,8 @@ const STEPS: Step[] = [
     title: "The back of the card",
     body: (
       <>
-        The <strong>light header</strong> tells you you’re on the back, the side that shows you how to lead the tool.
+        The <strong>light header</strong> tells you you’re on the back: how to lead the tool. One more page down is the
+        next tool, 3.10, because the guide runs in Tool List order.
       </>
     ),
     spots: [[0, 0, 960, 120]],
@@ -294,7 +289,12 @@ const STEPS: Step[] = [
   {
     page: "back",
     title: "Module and phrase",
-    body: <>The module this tool belongs to, and its phrase from the title slide. It’s at the foot of both sides, so you always know where you are.</>,
+    body: (
+      <>
+        The module this tool belongs to, <em>Disciple’s Journey</em>, and its phrase, <em>Build a Training Center</em>.
+        It’s at the foot of both sides, so you always know where you are.
+      </>
+    ),
     spots: [[260, 656, 512, 52]],
     arrows: [{ from: [480, 350], c: [460, 560], to: [480, 652] }],
     pop: [240, 260, 480],
@@ -304,8 +304,8 @@ const STEPS: Step[] = [
     title: "The icons",
     body: (
       <>
-        What goes with this tool. A <strong>dark blue</strong> icon opens it right here in the portal; a{" "}
-        <strong>faded</strong> one means there isn’t one. 3.9 has a handout, but no video.
+        What goes with this tool. A <strong>dark blue</strong> icon opens it in the portal; a <strong>faded</strong>{" "}
+        one means there isn’t one. 3.9 has a handout, but no video.
       </>
     ),
     spots: [[801, 140, 126, 66]],
@@ -317,9 +317,9 @@ const STEPS: Step[] = [
     title: "Every kind of icon",
     body: (
       <>
-        A <strong>podium</strong> opens keynote slides. Only a few Horizon Storyline cards have one. A{" "}
-        <strong>sheet</strong> opens a handout (some tools have several), and a <strong>camera</strong> opens a
-        walkthrough video.
+        A <strong>podium</strong> opens keynote slides to present; only a few Horizon Storyline cards have them. A{" "}
+        <strong>sheet</strong> opens a handout for the team, and some tools have several. A <strong>camera</strong>{" "}
+        opens a video on leading the tool.
       </>
     ),
     spots: [],
@@ -344,22 +344,34 @@ const STEPS: Step[] = [
     title: "Back up a level",
     body: (
       <>
-        <Tap /> the logo to go back to this module’s Tool List.
+        <Tap /> the logo in the top-right corner to go back to this module’s Tool List. Use it rather than your
+        browser’s Back button, which closes the guide.
       </>
     ),
     spots: [[849, 24, 78, 78]],
     click: [859, 34, 58, 58],
-    hotspot: "The logo: back to the Tool List",
+    hotspot: "The top-right logo: back to the Tool List",
     arrows: [{ from: [650, 172], c: [720, 160], to: [856, 104] }],
-    pop: [380, 150, 300],
+    pop: [350, 150, 340],
+  },
+  {
+    page: "list-dj",
+    title: "Title slide",
+    body: <>Back on the Tool List. The module’s name and icon open its title slide: a clean page to show the room as the module begins.</>,
+    spots: [
+      [42, 162, 91, 91],
+      [183, 162, 493, 62],
+    ],
+    arrows: [{ from: [760, 340], c: [790, 215], to: [686, 193] }],
+    pop: [640, 330, 290],
   },
   {
     page: "list-dj",
     title: "And up again",
-    body: <>On a Tool List, the logo goes back to the menu.</>,
+    body: <>On a Tool List, the same top-right logo goes back to the menu. The RunFree logo on the left isn’t a link.</>,
     spots: [[849, 24, 78, 78]],
     click: [859, 34, 58, 58],
-    hotspot: "The logo: back to the menu",
+    hotspot: "The top-right logo: back to the menu",
     arrows: [{ from: [800, 270], c: [870, 230], to: [882, 108] }],
     pop: [660, 270, 280],
   },
@@ -368,7 +380,7 @@ const STEPS: Step[] = [
     title: "Now you try",
     body: (
       <>
-        Open <strong>Kingdom Platform</strong>.
+        Open module 4, <strong>Kingdom Platform</strong>.
       </>
     ),
     spots: [[504, 290, 93, 222]],
@@ -396,8 +408,9 @@ const STEPS: Step[] = [
     title: "That’s the whole guide",
     body: (
       <>
-        <strong>Menu → Tool List → tool</strong>, and the logo to climb back up. Every tool works like 3.9, so you never
-        need to scroll through 172 pages.
+        You found 4.1. <strong>Menu → Tool List → tool</strong>, and the top-right logo to go back up one level. Every
+        tool works like 3.9, so you never need to scroll through 172 pages.
+        <OnPhone> On a phone, turn it sideways before you open the guide: held upright, its links are small.</OnPhone>
       </>
     ),
     spots: [],
@@ -410,14 +423,15 @@ const STEPS: Step[] = [
       { x: 170, y: 446, text: "Menu", tone: "light" },
       { x: 480, y: 436, text: "Tool List", tone: "light" },
       { x: 790, y: 446, text: "Tool", tone: "light" },
-      { x: 480, y: 612, text: "The logo climbs back up", tone: "brand" },
+      { x: 480, y: 560, text: "The logo: one level up", tone: "brand" },
     ],
     arrows: [
       { from: [250, 214], c: [330, 140], to: [392, 204], delay: 350 },
       { from: [560, 206], c: [640, 140], to: [702, 212], delay: 550 },
-      { from: [790, 474], c: [480, 664], to: [172, 474], delay: 800 },
+      { from: [736, 480], c: [650, 546], to: [560, 470], delay: 800 },
+      { from: [430, 476], c: [340, 546], to: [250, 470], delay: 1000 },
     ],
-    pop: [230, 24, 500],
+    pop: [200, 12, 560],
   },
 ];
 
@@ -456,7 +470,7 @@ const ALT: Record<Still | Scene, string> = {
   "icon-grey": "A faded icon",
   pair: "The front and back of tool 3.9, the back fanned out from behind the front",
   icons: "The four kinds of icon: keynote, handout, video, and a faded one",
-  map: "The route: the menu, a Tool List and a tool, with an arrow from the tool back to the menu",
+  map: "The route: the menu, a Tool List and a tool, with arrows back from the tool to its Tool List and on to the menu",
 };
 
 const stillsOf = (s: Step): Still[] => (s.layers ? s.layers.map((l) => l.still) : [s.page as Still]);
@@ -483,7 +497,7 @@ function loadStill(p: Still, token: string): Promise<string> {
 }
 
 /**
- * Fetch the stills before anyone presses "How it works", so the tour opens on
+ * Fetch the stills before anyone presses "How to use the guide", so the tour opens on
  * the guide's cover rather than "Loading…". Joins any fetch already under way;
  * the tour's own effect retries anything that failed.
  */
@@ -598,7 +612,7 @@ export default function GuideTour({
   const [coarse, setCoarse] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches
   );
-  const [area, setArea] = useState<{ w: number; h: number; short: boolean } | null>(null);
+  const [area, setArea] = useState<{ w: number; h: number; short: boolean; upright: boolean } | null>(null);
   // A tap on the page that missed the spot on a click step: the spot and the hint answer.
   const [nudge, setNudge] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -646,7 +660,14 @@ export default function GuideTour({
   useLayoutEffect(() => {
     const el = areaRef.current;
     if (!open || !el) return;
-    const measure = () => setArea({ w: el.clientWidth, h: el.clientHeight, short: window.innerHeight < 500 });
+    const measure = () =>
+      setArea({
+        w: el.clientWidth,
+        h: el.clientHeight,
+        short: window.innerHeight < 500,
+        // Portrait and phone-sized: a small phone held sideways (under 768 px) is not "upright".
+        upright: window.matchMedia("(pointer: coarse) and (orientation: portrait) and (max-width: 700px)").matches,
+      });
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -718,6 +739,8 @@ export default function GuideTour({
   const ph = (pw * H) / W;
   const short = area?.short ?? false;
   const chapter = CHAPTERS.findIndex((c) => i >= c.from && i < c.to);
+  // On a step with nothing to tap on the page, a tap there points at the way on instead.
+  const nextNudge = nudge && !step.click && !reduced ? " tour-nudge" : "";
   // The hotspot is at least a thumb wide and tall; its visible pulse stays
   // the size of the thing it marks.
   const hb =
@@ -750,9 +773,9 @@ export default function GuideTour({
       className="relative shrink-0"
       style={{ width: pw, height: ph }}
       onClick={(e) => {
-        // A miss on a click step: show where to tap rather than doing nothing.
-        // The second click of a double-click on the previous step's hotspot lands here and is not a miss.
-        if (step.click && e.detail < 2 && !(e.target as HTMLElement).closest("button, [data-note]")) setNudge(true);
+        // A tap on the page that isn't the spot: on a click step the spot and the hint answer, on any
+        // other step the Next button does. The second click of a double-click is not a miss.
+        if (e.detail < 2 && !(e.target as HTMLElement).closest("button, [data-note]")) setNudge(true);
       }}
     >
       {scene ? (
@@ -858,7 +881,7 @@ export default function GuideTour({
         <button
           type="button"
           onClick={(e) => {
-            // The second click of a double-click: the logo sits in the same place on two steps in a row, so it would skip one.
+            // The second click of a double-click lands on the next step. Harmless today, but it would skip a step if two hotspots ever shared a place.
             if (e.detail > 1) return;
             go(1);
           }}
@@ -887,6 +910,7 @@ export default function GuideTour({
 
   return (
     <TapWord.Provider value={coarse ? "Tap" : "Click"}>
+      <Upright.Provider value={area?.upright ?? false}>
       <div className="fixed inset-0 z-50 flex flex-col bg-runfree-ink/95 backdrop-blur-md">
         <style>{`
           @keyframes tour-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -937,10 +961,10 @@ export default function GuideTour({
           {/* Top: title, chapters (each jumps to its first step), close */}
           <div className="flex shrink-0 items-center gap-3 text-white sm:gap-4">
             <p id={`${id}-name`} className="hidden font-display text-base font-bold tracking-wide sm:block">
-              How the guide works
+              How to use the guide
             </p>
             <p className="font-display text-sm font-bold tracking-wide sm:hidden" aria-hidden="true">
-              {chapter >= 0 ? CHAPTERS[chapter].name : "How the guide works"}
+              {chapter >= 0 ? CHAPTERS[chapter].name : "How to use the guide"}
             </p>
             <div className="flex min-w-0 flex-1 items-start gap-1.5" role="group" aria-label="Chapters">
               {CHAPTERS.map((c, k) => {
@@ -1035,7 +1059,7 @@ export default function GuideTour({
                     close();
                     onOpenGuide?.();
                   }}
-                  className="min-h-[44px] rounded-lg bg-runfree-grad px-6 text-sm font-semibold text-white shadow-lg transition hover:opacity-90"
+                  className={`min-h-[44px] rounded-lg bg-runfree-grad px-6 text-sm font-semibold text-white shadow-lg transition hover:opacity-90${nextNudge}`}
                 >
                   {onOpenGuide ? "Open the Guide" : "Done"}
                 </button>
@@ -1047,7 +1071,7 @@ export default function GuideTour({
                 onClick={() => go(1)}
                 title="Next (→)"
                 aria-keyshortcuts="ArrowRight"
-                className="min-h-[44px] rounded-lg bg-runfree-grad px-6 text-sm font-semibold text-white shadow-lg transition hover:opacity-90"
+                className={`min-h-[44px] rounded-lg bg-runfree-grad px-6 text-sm font-semibold text-white shadow-lg transition hover:opacity-90${nextNudge}`}
               >
                 {step.next ?? "Next"}
               </button>
@@ -1055,6 +1079,7 @@ export default function GuideTour({
           </div>
         </div>
       </div>
+      </Upright.Provider>
     </TapWord.Provider>
   );
 }

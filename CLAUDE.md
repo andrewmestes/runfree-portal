@@ -1458,6 +1458,23 @@ begun loading, so `complete` is false and it looks broken. Two such "failures"
 appeared the day Help gained an FAQ and Preparation gained the reading shelf,
 and both URLs returned 200 when fetched directly.
 
+## pdf.js: always the legacy build (25 Sept 2026)
+
+A certified framer on a Mac could not open the guide or any handout in
+Safari while Chrome worked. On Safari, phones and iPads the portal draws
+PDFs itself (`PdfPageViewer`, `PdfThumbnail`), and pdfjs-dist 6's MODERN
+build calls brand-new functions with no fallback —
+`Map.prototype.getOrInsertComputed`, `Promise.withResolvers`,
+`Uint8Array.fromBase64`, `Math.sumPrecise` — so on any Safari short of the
+very newest nothing drew. Both components import
+`pdfjs-dist/legacy/build/pdf.mjs` (core-js polyfills for all four) with the
+legacy worker at `public/vendor/pdf.worker.legacy.min.mjs`. When upgrading
+pdfjs-dist, copy the new legacy worker there too, and never switch back to
+`import("pdfjs-dist")`. Headless Chrome can't show this failure on its own:
+delete those four functions with `Page.addScriptToEvaluateOnNewDocument`
+before the page loads (the tour-walk script's OLD_SAFARI mode did) to
+stand in for an older Safari.
+
 ## Never run `next build` while `next dev` is running
 
 Both write to `.next/`. A production build replaces the dev server's chunk
@@ -2345,9 +2362,10 @@ idea, the how to, the coach tips, the module name and phrase, the icons and
 what they mean." He had already rejected numbered markers: "there are too
 many numbers competing in the document already".
 
-It is `src/components/GuideTour.tsx`, opened by the "How it works" button
-directly ABOVE the guide's cover on `/guide`, or by `/guide?tour=1` (Help
-links that). It used to be a small link under the Open button; Andrew: "i
+It is `src/components/GuideTour.tsx`, opened by the "How to use the guide"
+button directly ABOVE the guide's cover on `/guide` (it was "How it works",
+which is also the name of a section on every card's back; Andrew's own words
+were "how to use the dfg"), or by `/guide?tour=1` (Help links that). It used to be a small link under the Open button; Andrew: "i
 can click on the image of the dfg and never see it currently." The old
 `/guide/how-to-use` explainer is now only a redirect to `/guide?tour=1`.
 
@@ -2359,12 +2377,26 @@ of icons like keynote/handout/video … make it better overall") added three
 one dimmed page: **Two sides of one card** (3.9's front settles into a card
 and its back is dealt out from behind it, `from` on a layer), **Every kind of
 icon** (podium / sheet / camera / faded, cropped from p158 and p90), and the
-closing **map** (menu → Tool List → tool, and the logo's arrow back up). Every
+closing **map** (menu → Tool List → tool, and the logo's arrows back up,
+one level at a time — one long arrow to the menu contradicted the rule). Every
 step has at least one arrow (`arrows`, staggered by `delay` in a scene). The
 progress bar is four chapters taken from `chapter` on the first step of each
 — Find a tool, The front, The back, Getting around — and each is a button
-that jumps there. A tap on the dimmed page on a click step nudges: the spot
-pulses harder and the hint shakes.
+that jumps there. A tap on the page away from the spot nudges: on a click
+step the spot pulses harder and the hint shakes; on any other step the Next
+button pulses.
+
+The first-timer review (25 Sept; Andrew: "look for ways to improve it for
+someone who's never seen it before") cut it to 21 steps (the menu and "Open
+a module" are one click step; number and timer are one step; the title
+slide moved to "Getting around", after the first logo tap), explains "card"
+on the front's first step, names the TOP-RIGHT logo (the RunFree logo on
+the left of menus and Tool Lists is not a link) and warns off the browser's
+Back button (it closes the guide), says the page after a back is the next
+tool (the guide runs in Tool List order), and ends with a phone-only tip
+(`<OnPhone>`: coarse pointer, portrait, up to 700 px wide — measured with
+the page, so it follows rotation; a small phone held sideways is not upright) to turn the phone sideways, because the real
+guide's links are about 10 px tall held upright.
 
 How it works:
 
@@ -2373,14 +2405,15 @@ How it works:
 - On the same page the bright spot glides to its next place (`useGlide`);
   a new page fades in. The dim layer is keyed by page, not by step: keyed
   by step, it blinked to full brightness on every Next.
-- Every one of the 23 steps has an arrow. Give every arrow a slight bow: the
+- Every one of the 21 steps has an arrow. Give every arrow a slight bow: the
   gradient is sized to the arrow's own box, so a dead-straight horizontal or
   vertical arrow loses its colour and draws plain white.
-- A double-click on a hotspot counts once (`e.detail > 1`): the logo sits in
-  the same place on steps 19 and 20, and a double-click skipped "And up again".
-  The page's miss-nudge ignores that second click too (`e.detail < 2`).
+- A double-click on a hotspot counts once (`e.detail > 1`), and the page's
+  miss-nudge ignores that second click too (`e.detail < 2`). The two logo
+  steps are no longer back to back, but keep the guard in case a later edit
+  puts two hotspots in one place.
 - Progress is four chapter segments, with no step numbers. Screen readers
-  hear "Step N of 23: <chapter>" (`aria-valuetext` on a hidden progressbar).
+  hear "Step N of 21: <chapter>" (`aria-valuetext` on a hidden progressbar).
 - On a `click` step, a pulsing hotspot over the real link moves the tour on,
   just as the guide's own link would. Its tap area is at least 44 px
   (`MIN_HIT`), however small the page; the pulse stays the size of the link.
@@ -2396,13 +2429,14 @@ How it works:
 - With no guide file (Drive down), `?tour=1` still opens the tour, and its
   last button reads "Done" instead of "Open the Guide".
 
-The route (23 steps) is cover → menu → Disciple's Journey → its Tool List →
-the module's name and icon, which open its title slide (p71; p100 for
-Kingdom Platform) → 3.9 → front (header, number, timer, what goes up) →
-"Turn the card over" → the two-sides scene → back (the next page, reached by
-scrolling: header, Big Idea, How It Works, Coaching Tips, module and phrase,
-icons) → every kind of icon → logo → Tool List → logo → menu → Kingdom
-Platform → 4.1 → the map. The back comes in the order Andrew listed it. No
+The route (21 steps) is cover → menu (tap module 3, Disciple's Journey) →
+its Tool List → 3.9 → front (header; number and timer; what the room sees)
+→ "Turn the card over" → the two-sides scene → back (the next page, reached
+by scrolling: header and the next tool after it, Big Idea, How It Works,
+Coaching Tips, module and phrase, icons) → every kind of icon → top-right
+logo → Tool List, where the module's name and icon open its title slide
+(p71; p100 for Kingdom Platform) → logo → menu → module 4, Kingdom Platform
+→ 4.1 → the map. The back comes in the order Andrew listed it. No
 front links to its back; the tour says so. Icons are "dark blue" (opens) or
 "faded" (none), not "coloured" and "grey": that is what the guide draws.
 
@@ -2447,6 +2481,22 @@ points × 1.25 with a top-left origin. It was measured from the PDF's link
 boxes and `pdftotext -bbox`. A new edition that moves the logo, timer,
 icons, list or pictures needs new stills (upload over them, upsert) and new
 numbers.
+
+**Around the tour, in the viewer** (same review). The page box
+(`PdfPageViewer`, used for the guide on phones, iPads and Safari) takes a
+dot, and a tool number such as "3.9" gets a note instead of silently landing
+on page 39. `resumeKey` (`guide-page:{fileId}`, sessionStorage) reopens the
+guide on the page this tab last showed, so a guide closed by accident
+mid-session doesn't restart at the cover; a new edition (new id) starts at
+the cover. On `/open/…`, Close from a tab of its own (history length 1 —
+where guide icons open on phones, iPads and Safari) closes the tab, landing
+back on the guide; if the browser refuses, the shelf opens as before. Help's
+guide answers are one entry, "How to use the Digital Facilitator's Guide",
+with "Finding a page…", "Links in the…" and "Using the guide offline" right
+under it. Still open for Andrew: in Chrome and Edge on a computer the guide
+opens in the browser's own PDF viewer, where tapping an icon replaces the
+guide in place; drawing the guide with PdfPageViewer everywhere would fix
+that but loses Ctrl+F. His call.
 
 To check it, `scripts/site-shot.ts` page `guide-tour` captures the first
 screen. Use `REDUCED_MOTION=1` so the arrow is fully drawn. To see every

@@ -60,9 +60,9 @@ export default function GuidePage() {
   const [loadError, setLoadError] = useState("");
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   /**
-   * "How it works" — the guided tour (components/GuideTour). Andrew: "the DFG
+   * "How to use the guide" — the guided tour (components/GuideTour). Andrew: "the DFG
    * training is critical. let's just have that live on the DFG page." It opens
-   * from the How it works button above the cover, and on arrival from ?tour=1 (Help's
+   * from the "How to use the guide" button above the cover, and on arrival from ?tour=1 (Help's
    * link, and the old /guide/how-to-use address, which redirects here).
    */
   const [tourOpen, setTourOpen] = useState(false);
@@ -156,7 +156,7 @@ export default function GuidePage() {
   }, [file]);
 
   // The tour's seven stills (about 850 KB), a moment after the page settles,
-  // so "How it works" opens on the guide's cover instead of "Loading…".
+  // so "How to use the guide" opens on the guide's cover instead of "Loading…".
   useEffect(() => {
     if (!file) return;
     const t = window.setTimeout(() => void prefetchGuideStills(), 1000);
@@ -285,8 +285,8 @@ export default function GuidePage() {
                       </svg>
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block font-display text-base font-bold text-runfree-ink">How it works</span>
-                      <span className="block text-sm text-gray-600">A quick guided tour of the guide</span>
+                      <span className="block font-display text-base font-bold text-runfree-ink">How to use the guide</span>
+                      <span className="block text-sm text-gray-600">A short guided tour</span>
                     </span>
                     <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-runfree-magentaDeep transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                       <path d="M8 5l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
@@ -367,6 +367,7 @@ export default function GuidePage() {
           file={preview}
           fetchUrl={fetchBlobUrl}
           onClose={() => setPreview(null)}
+          resumeKey={`guide-page:${preview.id}`}
         />
       )}
     </div>

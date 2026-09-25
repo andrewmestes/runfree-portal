@@ -1,4 +1,63 @@
-# Google sign-in branding — the steps (20 Sept 2026)
+# Google sign-in branding — the steps (updated 25 Sept 2026)
+
+**Status:** the page is live at https://runfree.co/portal/ (25 Sept). It meets
+every home-page rule in Google's current docs (checked 25 Sept). What's left
+is below: two small WordPress touches, then the Google Cloud form.
+
+Why August failed (from that day's record): the first check ran against
+portal.runfree.co while it showed "Loading…" under the old name, and the
+next three against /auth/login, which is a sign-in page (Google rejects a
+home page that is only a login page) and still carried a global noindex.
+
+## Before you verify (WordPress, ~10 minutes, recommended)
+
+1. On the runfree.co/portal page, under "Access is by invitation only…", add:
+   "If you sign in with Google, the portal receives only your name, email
+   address and profile picture, and uses them only to sign you in, match you
+   to your invitation and show your name to your project team. It cannot read
+   your Gmail, Drive, Calendar or contacts. See our Privacy Policy." (link
+   "Privacy Policy" to https://portal.runfree.co/privacy)
+2. Yoast, this page: SEO title exactly `RunFree Portal` (delete the separator
+   and site-name variables); meta description "RunFree Portal is the private
+   online workspace for churches and leaders working with RunFree Co: session
+   recordings, notes, handouts, deliverables and tasks, by invitation only."
+3. Clear the site cache and check the page in a private window.
+
+## Google Cloud (signed in as authuser=1)
+
+`https://console.cloud.google.com/auth/branding?project=runfree-portal&authuser=1`
+
+- App name: RunFree Portal
+- Application home page: `https://runfree.co/portal/` — WITH the slash (without
+  it, the URL redirects)
+- Privacy policy: `https://portal.runfree.co/privacy` — no slash; it must match
+  the link on the page
+- Terms of service: `https://portal.runfree.co/terms`
+- Authorized domains: exactly `txaesavbpbtyqhzhcabm.supabase.co` and
+  `runfree.co`. If a row says `portal.runfree.co`, change it to `runfree.co`.
+  Don't add bare `supabase.co`, don't delete the Supabase host (it is the
+  sign-in redirect).
+- Leave the logo, Audience (External, In production) and Data Access (no
+  scopes) as they are. Save.
+
+Then: View issues → "I have fixed the issues" → Proceed (or "Verify
+branding"). It is automated and usually takes minutes. On "Ready to
+publish", click **Publish branding** within 7 days, then test in a private
+window: Google should say "to continue to RunFree Portal".
+
+If the SAME two findings come back, don't re-run it in a loop: choose "I
+believe the issues found are incorrect. Request additional review" (a person
+reviews in ~2–3 business days) with: "The home page https://runfree.co/portal/
+is headed 'RunFree Portal', exactly matching the app name, describes the
+app's purpose and how it uses Google sign-in data, and links to the privacy
+policy https://portal.runfree.co/privacy and terms. runfree.co is verified in
+Search Console. txaesavbpbtyqhzhcabm.supabase.co is the OAuth callback of our
+authentication provider, Supabase Auth, and cannot be owned by us. The app
+requests only openid, email and profile."
+
+---
+
+## The original steps (20 Sept), kept for reference
 
 Goal: the Google sign-in screen says **"to continue to RunFree Portal"**
 instead of "to continue to txaesavbpbtyqhzhcabm.supabase.co".

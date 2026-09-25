@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 /**
  * GET /api/guide-howto/{name} — one still of the Digital Facilitator's Guide
- * for the "How it works" tour on /guide, for certified framers only.
+ * for the "How to use the guide" tour on /guide, for certified framers only.
  *
  * The stills are guide pages — the back of 3.9 is certification-only
  * teaching (Big Idea, How It Works, Coaching Tips). They

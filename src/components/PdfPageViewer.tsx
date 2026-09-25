@@ -85,10 +85,17 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 export default function PdfPageViewer({
   blobUrl,
   onFail,
+  resumeKey,
 }: {
   blobUrl: string;
   /** Called if the document cannot be parsed, so the caller can fall back. */
   onFail?: () => void;
+  /**
+   * Remember the page in this tab (sessionStorage) and reopen there, so
+   * closing the guide by accident mid-session doesn't send you back to the
+   * cover. Include the file id, so a new edition starts at its cover.
+   */
+  resumeKey?: string;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<PdfDoc | null>(null);
@@ -270,9 +277,48 @@ export default function PdfPageViewer({
     setCurrent(page);
   };
 
+  // Reopen on the page this tab last showed (resumeKey), once the pages are
+  // laid out; save only after that, so the first render's page 1 never
+  // overwrites the saved page.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (!resumeKey || !doc || width <= 0 || restoredRef.current) return;
+    restoredRef.current = true;
+    let n = 0;
+    try {
+      n = Number(sessionStorage.getItem(resumeKey));
+    } catch {
+      // Storage blocked: open at the cover, as before.
+    }
+    if (n > 1) goToPage(n);
+    // goToPage is recreated each render; this runs once per document by design.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc, width, resumeKey]);
+  useEffect(() => {
+    if (!resumeKey || !restoredRef.current) return;
+    try {
+      sessionStorage.setItem(resumeKey, String(current));
+    } catch {
+      // Storage blocked: nothing to remember.
+    }
+  }, [current, resumeKey]);
+
+  /**
+   * A tool number typed as a page. The tour teaches tools by number, and
+   * "3.9" used to lose its dot and land on page 39 (on an iPhone the pad had
+   * no dot at all). Now the box takes the dot and says what to do instead.
+   */
+  const [notPage, setNotPage] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notPage) return;
+    const t = window.setTimeout(() => setNotPage(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [notPage]);
+
   return (
     <div className="flex h-full flex-col bg-gray-100">
       {doc && doc.numPages > 1 && (
+        <>
         <div className="flex shrink-0 items-center justify-center gap-2 border-b border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600">
           <button
             type="button"
@@ -296,8 +342,8 @@ export default function PdfPageViewer({
             <span aria-hidden="true">Page</span>
             <input
               id="pdf-page"
-              inputMode="numeric"
-              pattern="[0-9]*"
+              inputMode="decimal"
+              pattern="[0-9.]*"
               enterKeyHint="go"
               value={draft}
               onFocus={(e) => {
@@ -312,14 +358,21 @@ export default function PdfPageViewer({
               // scrolling the pages and leaving must not jump back to the
               // number the box showed on focus.
               onBlur={() => {
-                const n = Number(draft);
-                if (typedRef.current && draft !== "" && n > 0) goToPage(n);
+                // "3.9" (or "3,9" where a comma is the decimal key) is a tool number;
+                // a stray trailing dot ("88.") is still page 88.
+                const tool = /\d\.\d/.test(draft);
+                const n = Number(draft.replace(/\./g, ""));
+                if (typedRef.current && tool) setNotPage(draft);
+                else if (typedRef.current && n > 0) {
+                  setNotPage(null);
+                  goToPage(n);
+                }
                 typedRef.current = false;
                 setEditing(false);
               }}
               onChange={(e) => {
                 typedRef.current = true;
-                setDraft(e.target.value.replace(/[^0-9]/g, "").slice(0, 4));
+                setDraft(e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "").slice(0, 5));
               }}
               className="h-9 w-14 rounded-md border border-gray-300 text-center text-base text-runfree-ink outline-none focus:border-runfree-magenta focus:ring-2 focus:ring-runfree-magenta/25"
             />
@@ -335,6 +388,26 @@ export default function PdfPageViewer({
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M7.5 4.5L13 10l-5.5 5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         </div>
+        {/* Always mounted, so a screen reader announces the note when it appears. The guide's advice
+            only for the guide (it passes resumeKey); every other PDF gets a plain range. */}
+        <p
+          role="status"
+          className={
+            notPage ? "shrink-0 border-b border-gray-200 bg-white px-3 pb-1.5 text-center text-xs text-gray-600" : "sr-only"
+          }
+        >
+          {notPage ? (
+            <>
+              {notPage} isn&rsquo;t a page number.{" "}
+              {resumeKey ? (
+                <>For a tool in the guide, open it from its module&rsquo;s Tool List (the menu is page 2).</>
+              ) : (
+                <>Type a page from 1 to {doc.numPages}.</>
+              )}
+            </>
+          ) : null}
+        </p>
+        </>
       )}
     {/* `relative` makes this scroller the pages' offsetParent, so li.offsetTop
         and scrollTop share one origin. Without it offsetTop was measured from

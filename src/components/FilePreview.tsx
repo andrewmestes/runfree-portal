@@ -69,6 +69,7 @@ export default function FilePreview({
   fetchUrl,
   onClose,
   actions,
+  resumeKey,
 }: {
   file: PreviewFile;
   /** Returns an authorised blob URL for the file, or null on failure. */
@@ -76,6 +77,8 @@ export default function FilePreview({
   onClose: () => void;
   /** Extra controls in the header, before Download — the deck downloads on a presentation preview. */
   actions?: React.ReactNode;
+  /** Passed to PdfPageViewer: reopen on the page this tab last showed (the guide). */
+  resumeKey?: string;
 }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -215,7 +218,7 @@ export default function FilePreview({
               // error: a zoomed-in PDF showing page one is worth more than a
               // message saying the file could not be opened, which would also
               // be untrue — the bytes downloaded fine, only the render failed.
-              <PdfPageViewer blobUrl={blobUrl} onFail={() => setCanvasFailed(true)} />
+              <PdfPageViewer blobUrl={blobUrl} onFail={() => setCanvasFailed(true)} resumeKey={resumeKey} />
             ) : (
               <iframe
                 // The browser's own toolbar stays on: it is the page number

@@ -101,6 +101,7 @@ const POSTERS = new Set<string>(DRIVE_POSTERS as string[]);
 
 /** Drive file id -> the training_videos row it duplicates. See Video.twinOf. */
 import VIDEO_TWINS from "@/lib/video-twins.json";
+import { clipShareByDriveId } from "@/lib/clip-shares";
 const TWINS = VIDEO_TWINS as Record<string, string>;
 
 const DRIVE_PREFIX = "drive:";
@@ -118,13 +119,18 @@ const embeds = (v: Video) => Boolean(parseVideoUrl(v.url).embedUrl);
  * The public address a framer hands a client — /watch/{id}, no sign-in —
  * or null where there is none. The client shelf's database videos get one,
  * and so does a walkthrough that is the same film as one of them (twinOf):
- * its link opens that client row, never the Drive file. Every other
- * walkthrough stays private, and the Drive clips stream behind a ticket
- * (see app/watch/[id]/page.tsx for why). shareId is the one predicate: the
- * button shows exactly when there is an address to copy.
+ * its link opens that client row, never the Drive file. A Video Clips film
+ * gets /watch/{slug} when it has an official public version
+ * (lib/clip-shares.ts), which that page plays instead of our copy. Every
+ * other walkthrough stays private. shareId is the one predicate: the button
+ * shows exactly when there is an address to copy.
  */
-const shareId = (v: Video) =>
-  v.twinOf ? v.twinOf : v.audience === "clients" && !isDriveVideo(v) && embeds(v) ? v.id : null;
+const shareId = (v: Video) => {
+  if (v.twinOf) return v.twinOf;
+  if (v.audience !== "clients") return null;
+  if (isDriveVideo(v)) return clipShareByDriveId.get(driveId(v))?.slug ?? null;
+  return embeds(v) ? v.id : null;
+};
 const isShareable = (v: Video) => shareId(v) !== null;
 const shareUrl = (v: Video) => {
   const id = shareId(v);
@@ -805,8 +811,10 @@ export default function VideosPage() {
  * public /watch link — to paste into an email or text as pre-work. Andrew
  * picked it from the review's ideas ("a button that copies a module's
  * client videos as a ready-to-send list"). Only videos that have a public
- * address are listed; the Drive clips stream behind a sign-in and are left
- * out rather than sent as links a client cannot open.
+ * address are listed. A Video Clips film with an official public version
+ * (lib/clip-shares.ts) is listed under that entry's title, not its Drive
+ * filename. Every other Drive file streams behind a sign-in and is left out,
+ * rather than sent as a link a client cannot open.
  */
 function CopyModuleButton({
   label,
@@ -829,7 +837,8 @@ function CopyModuleButton({
       .filter(isShareable)
       .map((v) => {
         const { duration } = splitVideoMeta(v.description);
-        return `• ${v.title}${duration ? ` (${duration})` : ""}: ${shareUrl(v)}`;
+        const title = (isDriveVideo(v) && clipShareByDriveId.get(driveId(v))?.title) || v.title;
+        return `• ${title}${duration ? ` (${duration})` : ""}: ${shareUrl(v)}`;
       });
     const text = `${label} — videos to watch before we meet:\n\n${lines.join("\n")}`;
     try {

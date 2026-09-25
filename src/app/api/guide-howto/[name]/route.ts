@@ -16,8 +16,21 @@ import { supabaseAdmin } from "@/lib/supabase";
  * behind the same gate as the guide itself. To replace a still, upload over
  * it (upsert) — see CLAUDE.md, "The guide tour, and its private stills".
  */
-// The tour's seven pages (components/GuideTour.tsx): guide pages 1, 2, 5, 6, 89, 90 and 102.
-const STILLS = new Set(["cover", "menu", "list-dj", "list-kp", "front", "back", "front-kp"]);
+// The tour's stills (components/GuideTour.tsx): guide pages 1, 2, 5, 6, 89, 90 and 102, and the four
+// kinds of icon, cropped from the backs of 6.5 (p158) and 3.9 (p90).
+const STILLS = new Set([
+  "cover",
+  "menu",
+  "list-dj",
+  "list-kp",
+  "front",
+  "back",
+  "front-kp",
+  "icon-keynote",
+  "icon-handout",
+  "icon-video",
+  "icon-grey",
+]);
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ name: string }> }) {
   const access = await requireCertificationAccess(req);

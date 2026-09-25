@@ -2177,11 +2177,25 @@ row's), and the player header have a "Copy link" button (`CopyLinkButton`,
 a sibling of the card button, never inside it) that puts that address on
 the clipboard. What is NOT public: the facilitator walkthroughs as Drive
 files (never — a twin shares its client row, not itself), and
-the Drive clips (for now) — four of the seven are third-party films
-(Mr. Holland's Opus, Smoke, the Coca-Cola ad, Made to Stick) and I asked
-Andrew which of the seven he wants on a public address before opening any;
-he had not answered when the button shipped. `site-shot.ts` captures the
-page as `watch`.
+our copies of the Drive clips. Andrew, 24 Sept: "the 'video clips' … don't
+have a sharable link." Most are other people's films, so a clip's link is
+`/watch/{slug}` (`src/lib/clip-shares.ts`), and that page plays the
+rights-holder's OWN public version — TED's YouTube upload of the Tom Wujec
+talk, Carey Nieuwhof's episode 626 cut to the 14:17–36:17 section Andrew
+recorded (`start`/`end` on the embed), The Gospel Coalition's own upload of
+"How Churches Fake God's Work" — or shows the poster and a "Watch on …"
+button for CNN's Coca-Cola segment (cnn.com refuses to be framed; it also
+answers 451 in some regions) and Dan Heath's "Making Strategy Simple" on
+Fast Company's own video page (its YouTube copy is private, and Fast
+Company's embeddable player runs an ad and then autoplays other videos).
+YouTube embeds carry `rel=0`. Every
+source was found and then re-checked by a second researcher: same film,
+same cut or the exact section, uploaded by the owner. No link, on purpose:
+Mr. Holland's Opus (no official version online), Hope Baptist's "Jesus
+Follower" film (Will's private upload; no public copy was found)
+and Smoke (Movieclips' official clip is 2:41 of our 6:56 scene). A clip re-uploaded to Drive gets
+a new id and loses its link; update `clip-shares.ts`. `site-shot.ts`
+captures the page as `watch`.
 
 The client-shelf row "Upper / Lower Room Master Teaching" pointed at an
 older 9-minute Loom while its own description said "12 min"; 084 points it
@@ -2317,24 +2331,42 @@ idea, the how to, the coach tips, the module name and phrase, the icons and
 what they mean." He had already rejected numbered markers: "there are too
 many numbers competing in the document already".
 
-It is `src/components/GuideTour.tsx`, opened by "How it works — a two-minute
-tour" under "Open the Guide" on `/guide`, or by `/guide?tour=1` (Help links
-that). The old `/guide/how-to-use` explainer is now only a redirect to
-`/guide?tour=1`.
+It is `src/components/GuideTour.tsx`, opened by the "How it works" button
+directly ABOVE the guide's cover on `/guide`, or by `/guide?tour=1` (Help
+links that). It used to be a small link under the Open button; Andrew: "i
+can click on the image of the dfg and never see it currently." The old
+`/guide/how-to-use` explainer is now only a redirect to `/guide?tour=1`.
+
+The second round the same evening (Andrew: "make sure each slide has an
+arrow. make the two sides of the card easier to understand by showing both
+sides of the same card creatively … an explainer card that shows all kinds
+of icons like keynote/handout/video … make it better overall") added three
+**scenes** — steps built from several stills (`layers`, `tags`) instead of
+one dimmed page: **Two sides of one card** (3.9's front settles into a card
+and its back is dealt out from behind it, `from` on a layer), **Every kind of
+icon** (podium / sheet / camera / faded, cropped from p158 and p90), and the
+closing **map** (menu → Tool List → tool, and the logo's arrow back up). Every
+step has at least one arrow (`arrows`, staggered by `delay` in a scene). The
+progress bar is four chapters taken from `chapter` on the first step of each
+— Find a tool, The front, The back, Getting around — and each is a button
+that jumps there. A tap on the dimmed page on a click step nudges: the spot
+pulses harder and the hint shakes.
 
 How it works:
 
-- Each step is one guide page. Everything except `spots` is dimmed.
+- Each step is one guide page, except the three scenes. On a page step
+  everything except `spots` is dimmed.
 - On the same page the bright spot glides to its next place (`useGlide`);
   a new page fades in. The dim layer is keyed by page, not by step: keyed
   by step, it blinked to full brightness on every Next.
-- 13 of the 21 steps have an arrow pointing into the spot. Give every arrow
-  a slight bow: the gradient is sized to the arrow's own box, so a dead-straight
-  horizontal or vertical arrow loses its colour and draws plain white.
+- Every one of the 23 steps has an arrow. Give every arrow a slight bow: the
+  gradient is sized to the arrow's own box, so a dead-straight horizontal or
+  vertical arrow loses its colour and draws plain white.
 - A double-click on a hotspot counts once (`e.detail > 1`): the logo sits in
-  the same place on steps 17 and 18, and a double-click skipped "And up again".
-- Progress is a bar, with no step numbers. Screen readers hear "Step N of
-  21" (`aria-valuetext`).
+  the same place on steps 19 and 20, and a double-click skipped "And up again".
+  The page's miss-nudge ignores that second click too (`e.detail < 2`).
+- Progress is four chapter segments, with no step numbers. Screen readers
+  hear "Step N of 23: <chapter>" (`aria-valuetext` on a hidden progressbar).
 - On a `click` step, a pulsing hotspot over the real link moves the tour on,
   just as the guide's own link would. Its tap area is at least 44 px
   (`MIN_HIT`), however small the page; the pulse stays the size of the link.
@@ -2350,13 +2382,15 @@ How it works:
 - With no guide file (Drive down), `?tour=1` still opens the tour, and its
   last button reads "Done" instead of "Open the Guide".
 
-The route (21 steps) is cover → menu → Disciple's Journey → its Tool List →
+The route (23 steps) is cover → menu → Disciple's Journey → its Tool List →
 the module's name and icon, which open its title slide (p71; p100 for
-Kingdom Platform) → 3.9 → front (number, timer, what goes up) → back (the
-next page, reached by scrolling: header, Big Idea, How It Works, Coaching
-Tips, module and phrase, icons) → logo → Tool List → logo → menu → Kingdom
-Platform → 4.1 → the end. The back comes in the order Andrew listed it.
-No front links to its back; the tour says so.
+Kingdom Platform) → 3.9 → front (header, number, timer, what goes up) →
+"Turn the card over" → the two-sides scene → back (the next page, reached by
+scrolling: header, Big Idea, How It Works, Coaching Tips, module and phrase,
+icons) → every kind of icon → logo → Tool List → logo → menu → Kingdom
+Platform → 4.1 → the map. The back comes in the order Andrew listed it. No
+front links to its back; the tour says so. Icons are "dark blue" (opens) or
+"faded" (none), not "coloured" and "grey": that is what the guide draws.
 
 The claims were checked against the whole September PDF, not one example:
 
@@ -2372,12 +2406,14 @@ The claims were checked against the whole September PDF, not one example:
 Re-check those counts against a new edition, and the page count the tour's
 first and last notes state ("172 pages").
 
-**The stills are private.** They are guide pages 1, 2, 5, 6, 89, 90 and 102.
-The back of 3.9 is certification-only teaching.
+**The stills are private.** They are guide pages 1, 2, 5, 6, 89, 90 and 102,
+and four 300 × 300 icon crops (`icon-keynote`, `icon-handout`, `icon-video`
+from p158, `icon-grey` from p90, rendered at 400 dpi). The back of 3.9 is
+certification-only teaching.
 
-- Each is a 1440 × 1080 JPG, rendered at 150 dpi and resized.
+- Each page is a 1440 × 1080 JPG, rendered at 150 dpi and resized.
 - They live in the private `deliverable-images` bucket at
-  `site-assets/guide-tour/{cover,menu,list-dj,list-kp,front,back,front-kp}.jpg`.
+  `site-assets/guide-tour/{name}.jpg`.
 - `/api/guide-howto/{name}` serves them: service role, behind
   `requireCertificationAccess`, names allowlisted.
 - The tour fetches them with the session and shows blob URLs.

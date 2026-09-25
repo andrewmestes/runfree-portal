@@ -387,12 +387,13 @@ export default function HelpPage() {
               A menu on page 2 opens each module&rsquo;s <em>Tool List</em>. Almost
               every tool has a front (dark header &mdash; the flip chart or visual as it
               goes up in the room) and a back (light header &mdash; Big Idea, How It
-              Works, Coaching Tips, and the handout and video icons); each
+              Works, Coaching Tips, and the keynote, handout and video icons); each
               module&rsquo;s Pre-work is a single page. The logo in the top-right
               corner always takes you one level back up. On the Guide page,{" "}
               <a href="/guide?tour=1" className="font-semibold text-runfree-magentaDeep hover:underline">How it works</a>{" "}
-              is a two-minute tour that walks you through it on the guide&rsquo;s own pages:
-              you click where you would in the guide, and it explains each part as you go.
+              (just above the cover) is a short guided tour on the guide&rsquo;s own pages:
+              you click where you would in the guide, and it explains each part as you go,
+              including both sides of a card and every kind of icon.
             </Faq>
             <Faq q="What is the Certification Companion Guide?">
               Will&rsquo;s orientation to the certification: the bird&rsquo;s-eye view
@@ -477,8 +478,13 @@ export default function HelpPage() {
               RunFree page with no sign-in, so a board member or a pastor you are
               still talking with can watch it straight from a text or an email. A
               facilitator walkthrough gets one only when it is the same film as a
-              Client Video, and the link opens that client copy. The films under{" "}
-              <em>Video Clips</em> do not, for now, so play those in the room. If a
+              Client Video, and the link opens that client copy. A film under{" "}
+              <em>Video Clips</em> has one when its maker publishes the same film online
+              (the TED talk, the Carey Nieuwhof interview, the Gospel Coalition roundtable,
+              and the CNN and Fast Company pieces): the link opens the maker&rsquo;s own
+              version (the CNN and Fast Company ones on their own sites), never our copy.
+              The two movie scenes and the Hope Baptist film have no link, so play those
+              in the room. If a
               video is later taken down or moved, a link you already sent opens a
               RunFree page asking them for a fresh one; copy it again from the tab.
               To send a whole module as pre-work, use <strong>Copy this

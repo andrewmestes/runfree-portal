@@ -62,7 +62,7 @@ export default function GuidePage() {
   /**
    * "How it works" — the guided tour (components/GuideTour). Andrew: "the DFG
    * training is critical. let's just have that live on the DFG page." It opens
-   * from the button under Open the Guide, and on arrival from ?tour=1 (Help's
+   * from the How it works button above the cover, and on arrival from ?tour=1 (Help's
    * link, and the old /guide/how-to-use address, which redirects here).
    */
   const [tourOpen, setTourOpen] = useState(false);
@@ -270,6 +270,28 @@ export default function GuidePage() {
             <div className="p-6 text-center sm:p-10">
               {file ? (
                 <>
+                  {/* The tour sits ABOVE the cover. Andrew: "The 'how it works' isn't
+                      immediately visible … i can click on the image of the dfg and
+                      never see it currently." Under the title and the Open button it
+                      was the last thing on the card; here it is the first. */}
+                  <button
+                    type="button"
+                    onClick={() => setTourOpen(true)}
+                    className="group mx-auto mb-4 flex w-full max-w-sm items-center gap-3 rounded-xl bg-runfree-pink px-4 py-3 text-left ring-1 ring-runfree-magenta/25 transition hover:bg-[#fbdbe9] hover:ring-runfree-magenta/50 sm:mb-5 sm:max-w-md"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-runfree-grad text-white shadow-md transition group-hover:scale-105" aria-hidden="true">
+                      <svg viewBox="0 0 20 20" className="ml-0.5 h-4 w-4" fill="currentColor">
+                        <path d="M6.5 4.5l9 5.5-9 5.5z" />
+                      </svg>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-display text-base font-bold text-runfree-ink">How it works</span>
+                      <span className="block text-sm text-gray-600">A quick guided tour of the guide</span>
+                    </span>
+                    <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-runfree-magentaDeep transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path d="M8 5l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
                   {/* The guide's own title slide — a 172-page playbook deserves
                       to show its face rather than sit behind a text link.
                       Always the real cover, not a live PDF render: at 25 MB
@@ -319,19 +341,6 @@ export default function GuidePage() {
                   >
                     Open the Guide
                   </button>
-                  <div className="mt-5">
-                    <button
-                      type="button"
-                      onClick={() => setTourOpen(true)}
-                      className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-runfree-magentaDeep ring-1 ring-runfree-magenta/30 transition hover:bg-runfree-pink"
-                    >
-                      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                        <circle cx="10" cy="10" r="7.5" />
-                        <path d="M8.5 7l4 3-4 3z" fill="currentColor" stroke="none" />
-                      </svg>
-                      How it works &mdash; a two-minute tour
-                    </button>
-                  </div>
                 </>
               ) : (
                 <>

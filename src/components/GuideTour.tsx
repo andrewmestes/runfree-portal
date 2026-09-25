@@ -16,37 +16,79 @@ import { useFocusTrap } from "@/lib/useFocusTrap";
  * it gets to the back of a teaching card, it describes each section like the
  * big idea, the how to, the coach tips, the module name and phrase, the icons
  * and what they mean." Also: "there are too many numbers competing in the
- * document already" — so no step numbers, only a progress bar.
+ * document already" — so no step numbers, only a progress bar. And later the
+ * same day: "each slide has an arrow … make the two sides of the card easier
+ * to understand by showing both sides of the same card creatively … an
+ * explainer card that shows all kinds of icons like keynote/handout/video".
  *
- * It is a product tour: each step is one page of the guide with everything
- * but `spots` dimmed, an arrow into the place that matters, a note beside it,
- * and — on a `click` step — a live hotspot over the very thing you would tap
- * in the guide, which moves you on exactly as the guide's own link would.
- * On the same page the bright spot glides to its next place rather than
- * blinking. Next, Back, the arrow keys and Escape work throughout; nothing
- * advances on its own.
+ * Most steps are one page of the guide with everything but `spots` dimmed, an
+ * arrow into the place that matters, and a note beside it; on a `click` step
+ * a live hotspot sits over the very thing you would tap in the guide and
+ * moves you on exactly as the guide's own link would. Three steps are scenes
+ * built from several stills (`layers`): the two sides of one card fanned
+ * together, every kind of icon, and a map of the route. Every step has at
+ * least one arrow. On the same page the bright spot glides to its next place.
+ * The progress bar is four chapters, each a button that jumps to it. Next,
+ * Back, the arrow keys and Escape work throughout; nothing advances on its own.
  *
  * Geometry is in the stills' own units (960 x 720, the guide page at 1.25
  * px/pt), measured from the PDF's link and text boxes on pages 1, 2, 5, 6, 89,
- * 90 and 102 of the September 2026 edition. The stills are guide pages, so
- * they are private: rendered at 1440 x 1080, kept in the private
- * deliverable-images bucket (site-assets/guide-tour/), served to certified
- * framers by /api/guide-howto/{name}. A new edition that moves the logo,
- * timer, icons or list needs new stills, new numbers here, and a new
- * STILLS_VERSION so browsers don't pair new numbers with day-old pictures.
+ * 90, 102 and 158 of the September 2026 edition. The stills are guide pages, so
+ * they are private: kept in the private deliverable-images bucket
+ * (site-assets/guide-tour/), served to certified framers by
+ * /api/guide-howto/{name}. A new edition that moves the logo, timer, icons or
+ * list needs new stills, new numbers here, and a new STILLS_VERSION so
+ * browsers don't pair new numbers with day-old pictures.
  */
 
-type Page = "cover" | "menu" | "list-dj" | "list-kp" | "front" | "back" | "front-kp";
+type Still =
+  | "cover"
+  | "menu"
+  | "list-dj"
+  | "list-kp"
+  | "front"
+  | "back"
+  | "front-kp"
+  | "icon-keynote"
+  | "icon-handout"
+  | "icon-video"
+  | "icon-grey";
+type Scene = "pair" | "icons" | "map";
 type Pt = [number, number];
 type Rect = [number, number, number, number]; // x, y, w, h
+type Arrow = { from: Pt; c: Pt; to: Pt; /** ms, so a scene's arrows draw one after another */ delay?: number };
+
+/**
+ * One still placed in a scene, in page units. `from` (x, y, angle, scale) is where it moves in from, already
+ * visible: the front settling from a whole page into a card, the back dealt out from behind it. Without
+ * `from`, a layer fades up into place.
+ */
+type Layer = {
+  still: Still;
+  x: number;
+  y: number;
+  w: number;
+  h?: number;
+  rot?: number;
+  z?: number;
+  from?: [number, number, number, number?];
+  delay?: number;
+};
+/** A label on a scene, centred on (x, y). */
+type Tag = { x: number; y: number; text: string; tone?: "light" | "brand" };
 
 type Step = {
-  page: Page;
+  /** A still for a page of the guide, or a scene name for a composed step. */
+  page: Still | Scene;
+  /** The first step of a chapter carries its name. */
+  chapter?: string;
   title: string;
   body: React.ReactNode;
-  /** The places left bright; everything else on the page is dimmed. */
+  /** The places left bright; everything else on the page is dimmed. A scene has none. */
   spots: Rect[];
-  arrow?: { from: Pt; c: Pt; to: Pt };
+  arrows: Arrow[];
+  layers?: Layer[];
+  tags?: Tag[];
   /**
    * Where the note sits when it floats on the page (x, y, width), in page
    * units. Beside the page, only y is used; under it, none.
@@ -63,7 +105,7 @@ const W = 960;
 const H = 720;
 
 /** Bump with STEPS whenever the stills are re-uploaded for a new edition. */
-const STILLS_VERSION = "2026-09-24";
+const STILLS_VERSION = "2026-09-24b";
 
 /** "Tap" on a touch screen, "Click" with a mouse — used inside the notes. */
 const TapWord = createContext("Tap");
@@ -71,9 +113,14 @@ function Tap() {
   return <>{useContext(TapWord)}</>;
 }
 
+// The two sides of 3.9, fanned: the front on top, the back dealt out from behind it.
+const PAIR_FRONT: Layer = { still: "front", x: 30, y: 56, w: 450, rot: -3, z: 2, from: [30, 56, 0, 1.12] };
+const PAIR_BACK: Layer = { still: "back", x: 470, y: 236, w: 450, rot: 2.5, z: 1, from: [30, 56, -3], delay: 380 };
+
 const STEPS: Step[] = [
   {
     page: "cover",
+    chapter: "Find a tool",
     title: "The Digital Facilitator’s Guide",
     body: (
       <>
@@ -83,7 +130,7 @@ const STEPS: Step[] = [
     spots: [[180, 540, 600, 105]],
     click: [185, 545, 590, 95],
     hotspot: "The guide’s title: open the menu",
-    arrow: { from: [480, 250], c: [540, 420], to: [482, 538] },
+    arrows: [{ from: [480, 250], c: [540, 420], to: [482, 538] }],
     pop: [240, 110, 480],
   },
   {
@@ -91,7 +138,8 @@ const STEPS: Step[] = [
     title: "The menu",
     body: <>The six modules of Pivvot Vision Framing, in order. Each one opens its own Tool List.</>,
     spots: [[55, 285, 850, 235]],
-    pop: [120, 525, 720],
+    arrows: [{ from: [300, 592], c: [170, 604], to: [112, 530] }],
+    pop: [160, 572, 640],
   },
   {
     page: "menu",
@@ -104,7 +152,7 @@ const STEPS: Step[] = [
     spots: [[361, 290, 92, 222]],
     click: [366, 295, 82, 212],
     hotspot: "Open Disciple’s Journey",
-    arrow: { from: [640, 600], c: [470, 610], to: [418, 522] },
+    arrows: [{ from: [640, 600], c: [470, 610], to: [418, 522] }],
     pop: [490, 522, 450],
   },
   {
@@ -113,11 +161,15 @@ const STEPS: Step[] = [
     body: (
       <>
         Every tool in this module, in order. 3.0 is the <span className="whitespace-nowrap">Pre-work</span> the team does
-        before the session.{" "}
-        <em>Deliverables</em>, at the bottom, is what the module produces, and what you put together afterwards.
+        before the session. <em>Deliverables</em>, at the bottom, is what the module produces, and what you put together
+        afterwards.
       </>
     ),
     spots: [[180, 238, 460, 408]],
+    arrows: [
+      { from: [670, 300], c: [520, 236], to: [336, 258] },
+      { from: [720, 452], c: [620, 690], to: [392, 628], delay: 250 },
+    ],
     pop: [660, 250, 280],
   },
   {
@@ -128,7 +180,7 @@ const STEPS: Step[] = [
       [42, 162, 91, 91],
       [183, 162, 493, 62],
     ],
-    arrow: { from: [760, 340], c: [790, 215], to: [686, 193] },
+    arrows: [{ from: [760, 340], c: [790, 215], to: [686, 193] }],
     pop: [640, 330, 290],
   },
   {
@@ -142,27 +194,28 @@ const STEPS: Step[] = [
     spots: [[182, 483, 428, 26]],
     click: [189, 482, 412, 27],
     hotspot: "Open 3.9 · 4 Ways to Articulate Mission Measures",
-    arrow: { from: [790, 390], c: [790, 500], to: [616, 496] },
+    arrows: [{ from: [790, 390], c: [790, 500], to: [616, 496] }],
     pop: [660, 250, 280],
   },
   {
     page: "front",
+    chapter: "The front",
     title: "The front of the card",
     body: (
       <>
-        Almost every tool is two pages, like the front and back of a card. The front is the one with the{" "}
-        <strong>dark blue header</strong>.
+        You’ve opened 3.9. This is its front: the side with the <strong>dark blue header</strong>.
       </>
     ),
     spots: [[0, 0, 960, 122]],
-    pop: [18, 180, 262],
+    arrows: [{ from: [160, 244], c: [118, 190], to: [150, 130] }],
+    pop: [18, 232, 262],
   },
   {
     page: "front",
     title: "Tool number",
     body: <>The same number as on the Tool List. Most of the walkthroughs in Training Videos → Facilitator Training start with it too.</>,
     spots: [[32, 22, 80, 82]],
-    arrow: { from: [150, 250], c: [70, 200], to: [72, 110] },
+    arrows: [{ from: [150, 250], c: [70, 200], to: [72, 110] }],
     pop: [18, 240, 262],
   },
   {
@@ -170,7 +223,7 @@ const STEPS: Step[] = [
     title: "Timer",
     body: <>Roughly how many minutes the tool takes in the room.</>,
     spots: [[764, 26, 70, 70]],
-    arrow: { from: [800, 240], c: [812, 170], to: [800, 102] },
+    arrows: [{ from: [800, 240], c: [812, 170], to: [800, 102] }],
     pop: [682, 230, 262],
   },
   {
@@ -178,27 +231,48 @@ const STEPS: Step[] = [
     title: "What goes up in the room",
     body: <>The flip chart you’ll draw, the handout or the visual — often shown filled in, as an example.</>,
     spots: [[288, 143, 378, 484]],
-    pop: [18, 300, 262],
+    arrows: [{ from: [724, 412], c: [724, 304], to: [674, 282] }],
+    pop: [684, 400, 262],
     next: "Turn the card over",
+  },
+  {
+    page: "pair",
+    chapter: "The back",
+    title: "Two sides of one card",
+    body: (
+      <>
+        Almost every tool is two pages, like the two sides of a card. The <strong>front</strong> goes up for the room.
+        The <strong>back</strong> is for you, and it’s the very next page: no link takes you there, just scroll down one
+        page.
+      </>
+    ),
+    spots: [],
+    layers: [PAIR_FRONT, PAIR_BACK],
+    tags: [
+      { x: 170, y: 32, text: "Front · for the room", tone: "light" },
+      { x: 790, y: 606, text: "Back · for you", tone: "brand" },
+    ],
+    arrows: [{ from: [496, 70], c: [640, 40], to: [650, 236], delay: 450 }],
+    pop: [30, 432, 330],
   },
   {
     page: "back",
     title: "The back of the card",
     body: (
       <>
-        The back is the very next page — just scroll down one. Its <strong>light header</strong> marks the side
-        that’s for you: how to lead the tool.
+        The <strong>light header</strong> tells you you’re on the back, the side that shows you how to lead the tool.
       </>
     ),
     spots: [[0, 0, 960, 120]],
-    pop: [300, 300, 360],
+    arrows: [{ from: [480, 252], c: [462, 190], to: [480, 128] }],
+    pop: [300, 240, 360],
   },
   {
     page: "back",
     title: "Big Idea",
     body: <>What this tool is for: what you’re setting out to do with the team. Some cards add background or a Scripture to reflect on.</>,
     spots: [[34, 202, 282, 418]],
-    arrow: { from: [460, 330], c: [360, 290], to: [322, 266] },
+    arrows: [{ from: [460, 330], c: [360, 290], to: [322, 266] }],
     pop: [400, 300, 300],
   },
   {
@@ -206,21 +280,23 @@ const STEPS: Step[] = [
     title: "How It Works",
     body: <>The steps for leading it, in order.</>,
     spots: [[332, 202, 296, 418]],
-    pop: [662, 300, 282],
+    arrows: [{ from: [692, 432], c: [662, 340], to: [634, 300] }],
+    pop: [662, 420, 282],
   },
   {
     page: "back",
     title: "Coaching Tips",
     body: <>Advice for leading it well. Some cards give you a Power Phrase to use in the room.</>,
     spots: [[650, 202, 290, 418]],
-    pop: [330, 300, 300],
+    arrows: [{ from: [568, 432], c: [608, 330], to: [644, 300] }],
+    pop: [300, 420, 300],
   },
   {
     page: "back",
     title: "Module and phrase",
     body: <>The module this tool belongs to, and its phrase from the title slide. It’s at the foot of both sides, so you always know where you are.</>,
     spots: [[260, 656, 512, 52]],
-    arrow: { from: [480, 350], c: [460, 560], to: [480, 652] },
+    arrows: [{ from: [480, 350], c: [460, 560], to: [480, 652] }],
     pop: [240, 260, 480],
   },
   {
@@ -228,16 +304,43 @@ const STEPS: Step[] = [
     title: "The icons",
     body: (
       <>
-        A coloured icon opens that tool’s handout or walkthrough video. Grey means there isn’t one: 3.9 has a
-        handout, no video. On a few Horizon Storyline cards, a podium opens the keynote slides.
+        What goes with this tool. A <strong>dark blue</strong> icon opens it right here in the portal; a{" "}
+        <strong>faded</strong> one means there isn’t one. 3.9 has a handout, but no video.
       </>
     ),
     spots: [[801, 140, 126, 66]],
-    arrow: { from: [600, 190], c: [700, 168], to: [797, 176] },
+    arrows: [{ from: [600, 190], c: [700, 168], to: [797, 176] }],
     pop: [330, 140, 300],
   },
   {
+    page: "icons",
+    title: "Every kind of icon",
+    body: (
+      <>
+        A <strong>podium</strong> opens keynote slides. Only a few Horizon Storyline cards have one. A{" "}
+        <strong>sheet</strong> opens a handout (some tools have several), and a <strong>camera</strong> opens a
+        walkthrough video.
+      </>
+    ),
+    spots: [],
+    layers: [
+      { still: "icon-keynote", x: 75, y: 200, w: 150, h: 150, delay: 0 },
+      { still: "icon-handout", x: 295, y: 200, w: 150, h: 150, delay: 110 },
+      { still: "icon-video", x: 515, y: 200, w: 150, h: 150, delay: 220 },
+      { still: "icon-grey", x: 735, y: 200, w: 150, h: 150, delay: 330 },
+    ],
+    tags: [
+      { x: 150, y: 168, text: "Keynote", tone: "light" },
+      { x: 370, y: 168, text: "Handout", tone: "light" },
+      { x: 590, y: 168, text: "Video", tone: "light" },
+      { x: 810, y: 168, text: "Faded = none", tone: "light" },
+    ],
+    arrows: [{ from: [300, 484], c: [170, 470], to: [150, 364], delay: 500 }],
+    pop: [230, 470, 500],
+  },
+  {
     page: "back",
+    chapter: "Getting around",
     title: "Back up a level",
     body: (
       <>
@@ -247,7 +350,7 @@ const STEPS: Step[] = [
     spots: [[849, 24, 78, 78]],
     click: [859, 34, 58, 58],
     hotspot: "The logo: back to the Tool List",
-    arrow: { from: [650, 172], c: [720, 160], to: [856, 104] },
+    arrows: [{ from: [650, 172], c: [720, 160], to: [856, 104] }],
     pop: [380, 150, 300],
   },
   {
@@ -257,7 +360,7 @@ const STEPS: Step[] = [
     spots: [[849, 24, 78, 78]],
     click: [859, 34, 58, 58],
     hotspot: "The logo: back to the menu",
-    arrow: { from: [800, 270], c: [870, 230], to: [882, 108] },
+    arrows: [{ from: [800, 270], c: [870, 230], to: [882, 108] }],
     pop: [660, 270, 280],
   },
   {
@@ -271,7 +374,7 @@ const STEPS: Step[] = [
     spots: [[504, 290, 93, 222]],
     click: [509, 295, 83, 212],
     hotspot: "Open Kingdom Platform",
-    arrow: { from: [420, 630], c: [560, 650], to: [552, 524] },
+    arrows: [{ from: [420, 630], c: [560, 650], to: [552, 524] }],
     pop: [40, 522, 450],
   },
   {
@@ -285,27 +388,61 @@ const STEPS: Step[] = [
     spots: [[182, 280, 231, 29]],
     click: [189, 282, 216, 27],
     hotspot: "Open 4.1 · Strategy Exercise",
-    arrow: { from: [640, 266], c: [520, 266], to: [420, 290] },
+    arrows: [{ from: [640, 266], c: [520, 266], to: [420, 290] }],
     pop: [620, 240, 300],
   },
   {
-    page: "front-kp",
+    page: "map",
     title: "That’s the whole guide",
     body: (
       <>
-        Every card works like 3.9: the front for the room, the back for you. <strong>Menu → Tool List → tool</strong>,
-        and the logo to climb back. You never need to scroll through 172 pages.
+        <strong>Menu → Tool List → tool</strong>, and the logo to climb back up. Every tool works like 3.9, so you never
+        need to scroll through 172 pages.
       </>
     ),
     spots: [],
-    pop: [230, 250, 500],
+    layers: [
+      { still: "menu", x: 40, y: 220, w: 260, rot: -2, delay: 0 },
+      { still: "list-kp", x: 350, y: 210, w: 260, rot: 1, delay: 120 },
+      { still: "front-kp", x: 660, y: 220, w: 260, rot: 2, delay: 240 },
+    ],
+    tags: [
+      { x: 170, y: 446, text: "Menu", tone: "light" },
+      { x: 480, y: 436, text: "Tool List", tone: "light" },
+      { x: 790, y: 446, text: "Tool", tone: "light" },
+      { x: 480, y: 612, text: "The logo climbs back up", tone: "brand" },
+    ],
+    arrows: [
+      { from: [250, 214], c: [330, 140], to: [392, 204], delay: 350 },
+      { from: [560, 206], c: [640, 140], to: [702, 212], delay: 550 },
+      { from: [790, 474], c: [480, 664], to: [172, 474], delay: 800 },
+    ],
+    pop: [230, 24, 500],
   },
 ];
 
-const PAGES: Page[] = ["cover", "menu", "list-dj", "list-kp", "front", "back", "front-kp"];
+/** Chapters of the progress bar: where each starts, taken from STEPS so they cannot drift. */
+const CHAPTERS = STEPS.flatMap((s, k) => (s.chapter ? [{ name: s.chapter, from: k }] : [])).map((c, k, all) => ({
+  ...c,
+  to: k + 1 < all.length ? all[k + 1].from : STEPS.length,
+}));
 
-/** What each still is, for a screen reader (the note says what the step is about). */
-const PAGE_ALT: Record<Page, string> = {
+const STILLS: Still[] = [
+  "cover",
+  "menu",
+  "list-dj",
+  "list-kp",
+  "front",
+  "back",
+  "front-kp",
+  "icon-keynote",
+  "icon-handout",
+  "icon-video",
+  "icon-grey",
+];
+
+/** What each picture is, for a screen reader (the note says what the step is about). */
+const ALT: Record<Still | Scene, string> = {
   cover: "The guide’s cover",
   menu: "The guide’s menu",
   "list-dj": "The Disciple’s Journey Tool List",
@@ -313,13 +450,22 @@ const PAGE_ALT: Record<Page, string> = {
   front: "The front of tool 3.9",
   back: "The back of tool 3.9",
   "front-kp": "The front of tool 4.1",
+  "icon-keynote": "The keynote icon",
+  "icon-handout": "The handout icon",
+  "icon-video": "The video icon",
+  "icon-grey": "A faded icon",
+  pair: "The front and back of tool 3.9, the back fanned out from behind the front",
+  icons: "The four kinds of icon: keynote, handout, video, and a faded one",
+  map: "The route: the menu, a Tool List and a tool, with an arrow from the tool back to the menu",
 };
 
-/** Blob URLs for the stills, kept for the life of the page so a second tour opens instantly. */
-const stillCache: Partial<Record<Page, string>> = {};
-const inflight: Partial<Record<Page, Promise<string>>> = {};
+const stillsOf = (s: Step): Still[] => (s.layers ? s.layers.map((l) => l.still) : [s.page as Still]);
 
-function loadStill(p: Page, token: string): Promise<string> {
+/** Blob URLs for the stills, kept for the life of the page so a second tour opens instantly. */
+const stillCache: Partial<Record<Still, string>> = {};
+const inflight: Partial<Record<Still, Promise<string>>> = {};
+
+function loadStill(p: Still, token: string): Promise<string> {
   const have = stillCache[p];
   if (have) return Promise.resolve(have);
   return (inflight[p] ??= fetch(`/api/guide-howto/${p}?v=${STILLS_VERSION}`, {
@@ -342,12 +488,12 @@ function loadStill(p: Page, token: string): Promise<string> {
  * the tour's own effect retries anything that failed.
  */
 export async function prefetchGuideStills(): Promise<void> {
-  if (PAGES.every((p) => stillCache[p])) return;
+  if (STILLS.every((p) => stillCache[p])) return;
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) return;
-  await Promise.allSettled(PAGES.map((p) => loadStill(p, session.access_token)));
+  await Promise.allSettled(STILLS.map((p) => loadStill(p, session.access_token)));
 }
 
 /**
@@ -383,7 +529,7 @@ function layoutFor(aw: number, ah: number): Layout {
  * spots, they glide from wherever they are to the new step's; otherwise (a new
  * page, or reduced motion) they move at once.
  */
-function useGlide(spots: Rect[], page: Page, reduced: boolean): Rect[] {
+function useGlide(spots: Rect[], page: string, reduced: boolean): Rect[] {
   const [shown, setShown] = useState(spots);
   const at = useRef({ spots, page });
   useLayoutEffect(() => {
@@ -416,7 +562,7 @@ function roundRect([x, y, w, h]: Rect, r = 16) {
   return `M${x + rr} ${y}H${x + w - rr}A${rr} ${rr} 0 0 1 ${x + w} ${y + rr}V${y + h - rr}A${rr} ${rr} 0 0 1 ${x + w - rr} ${y + h}H${x + rr}A${rr} ${rr} 0 0 1 ${x} ${y + h - rr}V${y + rr}A${rr} ${rr} 0 0 1 ${x + rr} ${y}Z`;
 }
 
-function arrowGeometry({ from, c, to }: { from: Pt; c: Pt; to: Pt }) {
+function arrowGeometry({ from, c, to }: Arrow) {
   const dx = to[0] - c[0];
   const dy = to[1] - c[1];
   const len = Math.hypot(dx, dy) || 1;
@@ -445,14 +591,16 @@ export default function GuideTour({
   onOpenGuide?: () => void;
 }) {
   const [i, setI] = useState(0);
-  const [stills, setStills] = useState<Partial<Record<Page, string>>>(() => ({ ...stillCache }));
-  const [failed, setFailed] = useState<Set<Page>>(() => new Set());
+  const [stills, setStills] = useState<Partial<Record<Still, string>>>(() => ({ ...stillCache }));
+  const [failed, setFailed] = useState<Set<Still>>(() => new Set());
   const [reduced, setReduced] = useState(false);
   // Read at first render, not in an effect, so a phone never flashes "Click".
   const [coarse, setCoarse] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches
   );
   const [area, setArea] = useState<{ w: number; h: number; short: boolean } | null>(null);
+  // A tap on the page that missed the spot on a click step: the spot and the hint answer.
+  const [nudge, setNudge] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const id = useId().replace(/:/g, "");
@@ -482,6 +630,13 @@ export default function GuideTour({
       d.querySelector<HTMLElement>("[data-autofocus]")?.focus();
   }, [i, open]);
 
+  useEffect(() => setNudge(false), [i]);
+  useEffect(() => {
+    if (!nudge) return;
+    const t = window.setTimeout(() => setNudge(false), 1300);
+    return () => window.clearTimeout(t);
+  }, [nudge]);
+
   useEffect(() => {
     if (!open) return;
     setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -505,18 +660,18 @@ export default function GuideTour({
     if (!open) return;
     setStills({ ...stillCache });
     setFailed(new Set());
-    if (PAGES.every((p) => stillCache[p])) return;
+    if (STILLS.every((p) => stillCache[p])) return;
     let cancelled = false;
     (async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
-        if (!cancelled) setFailed(new Set(PAGES));
+        if (!cancelled) setFailed(new Set(STILLS));
         return;
       }
       await Promise.all(
-        PAGES.map((p) =>
+        STILLS.map((p) =>
           loadStill(p, session.access_token).then(
             () => setStills({ ...stillCache }),
             () => {
@@ -552,14 +707,17 @@ export default function GuideTour({
 
   if (!open) return null;
 
-  const src = stills[step.page];
+  const need = stillsOf(step);
+  const ready = need.every((p) => stills[p]);
+  const broken = need.some((p) => failed.has(p));
+  const scene = Boolean(step.layers);
   const shade = `M0 0H${W}V${H}H0Z ` + spots.map((s) => roundRect(s)).join(" ");
-  const arrow = step.arrow ? arrowGeometry(step.arrow) : null;
   const fade = reduced ? undefined : "tour-fade";
   const fadeIn = reduced ? undefined : "tour-in";
   const { mode, pw, sw } = area ? layoutFor(area.w, area.h) : { mode: "float" as const, pw: 0, sw: 0 };
   const ph = (pw * H) / W;
   const short = area?.short ?? false;
+  const chapter = CHAPTERS.findIndex((c) => i >= c.from && i < c.to);
   // The hotspot is at least a thumb wide and tall; its visible pulse stays
   // the size of the thing it marks.
   const hb =
@@ -580,7 +738,7 @@ export default function GuideTour({
       <p className={`font-display font-bold text-runfree-ink ${short ? "text-base" : "text-base sm:text-lg"}`}>{step.title}</p>
       <p className={`mt-1.5 leading-relaxed text-gray-700 ${short ? "text-sm" : "text-sm sm:text-[15px]"}`}>{step.body}</p>
       {step.click && (
-        <p className="mt-2 text-xs font-semibold text-runfree-magentaDeep">
+        <p className={`mt-2 text-xs font-semibold text-runfree-magentaDeep ${nudge && !reduced ? "tour-hint" : ""}`}>
           <Tap /> the highlighted spot, or press Next.
         </p>
       )}
@@ -588,21 +746,78 @@ export default function GuideTour({
   );
 
   const page = (
-    <div className="relative shrink-0" style={{ width: pw, height: ph }}>
-      <div className="absolute inset-0 overflow-hidden rounded-xl bg-white/10 shadow-2xl ring-1 ring-white/15">
-        {src ? (
-          // eslint-disable-next-line @next/next/no-img-element -- a blob URL of a private still
-          <img key={step.page} src={src} alt={PAGE_ALT[step.page]} className={`block h-full w-full ${fadeIn ?? ""}`} />
-        ) : (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-white/70">
-            {failed.has(step.page) ? "Couldn’t load this page of the guide. Close and try again." : "Loading…"}
-          </div>
-        )}
-      </div>
-      {src && (
+    <div
+      className="relative shrink-0"
+      style={{ width: pw, height: ph }}
+      onClick={(e) => {
+        // A miss on a click step: show where to tap rather than doing nothing.
+        // The second click of a double-click on the previous step's hotspot lands here and is not a miss.
+        if (step.click && e.detail < 2 && !(e.target as HTMLElement).closest("button, [data-note]")) setNudge(true);
+      }}
+    >
+      {scene ? (
+        <div key={`scene-${step.page}`} className="absolute inset-0 rounded-xl bg-white/[0.06] ring-1 ring-white/10" role="img" aria-label={ALT[step.page]}>
+          {ready &&
+            step.layers!.map((l, k) => {
+              const h = l.h ?? (l.w * H) / W;
+              const style: React.CSSProperties & Record<string, string | number> = {
+                left: pct(l.x, W),
+                top: pct(l.y, H),
+                width: pct(l.w, W),
+                height: pct(h, H),
+                zIndex: l.z ?? 1,
+                transform: `rotate(${l.rot ?? 0}deg)`,
+                "--r1": `${l.rot ?? 0}deg`,
+                "--r0": `${l.from ? l.from[2] : l.rot ?? 0}deg`,
+                "--dx": l.from ? `${((l.from[0] - l.x) / l.w) * 100}%` : "0%",
+                "--dy": l.from ? `${((l.from[1] - l.y) / h) * 100}%` : "6%",
+                "--s0": l.from?.[3] ?? 1,
+                "--o0": l.from ? 1 : 0,
+                animationDelay: `${l.delay ?? 0}ms`,
+              };
+              return (
+                <div
+                  key={k}
+                  className={`absolute overflow-hidden rounded-lg bg-white shadow-[0_12px_40px_rgba(0,0,0,.45)] ring-1 ring-black/10 ${reduced ? "" : "tour-deal"}`}
+                  style={style}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- a blob URL of a private still */}
+                  <img src={stills[l.still]} alt="" className="block h-full w-full object-cover" />
+                </div>
+              );
+            })}
+          {ready &&
+            step.tags?.map((t, k) => (
+              <span
+                key={`t${k}`}
+                className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full font-bold uppercase shadow-lg ${
+                  pw < 520 ? "px-1.5 py-0.5 text-[9px]" : "px-2.5 py-1 text-[10px] tracking-wide sm:text-xs"
+                } ${
+                  t.tone === "brand" ? "bg-runfree-grad text-white" : "bg-white text-runfree-ink"
+                } ${fadeIn ?? ""}`}
+                style={{ left: pct(t.x, W), top: pct(t.y, H), animationDelay: "300ms" }}
+              >
+                {t.text}
+              </span>
+            ))}
+        </div>
+      ) : (
+        <div className="absolute inset-0 overflow-hidden rounded-xl bg-white/10 shadow-2xl ring-1 ring-white/15">
+          {ready && (
+            // eslint-disable-next-line @next/next/no-img-element -- a blob URL of a private still
+            <img key={step.page} src={stills[step.page as Still]} alt={ALT[step.page]} className={`block h-full w-full ${fadeIn ?? ""}`} />
+          )}
+        </div>
+      )}
+      {!ready && (
+        <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-white/70">
+          {broken ? "Couldn’t load this page of the guide. Close and try again." : "Loading…"}
+        </div>
+      )}
+      {ready && (
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+          className="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible"
           aria-hidden="true"
         >
           <defs>
@@ -615,48 +830,55 @@ export default function GuideTour({
               <rect x="0" y="0" width={W} height={H} rx="12" />
             </clipPath>
           </defs>
-          {/* Keyed by page: it fades in with a new page, and stays put (the spot gliding) on the same one. */}
-          <g key={`shade-${step.page}`} className={fadeIn}>
-            <path
-              d={shade}
-              fillRule="evenodd"
-              fill="#0F1438"
-              fillOpacity={step.spots.length ? 0.66 : 0.5}
-              clipPath={`url(#c${id})`}
-            />
-            {spots.map((s, k) => (
-              <path key={k} d={roundRect(s)} fill="none" stroke="#fff" strokeWidth="4" />
-            ))}
-          </g>
-          {arrow && (
-            <g key={`arrow-${i}`}>
-              <path d={arrow.path} pathLength={1} fill="none" stroke="#fff" strokeWidth="26" strokeLinecap="round" className={reduced ? undefined : "tour-draw"} />
-              <path d={arrow.path} pathLength={1} fill="none" stroke={`url(#g${id})`} strokeWidth="15" strokeLinecap="round" className={reduced ? undefined : "tour-draw"} />
-              <path d={arrow.head} fill="#F15A25" stroke="#fff" strokeWidth="7" strokeLinejoin="round" className={reduced ? undefined : "tour-head"} />
+          {/* Keyed by page: it fades in with a new page, and stays put (the spot gliding) on the same one. A scene is not dimmed. */}
+          {!scene && (
+            <g key={`shade-${step.page}`} className={fadeIn}>
+              <path d={shade} fillRule="evenodd" fill="#0F1438" fillOpacity={0.66} clipPath={`url(#c${id})`} />
+              {spots.map((s, k) => (
+                <path key={k} d={roundRect(s)} fill="none" stroke="#fff" strokeWidth="4" />
+              ))}
             </g>
           )}
+          {step.arrows.map((a, k) => {
+            const g = arrowGeometry(a);
+            const d = a.delay ?? 0;
+            const draw = reduced ? undefined : { animationDelay: `${150 + d}ms` };
+            const head = reduced ? undefined : { animationDelay: `${750 + d}ms` };
+            return (
+              <g key={`arrow-${i}-${k}`}>
+                <path d={g.path} pathLength={1} fill="none" stroke="#fff" strokeWidth="26" strokeLinecap="round" className={reduced ? undefined : "tour-draw"} style={draw} />
+                <path d={g.path} pathLength={1} fill="none" stroke={`url(#g${id})`} strokeWidth="15" strokeLinecap="round" className={reduced ? undefined : "tour-draw"} style={draw} />
+                <path d={g.head} fill="#F15A25" stroke="#fff" strokeWidth="7" strokeLinejoin="round" className={reduced ? undefined : "tour-head"} style={head} />
+              </g>
+            );
+          })}
         </svg>
       )}
-      {src && hb && (
+      {ready && hb && (
         <button
           type="button"
           onClick={(e) => {
-            // The second click of a double-click: the logo sits in the same place on steps 17 and 18, so it would skip "And up again".
+            // The second click of a double-click: the logo sits in the same place on two steps in a row, so it would skip one.
             if (e.detail > 1) return;
             go(1);
           }}
           aria-label={step.hotspot ?? step.title}
-          className="group absolute rounded-lg outline-none"
+          data-hotspot
+          className="group absolute z-30 rounded-lg outline-none"
           style={{ left: hb.left, top: hb.top, width: hb.width, height: hb.height }}
         >
           <span
-            className="tour-pulse pointer-events-none absolute rounded-lg group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-offset-[6px] group-focus-visible:outline-runfree-magenta"
+            className={`${nudge && !reduced ? "tour-nudge" : "tour-pulse"} pointer-events-none absolute rounded-lg group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-offset-[6px] group-focus-visible:outline-runfree-magenta`}
             style={{ inset: `${hb.ey}px ${hb.ex}px` }}
           />
         </button>
       )}
       {mode === "float" && (
-        <div className="absolute" style={{ left: pct(step.pop[0], W), top: pct(step.pop[1], H), width: pct(step.pop[2], W) }}>
+        <div
+          data-note
+          className="absolute z-40"
+          style={{ left: pct(step.pop[0], W), top: pct(step.pop[1], H), width: pct(step.pop[2], W) }}
+        >
           {note}
         </div>
       )}
@@ -671,13 +893,19 @@ export default function GuideTour({
           @keyframes tour-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
           @keyframes tour-pop { from { opacity: 0; } to { opacity: 1; } }
           @keyframes tour-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(228,61,150,.65); } 50% { box-shadow: 0 0 0 14px rgba(228,61,150,0); } }
+          @keyframes tour-nudge { 0% { box-shadow: 0 0 0 0 rgba(228,61,150,.95); } 100% { box-shadow: 0 0 0 30px rgba(228,61,150,0); } }
+          @keyframes tour-hint { 0%, 100% { transform: none; } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+          @keyframes tour-deal { from { transform: translate(var(--dx), var(--dy)) rotate(var(--r0)) scale(var(--s0)); opacity: var(--o0); } to { transform: rotate(var(--r1)); opacity: 1; } }
           .tour-fade { animation: tour-fade .35s ease both; }
           .tour-in { animation: tour-pop .35s ease both; }
           .tour-draw { stroke-dasharray: 1; animation: tour-draw .7s cubic-bezier(.2,.8,.2,1) .15s both; }
           .tour-head { animation: tour-pop .2s ease .75s both; }
           .tour-pulse { animation: tour-pulse 1.6s ease-in-out infinite; }
+          .tour-nudge { animation: tour-nudge .65s ease-out 2; }
+          .tour-hint { display: inline-block; animation: tour-hint .5s ease; }
+          .tour-deal { animation: tour-deal .7s cubic-bezier(.2,.8,.2,1) both; }
           @media (prefers-reduced-motion: reduce) {
-            .tour-fade, .tour-in, .tour-draw, .tour-head, .tour-pulse { animation: none !important; }
+            .tour-fade, .tour-in, .tour-draw, .tour-head, .tour-pulse, .tour-nudge, .tour-hint, .tour-deal { animation: none !important; }
             /* The still version of the pulse, so a click step still looks clickable. */
             .tour-pulse { box-shadow: 0 0 0 4px rgba(228,61,150,.75); }
           }
@@ -696,25 +924,55 @@ export default function GuideTour({
           <div id={`${id}-step`} className="sr-only" aria-live="polite" aria-atomic="true">
             {step.title}. {step.body}
           </div>
+          <div
+            className="sr-only"
+            role="progressbar"
+            aria-label="Tour progress"
+            aria-valuemin={1}
+            aria-valuemax={STEPS.length}
+            aria-valuenow={i + 1}
+            aria-valuetext={`Step ${i + 1} of ${STEPS.length}${chapter >= 0 ? `: ${CHAPTERS[chapter].name}` : ""}`}
+          />
 
-          {/* Top: title, progress, close */}
-          <div className="flex shrink-0 items-center gap-3 text-white">
-            <p id={`${id}-name`} className="font-display text-sm font-bold tracking-wide sm:text-base">
+          {/* Top: title, chapters (each jumps to its first step), close */}
+          <div className="flex shrink-0 items-center gap-3 text-white sm:gap-4">
+            <p id={`${id}-name`} className="hidden font-display text-base font-bold tracking-wide sm:block">
               How the guide works
             </p>
-            <div
-              className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15"
-              role="progressbar"
-              aria-label="Tour progress"
-              aria-valuemin={1}
-              aria-valuemax={STEPS.length}
-              aria-valuenow={i + 1}
-              aria-valuetext={`Step ${i + 1} of ${STEPS.length}`}
-            >
-              <div
-                className="h-full rounded-full bg-runfree-grad transition-[width] duration-500"
-                style={{ width: `${((i + 1) / STEPS.length) * 100}%` }}
-              />
+            <p className="font-display text-sm font-bold tracking-wide sm:hidden" aria-hidden="true">
+              {chapter >= 0 ? CHAPTERS[chapter].name : "How the guide works"}
+            </p>
+            <div className="flex min-w-0 flex-1 items-start gap-1.5" role="group" aria-label="Chapters">
+              {CHAPTERS.map((c, k) => {
+                const done = Math.max(0, Math.min(1, (i - c.from + 1) / (c.to - c.from)));
+                const here = k === chapter;
+                return (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => setI(c.from)}
+                    aria-label={`Go to: ${c.name}`}
+                    aria-current={here ? "step" : undefined}
+                    title={c.name}
+                    className="group min-w-0 rounded py-[19px] text-left outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-runfree-magenta sm:py-1"
+                    style={{ flexGrow: c.to - c.from, flexBasis: 0 }}
+                  >
+                    <span className="block h-1.5 overflow-hidden rounded-full bg-white/15 transition group-hover:bg-white/25">
+                      <span
+                        className="block h-full rounded-full bg-runfree-grad transition-[width] duration-500"
+                        style={{ width: `${done * 100}%` }}
+                      />
+                    </span>
+                    <span
+                      className={`mt-1.5 hidden truncate text-[11px] font-semibold tracking-wide sm:block ${
+                        here ? "text-white" : "text-white/45 group-hover:text-white/80"
+                      }`}
+                    >
+                      {c.name}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <button
               type="button"

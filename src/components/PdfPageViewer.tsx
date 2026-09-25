@@ -129,9 +129,13 @@ export default function PdfPageViewer({
       const bytes = new Uint8Array(await (await fetch(blobUrl)).arrayBuffer());
       if (cancelled) return;
 
-      const pdfjs = await import("pdfjs-dist");
+      // The legacy build: the modern one calls brand-new functions (Map.getOrInsertComputed,
+      // Promise.withResolvers, Uint8Array.fromBase64) with no fallback, so on any Safari
+      // short of the very latest it could not start and the guide never appeared (a
+      // framer on an iPhone, 25 Sept 2026). The legacy build carries polyfills for them.
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
       if (cancelled) return;
-      pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.min.mjs";
+      pdfjs.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.legacy.min.mjs";
       const loading = pdfjs.getDocument({ data: bytes });
       task = loading;
       const loaded = (await withTimeout(
